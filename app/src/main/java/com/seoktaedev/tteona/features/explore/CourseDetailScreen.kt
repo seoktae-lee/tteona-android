@@ -320,21 +320,7 @@ private fun PlacesBlock(course: Course) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("코스 동선", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = TteDarkGray)
 
-        // TODO: MAPS_API_KEY 설정 후 Google Maps Compose 미니 지도로 교체
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(140.dp)
-                .clip(RoundedCornerShape(14.dp))
-                .background(TteFieldBackground),
-            contentAlignment = Alignment.Center,
-        ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Icon(Icons.Filled.Map, contentDescription = null, tint = TteMediumGray, modifier = Modifier.size(28.dp))
-                Spacer(Modifier.height(6.dp))
-                Text("동선 지도는 곧 표시될 예정이에요", fontSize = 12.sp, color = TteMediumGray)
-            }
-        }
+        CourseRouteMap(course)
 
         course.places.sortedBy { it.order }.forEachIndexed { idx, place ->
             PlaceCardRow(index = idx, place = place)

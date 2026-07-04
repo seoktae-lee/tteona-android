@@ -63,7 +63,10 @@ fun MainTabScreen() {
                 .fillMaxSize()
                 .padding(innerPadding)
             when (selectedTab) {
-                0 -> HomeScreen(modifier)
+                0 -> HomeScreen(
+                    modifier = modifier,
+                    onCourseClick = { course, thumb -> courseSelection = CourseSelection(course, thumb) },
+                )
                 1 -> ExploreScreen(
                     modifier = modifier,
                     onCourseClick = { course, thumb -> courseSelection = CourseSelection(course, thumb) },

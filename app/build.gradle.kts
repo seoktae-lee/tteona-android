@@ -97,6 +97,7 @@ dependencies {
     implementation(libs.coil.network.okhttp)
 
     implementation(libs.play.services.maps)
+    implementation(libs.play.services.location)
     implementation(libs.maps.compose)
 
     implementation(libs.socketio) {

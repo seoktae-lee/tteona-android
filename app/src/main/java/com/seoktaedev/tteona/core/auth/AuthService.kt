@@ -264,12 +264,70 @@ object AuthService {
         }
     }
 
-    // MARK: - 카카오 로그인
-    suspend fun signInWithKakao() {
-        // TODO(Kakao): Kakao Developers에 Android 플랫폼 등록 후 Kakao SDK 연동 →
-        //  createKakaoCustomToken Functions 호출 → signInWithCustomToken (iOS와 동일 플로우)
-        _errorMessage.value = "카카오 로그인은 준비 중이에요. 이메일 또는 Google로 로그인해주세요."
+    // MARK: - 카카오 로그인 (iOS runKakaoSignIn과 동일 플로우)
+    // Kakao SDK 로그인 → createKakaoCustomToken(Functions) → Firebase 커스텀 토큰 로그인
+    suspend fun signInWithKakao(context: Context) {
+        _isLoading.value = true
+        _errorMessage.value = null
+        try {
+            val oauthToken = kakaoOAuthToken(context) ?: return // null = 사용자가 취소
+
+            val result = com.google.firebase.functions.FirebaseFunctions.getInstance("us-central1")
+                .getHttpsCallable("createKakaoCustomToken")
+                .call(mapOf("kakaoAccessToken" to oauthToken.accessToken))
+                .await()
+            val customToken = (result.data as? Map<*, *>)?.get("customToken") as? String
+            if (customToken.isNullOrEmpty()) {
+                _errorMessage.value = "서버 응답이 올바르지 않아요."
+                return
+            }
+
+            val authResult = auth.signInWithCustomToken(customToken).await()
+            val user = authResult.user ?: return
+            _verificationEmailSent.value = false
+            _currentUser.value = AppUser(uid = user.uid, email = user.email ?: "")
+            refreshOnboardingStatus(user.uid)
+        } catch (e: Exception) {
+            Log.w("Auth", "카카오 로그인 실패", e)
+            _errorMessage.value = "카카오 로그인에 실패했어요. 잠시 후 다시 시도해주세요."
+        } finally {
+            _isLoading.value = false
+        }
     }
+
+    // 카카오톡 앱 로그인 우선, 미설치/실패 시 카카오계정(웹) 로그인 폴백 — 공식 권장 패턴.
+    // 사용자가 직접 취소한 경우 null을 반환해 에러 표시 없이 조용히 끝낸다 (iOS와 동일).
+    private suspend fun kakaoOAuthToken(context: Context): com.kakao.sdk.auth.model.OAuthToken? =
+        kotlinx.coroutines.suspendCancellableCoroutine { cont ->
+            val client = com.kakao.sdk.user.UserApiClient.instance
+            val accountCallback: (com.kakao.sdk.auth.model.OAuthToken?, Throwable?) -> Unit = { token, error ->
+                if (cont.isActive) {
+                    when {
+                        error is com.kakao.sdk.common.model.ClientError &&
+                            error.reason == com.kakao.sdk.common.model.ClientErrorCause.Cancelled ->
+                            cont.resume(null) {}
+                        error != null -> cont.resumeWith(Result.failure(error))
+                        token != null -> cont.resume(token) {}
+                        else -> cont.resume(null) {}
+                    }
+                }
+            }
+            if (client.isKakaoTalkLoginAvailable(context)) {
+                client.loginWithKakaoTalk(context) { token, error ->
+                    when {
+                        error is com.kakao.sdk.common.model.ClientError &&
+                            error.reason == com.kakao.sdk.common.model.ClientErrorCause.Cancelled ->
+                            if (cont.isActive) cont.resume(null) {}
+                        // 카카오톡 앱 로그인 실패(계정 미연동 등) → 카카오계정 로그인 폴백
+                        error != null -> client.loginWithKakaoAccount(context, callback = accountCallback)
+                        token != null -> if (cont.isActive) cont.resume(token) {}
+                        else -> if (cont.isActive) cont.resume(null) {}
+                    }
+                }
+            } else {
+                client.loginWithKakaoAccount(context, callback = accountCallback)
+            }
+        }
 
     // MARK: - 온보딩 완료 (users 문서 생성 — iOS OnboardingView의 저장 로직에 대응)
     suspend fun completeOnboarding(nickname: String) {

@@ -17,6 +17,8 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        // Kakao SDK
+        maven("https://devrepo.kakao.com/nexus/content/groups/public/")
     }
 }
 

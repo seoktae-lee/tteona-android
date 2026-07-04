@@ -120,7 +120,7 @@ fun LoginScreen(viewModel: AuthViewModel = viewModel()) {
                     background = Color(0xFFFEE500),
                     border = Color.Transparent,
                     enabled = !isLoading,
-                    onClick = { viewModel.signInWithKakao() },
+                    onClick = { viewModel.signInWithKakao(context) },
                 ) {
                     Icon(
                         Icons.AutoMirrored.Filled.Chat,

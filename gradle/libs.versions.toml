@@ -53,6 +53,7 @@ play-services-maps = { group = "com.google.android.gms", name = "play-services-m
 play-services-location = { group = "com.google.android.gms", name = "play-services-location", version = "21.3.0" }
 maps-compose = { group = "com.google.maps.android", name = "maps-compose", version.ref = "mapsCompose" }
 socketio = { group = "io.socket", name = "socket.io-client", version.ref = "socketio" }
+kakao-user = { group = "com.kakao.sdk", name = "v2-user", version = "2.24.0" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

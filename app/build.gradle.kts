@@ -31,6 +31,11 @@ android {
 
         // local.properties에 MAPS_API_KEY=... 형태로 저장 (VCS 제외 대상)
         manifestPlaceholders["MAPS_API_KEY"] = localProps.getProperty("MAPS_API_KEY") ?: ""
+
+        // 카카오 네이티브 앱 키 (클라이언트 공개 키 — Kakao Developers > 플랫폼 키 > tteona-ver.android)
+        val kakaoNativeAppKey = "e6df456a5ce81d4a4bfb77d290a127d2"
+        manifestPlaceholders["KAKAO_NATIVE_APP_KEY"] = kakaoNativeAppKey
+        resValue("string", "kakao_native_app_key", kakaoNativeAppKey)
     }
 
     buildTypes {
@@ -92,6 +97,9 @@ dependencies {
     implementation(libs.androidx.credentials)
     implementation(libs.androidx.credentials.play.services)
     implementation(libs.googleid)
+
+    // 카카오 로그인
+    implementation(libs.kakao.user)
 
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)

@@ -50,8 +50,8 @@ class AuthViewModel : ViewModel() {
         viewModelScope.launch { AuthService.signInWithGoogle(context) }
     }
 
-    fun signInWithKakao() {
-        viewModelScope.launch { AuthService.signInWithKakao() }
+    fun signInWithKakao(context: Context) {
+        viewModelScope.launch { AuthService.signInWithKakao(context) }
     }
 
     fun sendPasswordReset(email: String) {

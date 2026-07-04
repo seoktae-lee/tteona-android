@@ -63,8 +63,12 @@ class ExploreViewModel : ViewModel() {
                     RecommendationService.fetchRecommended(userId = AuthService.currentUser.value?.uid)
                 }
                 val rankJob = async { StatsService.fetchCreatorRanking() }
+                val likedJob = async {
+                    AuthService.currentUser.value?.uid?.let { CourseService.fetchLikedCourseIds(it) }
+                }
 
                 coursesJob.await()
+                likedJob.await()
                 _uiState.update {
                     it.copy(
                         thumbnails = thumbsJob.await(),

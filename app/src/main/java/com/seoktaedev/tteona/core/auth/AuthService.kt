@@ -295,6 +295,8 @@ object AuthService {
 
     // MARK: - 로그아웃
     fun signOut() {
+        // iOS RootView의 onChange(isLoggedIn) → clearUserData 대응
+        com.seoktaedev.tteona.core.services.CourseService.clearUserData()
         auth.signOut()
     }
 

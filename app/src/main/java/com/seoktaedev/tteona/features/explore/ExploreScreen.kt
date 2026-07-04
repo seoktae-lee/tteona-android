@@ -58,6 +58,7 @@ import com.seoktaedev.tteona.ui.theme.TteOrange
 @Composable
 fun ExploreScreen(
     modifier: Modifier = Modifier,
+    onCourseClick: (Course, String?) -> Unit = { _, _ -> },
     viewModel: ExploreViewModel = viewModel(),
 ) {
     val state by viewModel.uiState.collectAsState()
@@ -102,7 +103,12 @@ fun ExploreScreen(
                         }
                     }
                     items(sorted, key = { it.courseId }) { course ->
-                        GridCell(course = course, thumbnailUrl = state.thumbnails[course.courseId])
+                        val thumb = state.thumbnails[course.courseId]
+                        GridCell(
+                            course = course,
+                            thumbnailUrl = thumb,
+                            onClick = { onCourseClick(course, thumb) },
+                        )
                     }
                 }
             }
@@ -237,15 +243,13 @@ private fun RankInitial(nickname: String) {
 
 // MARK: - 그리드 셀 (iOS GridCell) — 3:4 세로 카드, 하단 그라디언트 + 코스명/지역·태그
 @Composable
-private fun GridCell(course: Course, thumbnailUrl: String?) {
+private fun GridCell(course: Course, thumbnailUrl: String?, onClick: () -> Unit) {
     Box(
         modifier = Modifier
             .aspectRatio(3f / 4f)
             .clip(RoundedCornerShape(14.dp))
             .background(TteFieldBackground)
-            .clickable {
-                // TODO: ExploreDetailView 이식 후 코스 상세로 이동
-            },
+            .clickable(onClick = onClick),
     ) {
         // 커스텀 썸네일 우선, 실패/부재 시 기본 썸네일
         // TODO: 장소 사진 폴백(PlacesPhotoService)은 해당 서비스 이식 후 연결

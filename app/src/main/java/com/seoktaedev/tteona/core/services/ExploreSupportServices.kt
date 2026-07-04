@@ -14,6 +14,32 @@ object CourseThumbnailService {
             .getOrDefault(emptyMap())
 }
 
+/**
+ * iOS PlacesPhotoService.swift의 축약 이식본.
+ * TourAPI(WAS 경유, 키 불필요) 경로만 우선 구현 — 대부분의 국내 관광지는 이걸로 커버된다.
+ * TODO: GOOGLE_PLACES_API_KEY 설정 후 Google Places 폴백(iOS 2순위 경로) 추가.
+ */
+object PlacesPhotoService {
+    private data class Info(val photoUrl: String?, val category: String?)
+    private val cache = mutableMapOf<String, Info>()
+
+    suspend fun photoUrl(placeName: String, latitude: Double? = null, longitude: Double? = null): String? {
+        ensureFetched(placeName, latitude, longitude)
+        return cache[placeName]?.photoUrl
+    }
+
+    suspend fun placeCategory(placeName: String, latitude: Double? = null, longitude: Double? = null): String? {
+        ensureFetched(placeName, latitude, longitude)
+        return cache[placeName]?.category
+    }
+
+    private suspend fun ensureFetched(placeName: String, latitude: Double?, longitude: Double?) {
+        if (cache.containsKey(placeName)) return
+        val result = runCatching { ApiClient.api.getTourPhoto(placeName, latitude, longitude) }.getOrNull()
+        cache[placeName] = Info(result?.url?.takeIf { it.isNotEmpty() }, result?.category)
+    }
+}
+
 object RecommendationService {
     suspend fun fetchRecommended(
         userId: String?,

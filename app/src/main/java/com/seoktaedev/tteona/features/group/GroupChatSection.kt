@@ -105,7 +105,14 @@ fun GroupChatSection(room: Room, modifier: Modifier = Modifier) {
 
     DisposableEffect(room.roomId) {
         chat.connect(room.roomId, uid, myNickname)
-        onDispose { chat.disconnect() }
+        // 이 방을 보고 있는 동안엔 이 방의 푸시 표시 억제 (iOS activeChatRoom)
+        com.seoktaedev.tteona.core.services.AppNotificationManager.activeChatRoomId = room.roomId
+        onDispose {
+            chat.disconnect()
+            if (com.seoktaedev.tteona.core.services.AppNotificationManager.activeChatRoomId == room.roomId) {
+                com.seoktaedev.tteona.core.services.AppNotificationManager.activeChatRoomId = null
+            }
+        }
     }
 
     val entries = remember(messages, feedItems) {

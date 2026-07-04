@@ -81,6 +81,27 @@ fun GroupListScreen(onClose: () -> Unit) {
     var subScreen by rememberSaveable { mutableStateOf(GroupSubScreen.LIST) }
     var selectedRoom by remember { mutableStateOf<Room?>(null) }
     var showMenu by remember { mutableStateOf(false) }
+    var joinInitialCode by rememberSaveable { mutableStateOf("") }
+
+    // 채팅 푸시 탭 → 해당 방 자동 오픈 (iOS openChatRoom)
+    val pendingChatRoom by com.seoktaedev.tteona.core.services.AppNotificationManager
+        .pendingChatRoom.collectAsState()
+    LaunchedEffect(pendingChatRoom, myRooms) {
+        val pending = pendingChatRoom ?: return@LaunchedEffect
+        val room = myRooms.firstOrNull { it.roomId == pending.roomId } ?: return@LaunchedEffect
+        com.seoktaedev.tteona.core.services.AppNotificationManager.clearPendingChatRoom()
+        selectedRoom = room
+    }
+
+    // 그룹 초대 딥링크 → 코드 참여 화면 자동 오픈 (iOS deepLinkedRoomCode)
+    val pendingRoomCode by com.seoktaedev.tteona.core.services.DeepLinkHandler
+        .pendingRoomCode.collectAsState()
+    LaunchedEffect(pendingRoomCode) {
+        val code = pendingRoomCode ?: return@LaunchedEffect
+        com.seoktaedev.tteona.core.services.DeepLinkHandler.clearPendingRoom()
+        joinInitialCode = code
+        subScreen = GroupSubScreen.JOIN
+    }
 
     // 새 피드 dot 판별용 (roomId → millis)
     var roomLastReadAt by remember { mutableStateOf<Map<String, Long>>(emptyMap()) }
@@ -136,7 +157,11 @@ fun GroupListScreen(onClose: () -> Unit) {
         GroupSubScreen.JOIN -> {
             JoinRoomScreen(
                 uid = uid, nickname = nickname,
-                onDone = { subScreen = GroupSubScreen.LIST },
+                onDone = {
+                    subScreen = GroupSubScreen.LIST
+                    joinInitialCode = ""
+                },
+                initialCode = joinInitialCode,
             )
             return
         }

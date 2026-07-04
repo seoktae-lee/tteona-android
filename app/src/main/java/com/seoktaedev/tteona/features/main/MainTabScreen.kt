@@ -1,5 +1,10 @@
 package com.seoktaedev.tteona.features.main
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -13,6 +18,8 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -21,9 +28,16 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
 import com.seoktaedev.tteona.core.model.Course
 import com.seoktaedev.tteona.core.model.CourseSessionInfo
 import com.seoktaedev.tteona.core.services.ActiveSessionStore
+import com.seoktaedev.tteona.core.services.AppNotificationManager
+import com.seoktaedev.tteona.core.services.CourseService
+import com.seoktaedev.tteona.core.services.CourseThumbnailService
+import com.seoktaedev.tteona.core.services.DeepLinkHandler
+import com.seoktaedev.tteona.core.services.TteonaMessagingService
 import com.seoktaedev.tteona.features.explore.CourseDetailScreen
 import com.seoktaedev.tteona.features.explore.ExploreScreen
 import com.seoktaedev.tteona.features.group.GroupListScreen
@@ -49,6 +63,44 @@ fun MainTabScreen() {
     var courseSelection by remember { mutableStateOf<CourseSelection?>(null) }
     var showGroups by rememberSaveable { mutableStateOf(false) }
     var sessionInfo by remember { mutableStateOf<CourseSessionInfo?>(null) }
+
+    val context = LocalContext.current
+    val pendingChatRoom by AppNotificationManager.pendingChatRoom.collectAsState()
+    val pendingCourseId by DeepLinkHandler.pendingCourseId.collectAsState()
+    val pendingRoomCode by DeepLinkHandler.pendingRoomCode.collectAsState()
+
+    // 알림 권한 요청 (Android 13+) + 채널 생성
+    val notifPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { }
+    LaunchedEffect(Unit) {
+        TteonaMessagingService.ensureChannel(context)
+        if (Build.VERSION.SDK_INT >= 33 &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS)
+            != PackageManager.PERMISSION_GRANTED
+        ) {
+            notifPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+
+    // 채팅 푸시 탭 → 그룹 화면 자동 오픈 (iOS pendingChatRoom → showGroups)
+    LaunchedEffect(pendingChatRoom) {
+        if (pendingChatRoom != null) showGroups = true
+    }
+
+    // 그룹 초대 딥링크 → 그룹 화면(코드 참여) 오픈
+    LaunchedEffect(pendingRoomCode) {
+        if (pendingRoomCode != null) showGroups = true
+    }
+
+    // 코스 공유 딥링크 → 코스 상세 오픈 (iOS deepLinkedCourse)
+    LaunchedEffect(pendingCourseId) {
+        val id = pendingCourseId ?: return@LaunchedEffect
+        DeepLinkHandler.clearPendingCourse()
+        val course = CourseService.fetchCourse(id) ?: return@LaunchedEffect
+        val thumb = runCatching { CourseThumbnailService.fetchAllThumbnails()[course.courseId] }.getOrNull()
+        courseSelection = CourseSelection(course, thumb)
+    }
 
     Box(Modifier.fillMaxSize()) {
         Scaffold(

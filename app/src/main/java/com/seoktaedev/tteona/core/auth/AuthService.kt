@@ -80,6 +80,8 @@ object AuthService {
                     _verificationEmailSent.value = false
                     _currentUser.value = AppUser(uid = user.uid, email = user.email ?: "")
                     refreshOnboardingStatus(user.uid)
+                    // FCM 토큰 등록 (iOS RootView의 saveFCMToken 대응)
+                    com.seoktaedev.tteona.core.services.TteonaMessagingService.registerCurrentToken(user.uid)
                 } else {
                     _currentUser.value = null
                     _onboardingComplete.value = false

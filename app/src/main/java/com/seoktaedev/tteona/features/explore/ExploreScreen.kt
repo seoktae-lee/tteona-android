@@ -24,6 +24,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -52,13 +53,13 @@ import com.seoktaedev.tteona.ui.theme.TteOrange
 
 /**
  * 탐색 탭 — iOS Features/Explore/ExploreGridView.swift의 이식본.
- * TODO: 셀 탭 → ExploreDetailView(코스 상세) 이식 후 연결.
- * TODO: 그룹(피드) 시트 — FeedTabView 이식 후 툴바 버튼 연결.
+ * 우측 상단 그룹 버튼 → 그룹(피드) 화면 (iOS showGroups 시트 대응).
  */
 @Composable
 fun ExploreScreen(
     modifier: Modifier = Modifier,
     onCourseClick: (Course, String?) -> Unit = { _, _ -> },
+    onOpenGroups: () -> Unit = {},
     viewModel: ExploreViewModel = viewModel(),
 ) {
     val state by viewModel.uiState.collectAsState()
@@ -77,6 +78,16 @@ fun ExploreScreen(
             contentAlignment = Alignment.Center,
         ) {
             Text("탐색", fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+            Icon(
+                Icons.Filled.Groups,
+                contentDescription = "그룹",
+                tint = TteOrange,
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .padding(end = 14.dp)
+                    .size(26.dp)
+                    .clickable(onClick = onOpenGroups),
+            )
         }
 
         SortChips(current = state.sortMode, onSelect = viewModel::setSortMode)

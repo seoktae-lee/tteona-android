@@ -39,6 +39,32 @@ data class StatsEventRequest(val userId: String, val type: String)
 @Serializable
 data class UploadResponse(val url: String? = null)
 
+@Serializable
+data class ModerationRequest(val text: String)
+
+@Serializable
+data class ModerationResponse(val blocked: Boolean = false)
+
+// 채팅 히스토리 (서버 PostgreSQL 컬럼명 그대로 snake_case)
+@Serializable
+data class ChatHistoryResponse(val messages: List<ChatHistoryRow> = emptyList())
+
+@Serializable
+data class ChatHistoryRow(
+    val id: Long? = null,
+    @kotlinx.serialization.SerialName("message_id") val messageId: String? = null,
+    @kotlinx.serialization.SerialName("user_id") val userId: String? = null,
+    val nickname: String? = null,
+    val text: String? = null,
+    @kotlinx.serialization.SerialName("created_at") val createdAt: String? = null,
+    @kotlinx.serialization.SerialName("reply_to_nickname") val replyToNickname: String? = null,
+    @kotlinx.serialization.SerialName("reply_to_text") val replyToText: String? = null,
+    val reactions: List<ChatReactionRow>? = null,
+)
+
+@Serializable
+data class ChatReactionRow(val emoji: String, val userId: String)
+
 /**
  * tteona.kr REST API 정의 — iOS의 각 actor 서비스가 호출하는 엔드포인트와 동일.
  */
@@ -91,4 +117,15 @@ interface TteonaApi {
     @Multipart
     @POST("users/{uid}/avatar")
     suspend fun uploadAvatar(@Path("uid") uid: String, @Part image: MultipartBody.Part): UploadResponse
+
+    // 콘텐츠 모더레이션 — 부적절 텍스트 검사 (iOS StatsService.isTextAllowed)
+    @POST("moderate")
+    suspend fun moderateText(@Body body: ModerationRequest): ModerationResponse
+
+    // 그룹 채팅 히스토리 (iOS ChatSocketService.loadHistory)
+    @GET("rooms/{roomId}/messages")
+    suspend fun getChatHistory(
+        @Path("roomId") roomId: String,
+        @Query("limit") limit: Int = 50,
+    ): ChatHistoryResponse
 }

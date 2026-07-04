@@ -24,6 +24,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import com.seoktaedev.tteona.core.model.Course
 import com.seoktaedev.tteona.features.explore.CourseDetailScreen
 import com.seoktaedev.tteona.features.explore.ExploreScreen
+import com.seoktaedev.tteona.features.group.GroupListScreen
 import com.seoktaedev.tteona.features.home.HomeScreen
 import com.seoktaedev.tteona.features.settings.SettingsScreen
 
@@ -43,6 +44,7 @@ private data class CourseSelection(val course: Course, val thumbnailUrl: String?
 fun MainTabScreen() {
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     var courseSelection by remember { mutableStateOf<CourseSelection?>(null) }
+    var showGroups by rememberSaveable { mutableStateOf(false) }
 
     Box(Modifier.fillMaxSize()) {
         Scaffold(
@@ -70,9 +72,15 @@ fun MainTabScreen() {
                 1 -> ExploreScreen(
                     modifier = modifier,
                     onCourseClick = { course, thumb -> courseSelection = CourseSelection(course, thumb) },
+                    onOpenGroups = { showGroups = true },
                 )
                 2 -> SettingsScreen(modifier)
             }
+        }
+
+        // 그룹(피드) — iOS FeedTabView 시트 대응 풀스크린
+        if (showGroups) {
+            GroupListScreen(onClose = { showGroups = false })
         }
 
         // 코스 상세 — 탭바 위를 전부 덮는 풀스크린 (iOS fullScreenCover 대응)

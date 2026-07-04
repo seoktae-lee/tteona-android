@@ -108,8 +108,4 @@ dependencies {
     implementation(libs.play.services.location)
     implementation(libs.maps.compose)
 
-    implementation(libs.socketio) {
-        // 안드로이드 프레임워크에 org.json이 내장되어 있어 중복 제외
-        exclude(group = "org.json", module = "json")
-    }
 }

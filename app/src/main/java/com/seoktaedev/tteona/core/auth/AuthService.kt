@@ -356,6 +356,7 @@ object AuthService {
         // iOS RootView의 onChange(isLoggedIn) → clearUserData 대응
         com.seoktaedev.tteona.core.services.CourseService.clearUserData()
         com.seoktaedev.tteona.core.services.UserService.clear()
+        com.seoktaedev.tteona.core.services.RoomService.clear()
         auth.signOut()
     }
 
@@ -371,6 +372,7 @@ object AuthService {
 
             com.seoktaedev.tteona.core.services.CourseService.clearUserData()
             com.seoktaedev.tteona.core.services.UserService.clear()
+            com.seoktaedev.tteona.core.services.RoomService.clear()
             // 구글 로그인 세션 완전 해제 (iOS GIDSignIn.disconnect 대응)
             runCatching {
                 CredentialManager.create(context)

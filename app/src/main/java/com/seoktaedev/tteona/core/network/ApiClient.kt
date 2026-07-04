@@ -32,6 +32,14 @@ object ApiClient {
             .build()
     }
 
+    // WebSocket 전용 클라이언트 — 무기한 수신 + 25초 ping (iOS pingTimer와 동일)
+    val wsClient: OkHttpClient by lazy {
+        okHttpClient.newBuilder()
+            .readTimeout(0, TimeUnit.SECONDS)
+            .pingInterval(25, TimeUnit.SECONDS)
+            .build()
+    }
+
     val retrofit: Retrofit by lazy {
         Retrofit.Builder()
             .baseUrl(BASE_URL)

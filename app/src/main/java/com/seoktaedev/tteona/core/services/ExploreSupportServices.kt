@@ -2,7 +2,10 @@ package com.seoktaedev.tteona.core.services
 
 import android.util.Log
 import com.seoktaedev.tteona.core.model.CreatorRank
+import com.seoktaedev.tteona.core.model.StatsEvent
+import com.seoktaedev.tteona.core.model.TravelStats
 import com.seoktaedev.tteona.core.network.ApiClient
+import com.seoktaedev.tteona.core.network.StatsEventRequest
 
 // iOS의 소형 actor 서비스 3종 이식본 — 실패 시 기본값 반환 (iOS와 동일한 방어적 동작)
 
@@ -57,4 +60,15 @@ object StatsService {
         runCatching { ApiClient.api.getCreatorRanking().ranking }
             .onFailure { Log.w("StatsService", "ranking 실패", it) }
             .getOrDefault(emptyList())
+
+    /** 개인 누적 통계 (iOS StatsService.fetchMyStats) */
+    suspend fun fetchMyStats(userId: String): TravelStats? =
+        runCatching { ApiClient.api.getMyStats(userId) }
+            .onFailure { Log.w("StatsService", "stats 실패", it) }
+            .getOrNull()
+
+    /** 통계 이벤트 적재 — 실패해도 무시 (iOS postEvent와 동일한 fire-and-forget) */
+    suspend fun postEvent(event: StatsEvent, userId: String) {
+        runCatching { ApiClient.api.postStatsEvent(StatsEventRequest(userId, event.type)) }
+    }
 }

@@ -1,10 +1,15 @@
 package com.seoktaedev.tteona.core.network
 
 import com.seoktaedev.tteona.core.model.CreatorRank
+import com.seoktaedev.tteona.core.model.TravelStats
 import kotlinx.serialization.Serializable
+import okhttp3.MultipartBody
 import retrofit2.http.Body
 import retrofit2.http.GET
+import retrofit2.http.Multipart
 import retrofit2.http.POST
+import retrofit2.http.Part
+import retrofit2.http.Path
 import retrofit2.http.Query
 
 @Serializable
@@ -27,6 +32,12 @@ data class RouteResponse(val distanceMeters: Double = 0.0, val travelTimeSec: Do
 
 @Serializable
 data class TourPhotoResponse(val url: String? = null, val category: String? = null)
+
+@Serializable
+data class StatsEventRequest(val userId: String, val type: String)
+
+@Serializable
+data class UploadResponse(val url: String? = null)
 
 /**
  * tteona.kr REST API 정의 — iOS의 각 actor 서비스가 호출하는 엔드포인트와 동일.
@@ -66,4 +77,18 @@ interface TteonaApi {
         @Query("lat") lat: Double? = null,
         @Query("lng") lng: Double? = null,
     ): TourPhotoResponse
+
+    // 개인 누적 통계 (iOS StatsService.fetchMyStats)
+    @GET("users/{uid}/stats")
+    suspend fun getMyStats(@Path("uid") uid: String): TravelStats
+
+    // 통계 이벤트 적재 — fire-and-forget (iOS StatsService.postEvent)
+    @POST("stats/event")
+    suspend fun postStatsEvent(@Body body: StatsEventRequest)
+
+    // 프로필 이미지 업로드 — 서버가 512px로 리샘플 후 Firestore profileImageUrl도 갱신
+    // (iOS ProfileImageService.upload)
+    @Multipart
+    @POST("users/{uid}/avatar")
+    suspend fun uploadAvatar(@Path("uid") uid: String, @Part image: MultipartBody.Part): UploadResponse
 }

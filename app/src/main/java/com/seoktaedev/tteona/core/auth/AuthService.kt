@@ -297,7 +297,36 @@ object AuthService {
     fun signOut() {
         // iOS RootView의 onChange(isLoggedIn) → clearUserData 대응
         com.seoktaedev.tteona.core.services.CourseService.clearUserData()
+        com.seoktaedev.tteona.core.services.UserService.clear()
         auth.signOut()
+    }
+
+    // MARK: - 회원탈퇴 (iOS deleteAccount 대응)
+    // 서버(Cloud Function)가 코스·그룹·계정을 일괄 삭제하고, 클라이언트는 세션 정리만 담당.
+    suspend fun deleteAccount(context: Context): Boolean {
+        _isLoading.value = true
+        return try {
+            com.google.firebase.functions.FirebaseFunctions.getInstance("us-central1")
+                .getHttpsCallable("deleteMyAccount")
+                .call()
+                .await()
+
+            com.seoktaedev.tteona.core.services.CourseService.clearUserData()
+            com.seoktaedev.tteona.core.services.UserService.clear()
+            // 구글 로그인 세션 완전 해제 (iOS GIDSignIn.disconnect 대응)
+            runCatching {
+                CredentialManager.create(context)
+                    .clearCredentialState(androidx.credentials.ClearCredentialStateRequest())
+            }
+            auth.signOut()
+            true
+        } catch (e: Exception) {
+            Log.w("Auth", "회원탈퇴 실패", e)
+            _errorMessage.value = "회원 탈퇴에 실패했어요. 잠시 후 다시 시도해주세요."
+            false
+        } finally {
+            _isLoading.value = false
+        }
     }
 
     fun clearError() {

@@ -65,6 +65,13 @@ data class ChatHistoryRow(
 @Serializable
 data class ChatReactionRow(val emoji: String, val userId: String)
 
+@Serializable
+data class CourseFollowedRequest(
+    val courseOwnerId: String,
+    val followerNickname: String,
+    val courseName: String,
+)
+
 /**
  * tteona.kr REST API 정의 — iOS의 각 actor 서비스가 호출하는 엔드포인트와 동일.
  */
@@ -128,4 +135,8 @@ interface TteonaApi {
         @Path("roomId") roomId: String,
         @Query("limit") limit: Int = 50,
     ): ChatHistoryResponse
+
+    // 코스 작성자 알림 (iOS PushService.notifyCourseFollowed)
+    @POST("push/course-followed")
+    suspend fun notifyCourseFollowed(@Body body: CourseFollowedRequest)
 }

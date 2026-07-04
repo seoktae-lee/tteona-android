@@ -80,6 +80,7 @@ fun CourseDetailScreen(
     course: Course,
     thumbnailUrl: String?,
     onClose: () -> Unit,
+    onStartCourse: ((Set<String>) -> Unit)? = null,
     viewModel: CourseDetailViewModel = viewModel(),
 ) {
     val state by viewModel.uiState.collectAsState()
@@ -87,6 +88,7 @@ fun CourseDetailScreen(
     val isLiked = course.courseId in likedIds
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+    var showRoomSelect by remember { androidx.compose.runtime.mutableStateOf(false) }
 
     BackHandler(onBack = onClose)
     LaunchedEffect(course.courseId) { viewModel.load(course) }
@@ -138,7 +140,8 @@ fun CourseDetailScreen(
             ) {
                 Button(
                     onClick = {
-                        scope.launch { snackbarHostState.showSnackbar("그룹 여행 시작 기능은 준비 중이에요.") }
+                        if (onStartCourse != null) showRoomSelect = true
+                        else scope.launch { snackbarHostState.showSnackbar("그룹 여행 시작 기능은 준비 중이에요.") }
                     },
                     modifier = Modifier
                         .fillMaxWidth()
@@ -148,6 +151,17 @@ fun CourseDetailScreen(
                 ) {
                     Text("이 코스 따라가기", fontSize = 17.sp, fontWeight = FontWeight.Bold)
                 }
+            }
+
+            // 공유할 그룹 선택 → 세션 시작 (iOS RoomSelectView 시트 대응)
+            if (showRoomSelect && onStartCourse != null) {
+                com.seoktaedev.tteona.features.session.RoomSelectSheet(
+                    onConfirm = { roomIds ->
+                        showRoomSelect = false
+                        onStartCourse(roomIds)
+                    },
+                    onDismiss = { showRoomSelect = false },
+                )
             }
         }
     }

@@ -22,10 +22,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.seoktaedev.tteona.core.model.Course
+import com.seoktaedev.tteona.core.model.CourseSessionInfo
+import com.seoktaedev.tteona.core.services.ActiveSessionStore
 import com.seoktaedev.tteona.features.explore.CourseDetailScreen
 import com.seoktaedev.tteona.features.explore.ExploreScreen
 import com.seoktaedev.tteona.features.group.GroupListScreen
 import com.seoktaedev.tteona.features.home.HomeScreen
+import com.seoktaedev.tteona.features.session.ActiveSessionScreen
 import com.seoktaedev.tteona.features.settings.SettingsScreen
 
 // iOS MainTabView와 동일한 3탭 구성: 홈(지도) / 탐색 / 설정
@@ -45,6 +48,7 @@ fun MainTabScreen() {
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     var courseSelection by remember { mutableStateOf<CourseSelection?>(null) }
     var showGroups by rememberSaveable { mutableStateOf(false) }
+    var sessionInfo by remember { mutableStateOf<CourseSessionInfo?>(null) }
 
     Box(Modifier.fillMaxSize()) {
         Scaffold(
@@ -68,6 +72,16 @@ fun MainTabScreen() {
                 0 -> HomeScreen(
                     modifier = modifier,
                     onCourseClick = { course, thumb -> courseSelection = CourseSelection(course, thumb) },
+                    onResumeCourse = {
+                        // 저장된 당일 코스 세션 이어하기 (iOS 코스 이어하기 버튼)
+                        ActiveSessionStore.loadTodaySession()?.let { saved ->
+                            sessionInfo = CourseSessionInfo(
+                                course = saved.course,
+                                roomIds = saved.roomIds.toSet(),
+                                isResuming = true,
+                            )
+                        }
+                    },
                 )
                 1 -> ExploreScreen(
                     modifier = modifier,
@@ -89,6 +103,21 @@ fun MainTabScreen() {
                 course = selection.course,
                 thumbnailUrl = selection.thumbnailUrl,
                 onClose = { courseSelection = null },
+                onStartCourse = { roomIds ->
+                    val course = selection.course
+                    courseSelection = null
+                    sessionInfo = CourseSessionInfo(course = course, roomIds = roomIds)
+                },
+            )
+        }
+
+        // 코스 진행 세션 (iOS ActiveSessionView fullScreenCover)
+        sessionInfo?.let { info ->
+            ActiveSessionScreen(
+                course = info.course,
+                roomIds = info.roomIds,
+                isResuming = info.isResuming,
+                onClose = { sessionInfo = null },
             )
         }
     }

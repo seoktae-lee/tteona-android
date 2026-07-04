@@ -37,6 +37,7 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
@@ -121,6 +122,7 @@ private fun pinRes(tag: CourseTag): Int = when (tag) {
 fun HomeScreen(
     modifier: Modifier = Modifier,
     onCourseClick: (Course, String?) -> Unit = { _, _ -> },
+    onResumeCourse: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -379,6 +381,32 @@ fun HomeScreen(
                 ) {
                     Icon(Icons.AutoMirrored.Filled.DirectionsWalk, contentDescription = null, tint = Color.White, modifier = Modifier.size(19.dp))
                     Text("나의 오늘", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                }
+
+                // 코스 이어하기 — 좌측 (iOS activeSessionStore.hasTodaySession 버튼)
+                val hasTodaySession by com.seoktaedev.tteona.core.services.ActiveSessionStore.hasTodaySession.collectAsState()
+                if (hasTodaySession) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(3.dp),
+                        modifier = Modifier
+                            .align(Alignment.CenterStart)
+                            .padding(start = 24.dp)
+                            .size(48.dp)
+                            .shadow(8.dp, CircleShape)
+                            .clip(CircleShape)
+                            .background(Color.White)
+                            .clickable(onClick = onResumeCourse)
+                            .padding(top = 8.dp),
+                    ) {
+                        Icon(
+                            Icons.Filled.Map,
+                            contentDescription = null,
+                            tint = TteOrange,
+                            modifier = Modifier.size(16.dp),
+                        )
+                        Text("코스", fontSize = 9.sp, fontWeight = FontWeight.Medium, color = TteOrange)
+                    }
                 }
 
                 // 현재 위치 — 우측

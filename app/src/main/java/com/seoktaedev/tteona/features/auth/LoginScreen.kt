@@ -1,5 +1,6 @@
 package com.seoktaedev.tteona.features.auth
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -13,13 +14,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Chat
+import androidx.compose.material.icons.filled.ChatBubble
 import androidx.compose.material.icons.filled.MarkEmailRead
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
@@ -43,8 +45,11 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -53,7 +58,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.layout.ContentScale
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.seoktaedev.tteona.R
 import com.seoktaedev.tteona.ui.theme.TteFieldBackground
 import com.seoktaedev.tteona.ui.theme.TteMediumGray
 import com.seoktaedev.tteona.ui.theme.TteOrange
@@ -94,11 +101,16 @@ fun LoginScreen(viewModel: AuthViewModel = viewModel()) {
                 .padding(horizontal = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Spacer(Modifier.height(100.dp))
+            Spacer(Modifier.height(130.dp))
 
-            // 로고 섹션
-            Text("tteona", fontSize = 52.sp, fontWeight = FontWeight.Bold, color = TteOrange)
-            Spacer(Modifier.height(12.dp))
+            // 로고 섹션 (워드마크 이미지 — iOS와 동일 에셋)
+            Image(
+                painter = painterResource(R.drawable.tteona_logo),
+                contentDescription = "tteona",
+                contentScale = ContentScale.Fit,
+                modifier = Modifier.width(190.dp),
+            )
+            Spacer(Modifier.height(16.dp))
             Text("특별한 순간을 영상으로 기록하세요", fontSize = 15.sp, color = TteMediumGray)
 
             Spacer(Modifier.height(48.dp))
@@ -108,14 +120,30 @@ fun LoginScreen(viewModel: AuthViewModel = viewModel()) {
             Spacer(Modifier.height(16.dp))
             val context = LocalContext.current
             Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+                // Google — iOS와 동일한 4색 그라데이션 G
                 SocialCircleButton(
                     background = Color.White,
                     border = Color(0x33000000),
                     enabled = !isLoading,
                     onClick = { viewModel.signInWithGoogle(context) },
                 ) {
-                    Text("G", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color(0xFF4285F4))
+                    Text(
+                        "G",
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Bold,
+                        style = TextStyle(
+                            brush = Brush.linearGradient(
+                                listOf(
+                                    Color(0xFF4285F4), // blue
+                                    Color(0xFFEA4335), // red
+                                    Color(0xFFFBBC05), // yellow
+                                    Color(0xFF34A853), // green
+                                )
+                            )
+                        ),
+                    )
                 }
+                // 카카오 — iOS message.fill과 동일한 채워진 말풍선
                 SocialCircleButton(
                     background = Color(0xFFFEE500),
                     border = Color.Transparent,
@@ -123,10 +151,10 @@ fun LoginScreen(viewModel: AuthViewModel = viewModel()) {
                     onClick = { viewModel.signInWithKakao(context) },
                 ) {
                     Icon(
-                        Icons.AutoMirrored.Filled.Chat,
+                        Icons.Filled.ChatBubble,
                         contentDescription = "카카오 로그인",
                         tint = Color(0xFF3A1D1D),
-                        modifier = Modifier.size(24.dp),
+                        modifier = Modifier.size(22.dp),
                     )
                 }
             }

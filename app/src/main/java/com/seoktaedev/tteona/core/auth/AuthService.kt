@@ -1,0 +1,327 @@
+package com.seoktaedev.tteona.core.auth
+
+import android.content.Context
+import android.util.Log
+import androidx.credentials.CredentialManager
+import androidx.credentials.CustomCredential
+import androidx.credentials.GetCredentialRequest
+import androidx.credentials.exceptions.GetCredentialCancellationException
+import com.google.android.libraries.identity.googleid.GetGoogleIdOption
+import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
+import com.google.firebase.Firebase
+import com.google.firebase.FirebaseNetworkException
+import com.google.firebase.Timestamp
+import com.google.firebase.auth.FirebaseAuthException
+import com.google.firebase.auth.GoogleAuthProvider
+import com.google.firebase.auth.auth
+import com.google.firebase.firestore.firestore
+import com.seoktaedev.tteona.R
+import com.seoktaedev.tteona.core.model.AppUser
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
+
+/**
+ * iOS Core/Services/AuthService.swift의 Kotlin 이식본.
+ * 앱 전역 싱글턴 — Application.onCreate에서 initialize() 호출.
+ */
+object AuthService {
+    private val auth get() = Firebase.auth
+    private val db get() = Firebase.firestore
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+
+    private val _currentUser = MutableStateFlow<AppUser?>(null)
+    val currentUser: StateFlow<AppUser?> = _currentUser
+
+    private val _isInitializing = MutableStateFlow(true)
+    val isInitializing: StateFlow<Boolean> = _isInitializing
+
+    private val _isLoading = MutableStateFlow(false)
+    val isLoading: StateFlow<Boolean> = _isLoading
+
+    private val _errorMessage = MutableStateFlow<String?>(null)
+    val errorMessage: StateFlow<String?> = _errorMessage
+
+    private val _verificationEmailSent = MutableStateFlow(false)
+    val verificationEmailSent: StateFlow<Boolean> = _verificationEmailSent
+
+    private val _onboardingComplete = MutableStateFlow(false)
+    val onboardingComplete: StateFlow<Boolean> = _onboardingComplete
+
+    val isLoggedIn: Boolean get() = _currentUser.value != null
+
+    fun initialize(context: Context) {
+        // 앱 재설치 시 남은 Firebase 토큰 제거 (iOS의 Keychain 잔존 토큰 처리와 동일)
+        val prefs = context.getSharedPreferences("tteona", Context.MODE_PRIVATE)
+        if (!prefs.getBoolean("app_installed", false)) {
+            auth.signOut()
+            prefs.edit().putBoolean("app_installed", true).apply()
+        }
+
+        auth.addAuthStateListener { firebaseAuth ->
+            val user = firebaseAuth.currentUser
+            scope.launch {
+                if (user != null) {
+                    // Android providerData에는 집계용 "firebase" 항목이 포함되므로 제외.
+                    // 카카오(커스텀 토큰) 계정은 실제 provider가 없어 이메일 인증 대상이 아님
+                    // (iOS의 allSatisfy 함정 처리와 동일한 의도).
+                    val providerIds = user.providerData.map { it.providerId }.filter { it != "firebase" }
+                    val isEmailPassword = providerIds.contains("password") && providerIds.all { it == "password" }
+                    val needsVerification = isEmailPassword && !user.isEmailVerified
+                    if (needsVerification) {
+                        // 미인증 이메일 계정 → currentUser 설정하지 않음
+                        _isInitializing.value = false
+                        return@launch
+                    }
+                    _verificationEmailSent.value = false
+                    _currentUser.value = AppUser(uid = user.uid, email = user.email ?: "")
+                    refreshOnboardingStatus(user.uid)
+                } else {
+                    _currentUser.value = null
+                    _onboardingComplete.value = false
+                }
+                _isInitializing.value = false
+            }
+        }
+    }
+
+    // MARK: - 이메일 로그인
+    suspend fun signIn(email: String, password: String) {
+        _isLoading.value = true
+        _errorMessage.value = null
+        try {
+            if (!isValidEmail(email)) { _errorMessage.value = "올바른 이메일 형식이 아닙니다."; return }
+            if (password.length < 6) { _errorMessage.value = "비밀번호는 6자 이상이어야 합니다."; return }
+
+            val result = auth.signInWithEmailAndPassword(email, password).await()
+            val user = result.user ?: return
+            if (!user.isEmailVerified) {
+                _verificationEmailSent.value = true
+                _errorMessage.value = null
+            } else {
+                _verificationEmailSent.value = false
+                _currentUser.value = AppUser(uid = user.uid, email = user.email ?: "")
+                refreshOnboardingStatus(user.uid)
+            }
+        } catch (e: Exception) {
+            _errorMessage.value = firebaseErrorMessage(e)
+        } finally {
+            _isLoading.value = false
+        }
+    }
+
+    // MARK: - 이메일 회원가입 (인증 메일 발송)
+    suspend fun signUp(email: String, password: String) {
+        _isLoading.value = true
+        _errorMessage.value = null
+        try {
+            if (!isValidEmail(email)) { _errorMessage.value = "올바른 이메일 형식이 아닙니다."; return }
+            if (password.length < 6) { _errorMessage.value = "비밀번호는 6자 이상이어야 합니다."; return }
+
+            val result = auth.createUserWithEmailAndPassword(email, password).await()
+            result.user?.sendEmailVerification()?.await()
+            _verificationEmailSent.value = true
+        } catch (e: FirebaseAuthException) {
+            if (e.errorCode == "ERROR_EMAIL_ALREADY_IN_USE") {
+                // 미인증 계정으로 재가입 시도 → 로그인해서 인증 여부 확인 (iOS와 동일)
+                try {
+                    val result = auth.signInWithEmailAndPassword(email, password).await()
+                    val user = result.user
+                    if (user != null && !user.isEmailVerified) {
+                        runCatching { user.sendEmailVerification().await() }
+                        _verificationEmailSent.value = true
+                        _errorMessage.value = null
+                    } else {
+                        auth.signOut()
+                        _errorMessage.value = "이미 가입된 이메일입니다. 로그인해주세요."
+                    }
+                } catch (_: Exception) {
+                    // 비밀번호가 달라 로그인 실패한 경우
+                    _errorMessage.value =
+                        "이미 가입 진행 중인 이메일이에요.\n처음 설정한 비밀번호로 로그인해 인증을 완료하거나, 비밀번호 재설정을 진행해주세요."
+                }
+            } else {
+                _errorMessage.value = firebaseErrorMessage(e)
+            }
+        } catch (e: Exception) {
+            _errorMessage.value = firebaseErrorMessage(e)
+        } finally {
+            _isLoading.value = false
+        }
+    }
+
+    // MARK: - 인증 완료 확인 후 로그인 (인증 메일 화면의 "인증 완료 후 시작하기")
+    suspend fun verifyAndLogin(email: String, password: String) {
+        _isLoading.value = true
+        try {
+            var user = auth.currentUser
+            if (user == null) {
+                // 앱 재실행 등으로 세션이 없으면 입력된 계정으로 로그인 후 확인
+                if (email.isEmpty() || password.isEmpty()) {
+                    _errorMessage.value = "인증 확인을 위해 이메일/비밀번호를 다시 입력해주세요."
+                    return
+                }
+                user = auth.signInWithEmailAndPassword(email, password).await().user
+            }
+            user ?: return
+            runCatching { user.reload().await() }
+            val refreshed = auth.currentUser
+            if (refreshed != null && refreshed.isEmailVerified) {
+                _errorMessage.value = null
+                _currentUser.value = AppUser(uid = refreshed.uid, email = refreshed.email ?: "")
+                refreshOnboardingStatus(refreshed.uid)
+                _verificationEmailSent.value = false
+            } else {
+                if (auth.currentUser?.isEmailVerified == false && email.isNotEmpty()) auth.signOut()
+                _errorMessage.value = "아직 인증이 완료되지 않았어요.\n메일함에서 링크를 클릭한 후 다시 눌러주세요."
+            }
+        } catch (e: Exception) {
+            _errorMessage.value = "로그인에 실패했어요. 다시 시도해주세요."
+        } finally {
+            _isLoading.value = false
+        }
+    }
+
+    // MARK: - 인증 메일 재전송
+    suspend fun resendVerificationEmail(email: String, password: String): Boolean {
+        try {
+            val user = auth.currentUser
+            if (user != null) {
+                user.sendEmailVerification().await()
+                _errorMessage.value = null
+                return true
+            }
+            if (email.isNotEmpty() && password.isNotEmpty()) {
+                val result = auth.signInWithEmailAndPassword(email, password).await()
+                result.user?.sendEmailVerification()?.await()
+                auth.signOut()
+                _errorMessage.value = null
+                return true
+            }
+            _errorMessage.value = "재전송을 위해 이메일/비밀번호를 입력해주세요."
+            return false
+        } catch (e: Exception) {
+            _errorMessage.value = "인증 메일 재전송에 실패했어요. 잠시 후 다시 시도해주세요."
+            return false
+        }
+    }
+
+    // MARK: - 비밀번호 재설정
+    suspend fun sendPasswordReset(email: String): Boolean {
+        if (!isValidEmail(email)) {
+            _errorMessage.value = "올바른 이메일 형식이 아닙니다."
+            return false
+        }
+        return try {
+            auth.sendPasswordResetEmail(email).await()
+            true
+        } catch (e: Exception) {
+            _errorMessage.value = firebaseErrorMessage(e)
+            false
+        }
+    }
+
+    // MARK: - Google 로그인 (Credential Manager)
+    suspend fun signInWithGoogle(context: Context) {
+        _isLoading.value = true
+        _errorMessage.value = null
+        try {
+            val credentialManager = CredentialManager.create(context)
+            val googleIdOption = GetGoogleIdOption.Builder()
+                .setFilterByAuthorizedAccounts(false)
+                .setServerClientId(context.getString(R.string.default_web_client_id))
+                .build()
+            val request = GetCredentialRequest.Builder()
+                .addCredentialOption(googleIdOption)
+                .build()
+
+            val result = credentialManager.getCredential(context, request)
+            val credential = result.credential
+            if (credential is CustomCredential &&
+                credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL
+            ) {
+                val idToken = GoogleIdTokenCredential.createFrom(credential.data).idToken
+                val firebaseCredential = GoogleAuthProvider.getCredential(idToken, null)
+                val authResult = auth.signInWithCredential(firebaseCredential).await()
+                val user = authResult.user ?: return
+                _verificationEmailSent.value = false
+                _currentUser.value = AppUser(uid = user.uid, email = user.email ?: "")
+                refreshOnboardingStatus(user.uid)
+            } else {
+                _errorMessage.value = "Google 인증 토큰을 가져올 수 없습니다."
+            }
+        } catch (_: GetCredentialCancellationException) {
+            // 사용자가 로그인 창을 닫음 — 에러 표시하지 않음
+        } catch (e: Exception) {
+            Log.w("Auth", "Google 로그인 실패", e)
+            _errorMessage.value = "Google 로그인에 실패했습니다.\nFirebase 콘솔에 SHA-1 지문이 등록되어 있는지 확인해주세요."
+        } finally {
+            _isLoading.value = false
+        }
+    }
+
+    // MARK: - 카카오 로그인
+    suspend fun signInWithKakao() {
+        // TODO(Kakao): Kakao Developers에 Android 플랫폼 등록 후 Kakao SDK 연동 →
+        //  createKakaoCustomToken Functions 호출 → signInWithCustomToken (iOS와 동일 플로우)
+        _errorMessage.value = "카카오 로그인은 준비 중이에요. 이메일 또는 Google로 로그인해주세요."
+    }
+
+    // MARK: - 온보딩 완료 (users 문서 생성 — iOS OnboardingView의 저장 로직에 대응)
+    suspend fun completeOnboarding(nickname: String) {
+        val user = auth.currentUser ?: return
+        _isLoading.value = true
+        try {
+            val data = mapOf(
+                "uid" to user.uid,
+                "email" to (user.email ?: ""),
+                "nickname" to nickname,
+                "createdAt" to Timestamp.now(),
+                "isVerified" to false,
+            )
+            db.collection("users").document(user.uid).set(data).await()
+            _currentUser.value = _currentUser.value?.copy(nickname = nickname)
+            _onboardingComplete.value = true
+        } catch (e: Exception) {
+            _errorMessage.value = "프로필 저장에 실패했어요. 다시 시도해주세요."
+        } finally {
+            _isLoading.value = false
+        }
+    }
+
+    // MARK: - 로그아웃
+    fun signOut() {
+        auth.signOut()
+    }
+
+    fun clearError() {
+        _errorMessage.value = null
+    }
+
+    // MARK: - Helpers
+    private suspend fun refreshOnboardingStatus(uid: String) {
+        // 기존 가입 유저는 Firestore users 문서가 이미 존재하므로 온보딩을 다시 하지 않음
+        val doc = runCatching { db.collection("users").document(uid).get().await() }.getOrNull()
+        _onboardingComplete.value = doc?.exists() == true
+    }
+
+    private fun isValidEmail(email: String): Boolean =
+        Regex("^[A-Z0-9a-z._%+\\-]+@[A-Za-z0-9.\\-]+\\.[A-Za-z]{2,}$").matches(email)
+
+    private fun firebaseErrorMessage(e: Exception): String {
+        if (e is FirebaseNetworkException) return "네트워크 오류가 발생했습니다."
+        val code = (e as? FirebaseAuthException)?.errorCode
+        return when (code) {
+            "ERROR_EMAIL_ALREADY_IN_USE" -> "이미 사용 중인 이메일입니다."
+            "ERROR_INVALID_EMAIL" -> "올바른 이메일 형식이 아닙니다."
+            "ERROR_WRONG_PASSWORD", "ERROR_INVALID_CREDENTIAL" -> "비밀번호가 올바르지 않습니다."
+            "ERROR_USER_NOT_FOUND" -> "존재하지 않는 계정입니다."
+            "ERROR_WEAK_PASSWORD" -> "비밀번호는 6자 이상이어야 합니다."
+            else -> "오류가 발생했습니다. 다시 시도해주세요."
+        }
+    }
+}

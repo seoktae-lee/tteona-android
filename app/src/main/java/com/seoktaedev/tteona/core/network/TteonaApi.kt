@@ -106,10 +106,12 @@ data class CourseLikedRequest(
 )
 
 // 채팅 등 서버(server.js) 발송 푸시용 FCM 토큰 등록
+// platform은 기본값을 두지 않는다 — kotlinx.serialization은 기본값과 같은 필드를
+// JSON 직렬화에서 생략하므로, 기본값이 있으면 서버가 platform을 못 받아 'ios'로 오판한다.
 @Serializable
 data class PushRegisterRequest(
     val token: String,
-    val platform: String = "android",
+    val platform: String,
 )
 
 /**

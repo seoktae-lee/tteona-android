@@ -98,7 +98,7 @@ class TteonaMessagingService : FirebaseMessagingService() {
             Firebase.firestore.collection("userPrivate").document(userId)
                 .set(mapOf("fcmToken" to token), SetOptions.merge())
             CoroutineScope(Dispatchers.IO).launch {
-                runCatching { ApiClient.api.registerPush(PushRegisterRequest(token)) }
+                runCatching { ApiClient.api.registerPush(PushRegisterRequest(token, platform = "android")) }
             }
         }
 

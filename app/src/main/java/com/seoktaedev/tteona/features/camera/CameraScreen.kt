@@ -13,6 +13,7 @@ import androidx.camera.core.CameraSelector
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.lifecycle.awaitInstance
+import androidx.camera.video.FallbackStrategy
 import androidx.camera.video.FileOutputOptions
 import androidx.camera.video.Quality
 import androidx.camera.video.QualitySelector
@@ -150,8 +151,17 @@ fun CameraScreen(
         val provider = ProcessCameraProvider.awaitInstance(context)
         cameraProvider = provider
         val preview = Preview.Builder().build().also { it.surfaceProvider = previewView.surfaceProvider }
+        // iOS는 .hd1920x1080(FHD) 고정 — 아이폰은 전부 1080p 지원.
+        // 안드로이드는 기기별 지원 화질이 달라(에뮬·일부 기기는 720p가 최대) FHD를 폴백 없이
+        // 요구하면 selectedQualities가 비어 Recorder가 PENDING_RECORDING에서 멈추거나 크래시한다.
+        // FHD 선호 + 미지원 시 HD→SD로 자동 강등하도록 정렬 리스트+폴백 지정.
         val recorder = Recorder.Builder()
-            .setQualitySelector(QualitySelector.from(Quality.FHD))
+            .setQualitySelector(
+                QualitySelector.fromOrderedList(
+                    listOf(Quality.FHD, Quality.HD, Quality.SD),
+                    FallbackStrategy.lowerQualityOrHigherThan(Quality.HD),
+                )
+            )
             .build()
         val capture = VideoCapture.withOutput(recorder)
         provider.unbindAll()

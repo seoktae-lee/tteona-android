@@ -350,7 +350,6 @@ fun CameraScreen(
                     .size(80.dp)
                     .clickable(enabled = !isSaving) {
                         if (isRecording) {
-                            isRecording = false
                             stopRecording()
                         } else {
                             startRecording()

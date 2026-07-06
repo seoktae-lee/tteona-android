@@ -76,6 +76,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -381,6 +382,8 @@ private fun FormatRow(
 private fun ProBadge() {
     Text(
         "👑 PRO", fontSize = 10.sp, fontWeight = FontWeight.Black, color = Color.White,
+        maxLines = 1,
+        softWrap = false,
         modifier = Modifier
             .clip(CircleShape)
             .background(Brush.horizontalGradient(listOf(Color(0xFFFFB34D), TteOrange)))
@@ -535,11 +538,19 @@ private fun BgmRow(
     ) {
         Icon(icon, contentDescription = null, tint = if (isOn) TteOrange else Color.White.copy(alpha = 0.5f), modifier = Modifier.width(28.dp).size(20.dp))
         Column(verticalArrangement = Arrangement.spacedBy(2.dp), modifier = Modifier.weight(1f)) {
+            // 제목이 길면(예: "Acoustic Road Trip Music") mood·PRO 뱃지가 밀려 한 글자씩
+            // 세로로 줄바꿈되는 문제 방지 — 제목만 weight로 줄이고, 뱃지들은 항상 한 줄 고정폭 유지.
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(name, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Color.White, maxLines = 1)
+                Text(
+                    name, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Color.White,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
                 mood?.let {
                     Text(
                         it, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = TteOrange,
+                        maxLines = 1,
+                        softWrap = false,
                         modifier = Modifier
                             .clip(CircleShape)
                             .background(TteOrange.copy(alpha = 0.18f))

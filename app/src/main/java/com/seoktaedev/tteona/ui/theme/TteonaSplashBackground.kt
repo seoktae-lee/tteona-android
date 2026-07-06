@@ -11,11 +11,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 
@@ -38,29 +36,26 @@ fun TteonaSplashBackground(modifier: Modifier = Modifier) {
     )
 
     Box(modifier.fillMaxSize().background(TteBackground)) {
-        // Circle 1: tteOrange 0.22, 420dp, blur 90 — (130,-80) → (-110,-200)
+        // Circle 1: tteOrange 0.22, 420dp — (130,-80) → (-110,-200)
         Box(
             Modifier
                 .size(420.dp)
                 .offset(x = (130 - 240 * t).dp, y = (-80 - 120 * t).dp)
-                .blur(90.dp)
-                .background(TteOrange.copy(alpha = 0.22f), CircleShape)
+                .glowCircle(TteOrange, 0.22f)
         )
-        // Circle 2: 웜 오렌지 0.17, 360dp, blur 80 — (-100,300) → (130,180)
+        // Circle 2: 웜 오렌지 0.17, 360dp — (-100,300) → (130,180)
         Box(
             Modifier
                 .size(360.dp)
                 .offset(x = (-100 + 230 * t).dp, y = (300 - 120 * t).dp)
-                .blur(80.dp)
-                .background(Color(0xFFFFA159).copy(alpha = 0.17f), CircleShape)
+                .glowCircle(Color(0xFFFFA159), 0.17f)
         )
-        // Circle 3: tteOrange 0.13, 320dp, blur 85 — (80,70) → (-60,300)
+        // Circle 3: tteOrange 0.13, 320dp — (80,70) → (-60,300)
         Box(
             Modifier
                 .size(320.dp)
                 .offset(x = (80 - 140 * t).dp, y = (70 + 230 * t).dp)
-                .blur(85.dp)
-                .background(TteOrange.copy(alpha = 0.13f), CircleShape)
+                .glowCircle(TteOrange, 0.13f)
         )
     }
 }

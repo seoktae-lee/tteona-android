@@ -79,7 +79,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -102,6 +101,7 @@ import com.seoktaedev.tteona.ui.theme.TteDarkGray
 import com.seoktaedev.tteona.ui.theme.TteFieldBackground
 import com.seoktaedev.tteona.ui.theme.TteMediumGray
 import com.seoktaedev.tteona.ui.theme.TteOrange
+import com.seoktaedev.tteona.ui.theme.glowCircle
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.cos
@@ -197,24 +197,21 @@ private fun AuroraBackground(tint: Color, modifier: Modifier = Modifier) {
             Modifier
                 .size(320.dp)
                 .offset(x = (40 + sin(t.toDouble()) * 40).dp, y = (60 + cos(t.toDouble() * 1.3) * 30).dp)
-                .blur(60.dp)
-                .background(tint.copy(alpha = 0.16f), CircleShape)
+                .glowCircle(tint, 0.16f)
         )
         Box(
             Modifier
                 .align(Alignment.CenterEnd)
                 .size(280.dp)
                 .offset(x = (cos(t.toDouble()) * 35).dp, y = (sin(t.toDouble() * 1.4) * 40).dp)
-                .blur(70.dp)
-                .background(tint.copy(alpha = 0.10f), CircleShape)
+                .glowCircle(tint, 0.10f)
         )
         Box(
             Modifier
                 .align(Alignment.BottomStart)
                 .size(250.dp)
                 .offset(x = (60 + sin(t.toDouble() + 2) * 45).dp, y = (cos(t.toDouble() * 1.2) * 30).dp)
-                .blur(55.dp)
-                .background(tint.copy(alpha = 0.12f), CircleShape)
+                .glowCircle(tint, 0.12f)
         )
     }
 }
@@ -254,8 +251,7 @@ private fun SplashStep(onNext: () -> Unit) {
                 Box(
                     Modifier
                         .size(260.dp)
-                        .blur(50.dp)
-                        .background(TteOrange.copy(alpha = 0.22f), CircleShape)
+                        .glowCircle(TteOrange, 0.22f)
                 )
                 Image(
                     painterResource(R.drawable.tteoni_front),

@@ -6,7 +6,9 @@ import androidx.credentials.CredentialManager
 import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialRequest
 import androidx.credentials.exceptions.GetCredentialCancellationException
+import androidx.credentials.exceptions.NoCredentialException
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
+import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.firebase.Firebase
 import com.google.firebase.FirebaseNetworkException
@@ -236,15 +238,29 @@ object AuthService {
         _errorMessage.value = null
         try {
             val credentialManager = CredentialManager.create(context)
-            val googleIdOption = GetGoogleIdOption.Builder()
-                .setFilterByAuthorizedAccounts(false)
-                .setServerClientId(context.getString(R.string.default_web_client_id))
-                .build()
-            val request = GetCredentialRequest.Builder()
-                .addCredentialOption(googleIdOption)
-                .build()
-
-            val result = credentialManager.getCredential(context, request)
+            val serverClientId = context.getString(R.string.default_web_client_id)
+            val result = try {
+                // 1차: 기기에 로그인된 구글 계정 선택 UI
+                credentialManager.getCredential(
+                    context,
+                    GetCredentialRequest.Builder()
+                        .addCredentialOption(
+                            GetGoogleIdOption.Builder()
+                                .setFilterByAuthorizedAccounts(false)
+                                .setServerClientId(serverClientId)
+                                .build()
+                        )
+                        .build()
+                )
+            } catch (_: NoCredentialException) {
+                // 기기에 구글 계정이 없음 → 계정 추가까지 가능한 전체 로그인 UI로 폴백
+                credentialManager.getCredential(
+                    context,
+                    GetCredentialRequest.Builder()
+                        .addCredentialOption(GetSignInWithGoogleOption.Builder(serverClientId).build())
+                        .build()
+                )
+            }
             val credential = result.credential
             if (credential is CustomCredential &&
                 credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL
@@ -261,9 +277,12 @@ object AuthService {
             }
         } catch (_: GetCredentialCancellationException) {
             // 사용자가 로그인 창을 닫음 — 에러 표시하지 않음
+        } catch (e: NoCredentialException) {
+            Log.w("Auth", "Google 로그인 실패 — 기기에 계정 없음", e)
+            _errorMessage.value = "이 기기에 로그인된 Google 계정이 없어요.\n설정 > 계정에서 Google 계정을 추가한 뒤 다시 시도해주세요."
         } catch (e: Exception) {
             Log.w("Auth", "Google 로그인 실패", e)
-            _errorMessage.value = "Google 로그인에 실패했습니다.\nFirebase 콘솔에 SHA-1 지문이 등록되어 있는지 확인해주세요."
+            _errorMessage.value = "Google 로그인에 실패했습니다. (${e.javaClass.simpleName})\n잠시 후 다시 시도해주세요."
         } finally {
             _isLoading.value = false
         }

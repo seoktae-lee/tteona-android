@@ -25,12 +25,15 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import com.seoktaedev.tteona.core.model.Course
@@ -69,6 +72,9 @@ fun MainTabScreen() {
     var sessionInfo by remember { mutableStateOf<CourseSessionInfo?>(null) }
     var impromptuRoomIds by remember { mutableStateOf<Set<String>?>(null) }
     var showImpromptuRoomSelect by remember { mutableStateOf(false) }
+    var showCourseResumeSheet by remember { mutableStateOf(false) }
+    // 코치마크 스포트라이트용 탭 실측 위치 (기기별 해상도·내비바 높이 대응)
+    val tabBounds = remember { mutableStateListOf<androidx.compose.ui.geometry.Rect?>(null, null, null, null) }
 
     val context = LocalContext.current
     val pendingChatRoom by AppNotificationManager.pendingChatRoom.collectAsState()
@@ -125,6 +131,7 @@ fun MainTabScreen() {
                 NavigationBar {
                     tabs.forEachIndexed { index, tab ->
                         NavigationBarItem(
+                            modifier = Modifier.onGloballyPositioned { tabBounds[index] = it.boundsInRoot() },
                             selected = selectedTab == index,
                             onClick = { selectedTab = index },
                             icon = {
@@ -150,14 +157,8 @@ fun MainTabScreen() {
                     modifier = modifier,
                     onCourseClick = { course, thumb -> courseSelection = CourseSelection(course, thumb) },
                     onResumeCourse = {
-                        // 저장된 당일 코스 세션 이어하기 (iOS 코스 이어하기 버튼)
-                        ActiveSessionStore.loadTodaySession()?.let { saved ->
-                            sessionInfo = CourseSessionInfo(
-                                course = saved.course,
-                                roomIds = saved.roomIds.toSet(),
-                                isResuming = true,
-                            )
-                        }
+                        // 코스 버튼 → 이어서/새로 시작 시트 (iOS showCourseResumeSheet)
+                        showCourseResumeSheet = true
                     },
                     onImpromptuTap = {
                         // iOS handleImpromptuTap — 저장 세션이 있거나 그룹이 없으면 바로 시작, 아니면 방 선택
@@ -209,6 +210,26 @@ fun MainTabScreen() {
             )
         }
 
+        // 코스 이어하기 시트 (iOS courseResumeSheet) — 이어서 기록 or 세션 삭제 후 새로
+        if (showCourseResumeSheet) {
+            CourseResumeSheet(
+                onResume = {
+                    showCourseResumeSheet = false
+                    ActiveSessionStore.loadTodaySession()?.let { saved ->
+                        sessionInfo = CourseSessionInfo(
+                            course = saved.course,
+                            roomIds = saved.roomIds.toSet(),
+                            isResuming = true,
+                        )
+                    }
+                },
+                onStartNew = {
+                    showCourseResumeSheet = false
+                    ActiveSessionStore.clear()
+                },
+            )
+        }
+
         // 즉흥 '나의 오늘' — 방 선택 시트 → 세션 (iOS showRoomSelect → ImpromptuSessionView)
         if (showImpromptuRoomSelect) {
             com.seoktaedev.tteona.features.session.RoomSelectSheet(
@@ -241,6 +262,7 @@ fun MainTabScreen() {
         }
         if (showNavGuide) {
             NavGuideOverlay(
+                tabBounds = { i -> tabBounds.getOrNull(i) },
                 onSelectTab = { selectedTab = it },
                 onFinish = {
                     authUser?.uid?.let { uid ->

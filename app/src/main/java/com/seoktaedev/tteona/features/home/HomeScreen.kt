@@ -384,31 +384,13 @@ fun HomeScreen(
                     .fillMaxWidth()
                     .padding(bottom = 24.dp),
             ) {
-                // 나의 오늘 — 정중앙
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier
-                        .align(Alignment.Center)
-                        .shadow(10.dp, CircleShape, spotColor = TteOrange)
-                        .clip(CircleShape)
-                        .background(TteOrange)
-                        .clickable {
-                            scope.launch { snackbarHostState.showSnackbar("나의 오늘은 그룹 기능과 함께 준비 중이에요.") }
-                        }
-                        .padding(horizontal = 30.dp, vertical = 15.dp),
-                ) {
-                    Icon(Icons.AutoMirrored.Filled.DirectionsWalk, contentDescription = null, tint = Color.White, modifier = Modifier.size(19.dp))
-                    Text("나의 오늘", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                }
-
                 // 나의 오늘 — 정중앙 고정 (iOS createCourseButton)
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier
                         .align(Alignment.Center)
-                        .shadow(12.dp, CircleShape)
+                        .shadow(12.dp, CircleShape, spotColor = TteOrange)
                         .clip(CircleShape)
                         .background(TteOrange)
                         .clickable(onClick = onImpromptuTap)
@@ -429,14 +411,13 @@ fun HomeScreen(
                     if (hasImpromptuSession) {
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(3.dp),
+                            verticalArrangement = Arrangement.spacedBy(3.dp, Alignment.CenterVertically),
                             modifier = Modifier
                                 .size(48.dp)
                                 .shadow(8.dp, CircleShape)
                                 .clip(CircleShape)
                                 .background(Color.White)
-                                .clickable(onClick = onResumeImpromptu)
-                                .padding(top = 8.dp),
+                                .clickable(onClick = onResumeImpromptu),
                         ) {
                             Icon(
                                 Icons.AutoMirrored.Filled.DirectionsWalk,
@@ -453,14 +434,13 @@ fun HomeScreen(
                     if (hasTodaySession) {
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(3.dp),
+                            verticalArrangement = Arrangement.spacedBy(3.dp, Alignment.CenterVertically),
                             modifier = Modifier
                                 .size(48.dp)
                                 .shadow(8.dp, CircleShape)
                                 .clip(CircleShape)
                                 .background(Color.White)
-                                .clickable(onClick = onResumeCourse)
-                                .padding(top = 8.dp),
+                                .clickable(onClick = onResumeCourse),
                         ) {
                             Icon(
                                 Icons.Filled.Map,
@@ -721,19 +701,21 @@ private fun PlacePhotoThumbnail(place: Place) {
                 }
             }
             // 순서 배지
-            Text(
-                "${place.order}",
-                fontSize = 10.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.White,
-                textAlign = TextAlign.Center,
+            Box(
+                contentAlignment = Alignment.Center,
                 modifier = Modifier
                     .offset(x = 4.dp, y = (-4).dp)
                     .size(18.dp)
                     .clip(CircleShape)
-                    .background(TteOrange)
-                    .padding(top = 1.dp),
-            )
+                    .background(TteOrange),
+            ) {
+                Text(
+                    "${place.order}",
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                )
+            }
         }
         Text(
             place.placeName,

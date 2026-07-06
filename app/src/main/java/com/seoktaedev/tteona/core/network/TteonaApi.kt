@@ -105,6 +105,13 @@ data class CourseLikedRequest(
     val courseName: String,
 )
 
+// 채팅 등 서버(server.js) 발송 푸시용 FCM 토큰 등록
+@Serializable
+data class PushRegisterRequest(
+    val token: String,
+    val platform: String = "android",
+)
+
 /**
  * tteona.kr REST API 정의 — iOS의 각 actor 서비스가 호출하는 엔드포인트와 동일.
  */
@@ -191,4 +198,8 @@ interface TteonaApi {
     // 코스 좋아요 알림 (iOS PushService.notifyCourseLiked)
     @POST("push/course-liked")
     suspend fun notifyCourseLiked(@Body body: CourseLikedRequest)
+
+    // 서버 직발송 푸시(채팅·Vlog 완성 등)용 디바이스 토큰 등록 (iOS PushService.registerDeviceToken 대응)
+    @POST("push/register")
+    suspend fun registerPush(@Body body: PushRegisterRequest)
 }

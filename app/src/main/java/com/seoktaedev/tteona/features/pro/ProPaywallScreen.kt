@@ -51,7 +51,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -68,6 +67,7 @@ import com.seoktaedev.tteona.core.services.ProManager
 import com.seoktaedev.tteona.core.util.Haptics
 import com.seoktaedev.tteona.features.common.InfoAlert
 import com.seoktaedev.tteona.ui.theme.TteOrange
+import com.seoktaedev.tteona.ui.theme.glowCircle
 import kotlinx.coroutines.launch
 
 /**
@@ -320,15 +320,13 @@ private fun PaywallAuroraBackground() {
             Modifier
                 .size(430.dp)
                 .offset(x = (110 - 240 * t).dp, y = (-70 - 160 * t).dp)
-                .blur(95.dp)
-                .background(TteOrange.copy(alpha = 0.55f), CircleShape)
+                .glowCircle(TteOrange, 0.55f)
         )
         Box(
             Modifier
                 .size(360.dp)
                 .offset(x = (-100 + 240 * t).dp, y = (330 - 140 * t).dp)
-                .blur(85.dp)
-                .background(Color(0xFFFFA159).copy(alpha = 0.45f), CircleShape)
+                .glowCircle(Color(0xFFFFA159), 0.45f)
         )
     }
 }

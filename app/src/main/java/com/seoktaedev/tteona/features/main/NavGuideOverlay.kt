@@ -38,7 +38,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -61,6 +60,7 @@ import com.seoktaedev.tteona.ui.theme.TteDarkGray
 import com.seoktaedev.tteona.ui.theme.TteFieldBackground
 import com.seoktaedev.tteona.ui.theme.TteMediumGray
 import com.seoktaedev.tteona.ui.theme.TteOrange
+import com.seoktaedev.tteona.ui.theme.glowCircle
 import kotlin.math.sin
 
 /**
@@ -70,6 +70,7 @@ import kotlin.math.sin
  */
 @Composable
 fun NavGuideOverlay(
+    tabBounds: (Int) -> androidx.compose.ui.geometry.Rect? = { null },
     onSelectTab: (Int) -> Unit,
     onFinish: () -> Unit,
 ) {
@@ -124,7 +125,7 @@ fun NavGuideOverlay(
         ) {
             drawRect(Color.Black.copy(alpha = 0.6f))
             step.tabIndex?.let { tab ->
-                val spot = spotlightRect(tab, size)
+                val spot = spotlightRect(tab, size, tabBounds(tab))
                 drawRoundRect(
                     color = Color.Transparent,
                     topLeft = spot.first,
@@ -164,16 +165,14 @@ fun NavGuideOverlay(
                     Modifier
                         .size(220.dp)
                         .offset(x = (-90 + 160 * t / (2 * Math.PI).toFloat()).dp, y = (-80 + 60 * t / (2 * Math.PI).toFloat()).dp)
-                        .blur(40.dp)
-                        .background(TteOrange.copy(alpha = 0.32f), androidx.compose.foundation.shape.CircleShape)
+                        .glowCircle(TteOrange, 0.32f)
                 )
                 Box(
                     Modifier
                         .align(Alignment.BottomEnd)
                         .size(190.dp)
                         .offset(x = (60 - 160 * t / (2 * Math.PI).toFloat()).dp, y = (-20 + 50 * t / (2 * Math.PI).toFloat()).dp)
-                        .blur(36.dp)
-                        .background(Color(0xFFFFA159).copy(alpha = 0.26f), androidx.compose.foundation.shape.CircleShape)
+                        .glowCircle(Color(0xFFFFA159), 0.26f)
                 )
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -238,13 +237,26 @@ fun NavGuideOverlay(
     }
 }
 
-/** 하단 내비게이션 4탭 기준 스포트라이트 위치 — (topLeft, size) */
-private fun spotlightRect(tab: Int, canvasSize: Size): Pair<Offset, Size> {
+/**
+ * 하단 내비게이션 탭 스포트라이트 위치 — (topLeft, size).
+ * MainTabScreen이 onGloballyPositioned로 실측한 탭 bounds를 우선 사용해
+ * 기기 해상도·밀도·제스처바 유무와 무관하게 항상 탭 정중앙에 맞춘다.
+ */
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.spotlightRect(
+    tab: Int,
+    canvasSize: Size,
+    measured: androidx.compose.ui.geometry.Rect?,
+): Pair<Offset, Size> {
+    if (measured != null && measured.width > 0f) {
+        val spotW = measured.width * 0.86f
+        val spotH = minOf(measured.height, 64.dp.toPx())
+        return Offset(measured.center.x - spotW / 2, measured.center.y - spotH / 2) to Size(spotW, spotH)
+    }
+    // 폴백 — 실측 전이면 dp 기반 추정 (Material3 NavigationBar 80dp)
     val tabWidth = canvasSize.width / 4f
     val centerX = (tab + 0.5f) * tabWidth
     val spotW = tabWidth * 0.86f
-    val spotH = 150f
-    // Material3 NavigationBar 높이(80dp) 중앙 근처
-    val centerY = canvasSize.height - 110f
+    val spotH = 56.dp.toPx()
+    val centerY = canvasSize.height - 44.dp.toPx()
     return Offset(centerX - spotW / 2, centerY - spotH / 2) to Size(spotW, spotH)
 }

@@ -18,6 +18,11 @@ import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import com.seoktaedev.tteona.MainActivity
 import com.seoktaedev.tteona.R
+import com.seoktaedev.tteona.core.network.ApiClient
+import com.seoktaedev.tteona.core.network.PushRegisterRequest
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 /**
  * FCM 수신 서비스 — iOS FCMService + AppNotificationManager(willPresent)의 이식본.
@@ -87,10 +92,14 @@ class TteonaMessagingService : FirebaseMessagingService() {
             }
         }
 
-        // FCM 토큰을 userPrivate에 저장 (iOS FCMService.saveFCMToken과 동일 — 서버가 여기서 읽어 발송)
+        // FCM 토큰을 userPrivate에 저장 (iOS FCMService.saveFCMToken과 동일 — Cloud Functions 그룹 알림용)
+        // + 서버(server.js) device_tokens에도 등록 — 채팅·Vlog 완성 등 서버 직발송 푸시용
         fun saveToken(userId: String, token: String) {
             Firebase.firestore.collection("userPrivate").document(userId)
                 .set(mapOf("fcmToken" to token), SetOptions.merge())
+            CoroutineScope(Dispatchers.IO).launch {
+                runCatching { ApiClient.api.registerPush(PushRegisterRequest(token)) }
+            }
         }
 
         fun registerCurrentToken(userId: String) {

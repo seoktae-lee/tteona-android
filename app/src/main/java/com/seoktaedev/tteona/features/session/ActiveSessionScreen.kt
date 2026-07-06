@@ -392,12 +392,12 @@ fun ActiveSessionScreen(
             Spacer(Modifier.weight(1f))
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
                 modifier = Modifier
                     .size(width = 52.dp, height = 44.dp)
                     .clip(RoundedCornerShape(22.dp))
                     .background(TteOrange)
-                    .clickable { showPlaceEditor = true }
-                    .padding(top = 5.dp),
+                    .clickable { showPlaceEditor = true },
             ) {
                 Text("${visitedPlaces.size}/${orderedPlaces.size}", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
                 Text("편집", fontSize = 10.sp, color = Color.White.copy(alpha = 0.8f))

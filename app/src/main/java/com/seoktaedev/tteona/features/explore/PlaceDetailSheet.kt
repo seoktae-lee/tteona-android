@@ -274,6 +274,8 @@ fun PlaceDetailSheet(
                             runCatching { UserService.blockUser(uid, review.userId) }
                                 .onSuccess {
                                     tteonaReviews = tteonaReviews.filter { it.userId != review.userId }
+                                    // 차단 즉시 이 작성자의 코스도 홈/탐색 목록에서 숨긴다
+                                    com.seoktaedev.tteona.core.services.CourseService.hideAuthorCourses(review.userId)
                                     resultMessage = "차단 완료" to "작성자가 차단되었습니다. 목록에서 후기가 삭제되었습니다."
                                 }
                         }

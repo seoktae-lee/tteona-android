@@ -44,6 +44,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -57,6 +58,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.google.android.gms.location.LocationServices
@@ -78,6 +80,8 @@ import com.seoktaedev.tteona.core.model.FeedType
 import com.seoktaedev.tteona.core.model.Place
 import com.seoktaedev.tteona.core.services.CourseService
 import com.seoktaedev.tteona.core.services.ImpromptuSessionStore
+import com.seoktaedev.tteona.core.services.LocationService
+import com.seoktaedev.tteona.core.services.LocationSocketService
 import com.seoktaedev.tteona.core.services.PushService
 import com.seoktaedev.tteona.core.services.RoomService
 import com.seoktaedev.tteona.core.services.SessionForegroundService
@@ -113,6 +117,21 @@ fun ImpromptuSessionScreen(
     val uid = AuthService.currentUser.value?.uid ?: ""
     val nickname = UserService.currentUser.value?.nickname?.takeIf { it.isNotEmpty() } ?: "멤버"
     val sessionId = "free_$uid"
+
+    // 위치 권한 없이 isMyLocationEnabled=true를 주면 지도가 SecurityException으로 크래시하므로 게이팅
+    val hasLocationPermission = remember {
+        androidx.core.content.ContextCompat.checkSelfPermission(
+            context, android.Manifest.permission.ACCESS_FINE_LOCATION
+        ) == android.content.pm.PackageManager.PERMISSION_GRANTED ||
+            androidx.core.content.ContextCompat.checkSelfPermission(
+                context, android.Manifest.permission.ACCESS_COARSE_LOCATION
+            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+    }
+
+    // 그룹 실시간 위치 공유 (iOS와 동일) — 코스 세션과 같은 소켓 경로 사용
+    val locationService = remember { LocationService(context) }
+    val currentLocation by locationService.currentLocation.collectAsState()
+    val memberLocations by LocationSocketService.memberLocations.collectAsState()
 
     var capturedPlaces by remember { mutableStateOf<List<Place>>(emptyList()) }
     var activeRoomIds by remember { mutableStateOf(selectedRoomIds) }
@@ -223,7 +242,25 @@ fun ImpromptuSessionScreen(
         )
     }
     DisposableEffect(Unit) {
-        onDispose { SessionForegroundService.stop(context) }
+        onDispose {
+            locationService.stopTracking()
+            LocationSocketService.disconnect()
+            SessionForegroundService.stop(context)
+        }
+    }
+
+    // 그룹 위치 공유 — 방이 선택돼 있으면 소켓 연결 + 위치 추적 시작 (iOS와 동일)
+    LaunchedEffect(activeRoomIds) {
+        if (activeRoomIds.isNotEmpty() && uid.isNotEmpty()) {
+            activeRoomIds.firstOrNull()?.let { LocationSocketService.connect(it, uid, nickname) }
+            locationService.startTracking(emptyList()) // 장소 도착 감지 없이 위치 갱신만
+        }
+    }
+
+    // 위치가 갱신되면 소켓으로 전송 (iOS onChange(currentLocation))
+    LaunchedEffect(currentLocation) {
+        val loc = currentLocation ?: return@LaunchedEffect
+        if (activeRoomIds.isNotEmpty()) LocationSocketService.sendLocation(loc.latitude, loc.longitude)
     }
 
     fun startCapture() {
@@ -287,7 +324,7 @@ fun ImpromptuSessionScreen(
         GoogleMap(
             modifier = Modifier.fillMaxSize(),
             cameraPositionState = cameraPositionState,
-            properties = MapProperties(isMyLocationEnabled = true),
+            properties = MapProperties(isMyLocationEnabled = hasLocationPermission),
             uiSettings = MapUiSettings(zoomControlsEnabled = false, myLocationButtonEnabled = false, mapToolbarEnabled = false),
         ) {
             capturedPlaces.forEach { place ->
@@ -312,6 +349,32 @@ fun ImpromptuSessionScreen(
                     color = TteOrange,
                     width = 6f,
                 )
+            }
+            // 동행 멤버 위치 (실시간 소켓)
+            memberLocations.forEach { member ->
+                MarkerComposable(
+                    keys = arrayOf("member", member.userId, member.latitude, member.longitude),
+                    state = rememberUpdatedMarkerState(position = LatLng(member.latitude, member.longitude)),
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier.size(36.dp).clip(CircleShape).background(Color(0xFF8E44AD)),
+                        ) {
+                            Text(member.nickname.take(1), fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                        }
+                        Text(
+                            member.nickname,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = Color.White,
+                            modifier = Modifier
+                                .clip(CircleShape)
+                                .background(Color(0xFF8E44AD).copy(alpha = 0.85f))
+                                .padding(horizontal = 6.dp, vertical = 2.dp),
+                        )
+                    }
+                }
             }
         }
 
@@ -614,49 +677,28 @@ fun ImpromptuSessionScreen(
                     modifier = Modifier.padding(top = 6.dp, bottom = 28.dp),
                 )
 
-                // Vlog 만들기 — 메인 액션
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(64.dp)
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(TteOrange)
-                        .clickable {
-                            buildCourseAndEnd(saveToFirestore = false, courseName = "", tag = CourseTag.FRIENDS)
-                            showEndSheet = false
-                            showVlog = true
-                        }
-                        .padding(horizontal = 20.dp),
-                ) {
-                    Icon(Icons.Filled.Movie, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
-                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        Text("Vlog 만들기", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
-                        Text("영상을 이어 붙여 추억을 만들어요", fontSize = 12.sp, color = Color.White.copy(alpha = 0.8f))
+                // 두 가지 마무리 방식 — 좌우 정사각형 카드로 한눈에 비교 (iOS endChoiceCard)
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    EndChoiceCard(
+                        icon = Icons.Filled.Movie,
+                        title = "Vlog만 만들기",
+                        subtitle = "영상을 이어 붙여\n추억으로 남겨요",
+                        isPrimary = true,
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        buildCourseAndEnd(saveToFirestore = false, courseName = "", tag = CourseTag.FRIENDS)
+                        showEndSheet = false
+                        showVlog = true
                     }
-                }
-                Spacer(Modifier.height(12.dp))
-
-                // 코스로 저장 후 Vlog
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(64.dp)
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(TteFieldBackground)
-                        .clickable {
-                            showEndSheet = false
-                            showSaveCourse = true
-                        }
-                        .padding(horizontal = 20.dp),
-                ) {
-                    Icon(Icons.Filled.LocationOn, contentDescription = null, tint = TteDarkGray, modifier = Modifier.size(18.dp))
-                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        Text("코스로 저장하고 Vlog 만들기", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = TteDarkGray)
-                        Text("이 경로를 나중에도 사용할 수 있어요", fontSize = 12.sp, color = TteMediumGray)
+                    EndChoiceCard(
+                        icon = Icons.Filled.LocationOn,
+                        title = "코스 저장 후\nVlog 만들기",
+                        subtitle = "경로를 나중에\n다시 쓸 수 있어요",
+                        isPrimary = false,
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        showEndSheet = false
+                        showSaveCourse = true
                     }
                 }
                 Spacer(Modifier.height(14.dp))
@@ -772,6 +814,65 @@ fun ImpromptuSessionScreen(
             confirmButton = {
                 TextButton(onClick = { showIntegrityAlert = false }) { Text("확인", color = TteOrange) }
             },
+        )
+    }
+}
+
+// 오늘 종료 시트의 좌우 선택 카드 (iOS endChoiceCard) — 고정 높이로 안정적인 정사각형 비율
+@Composable
+private fun EndChoiceCard(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    subtitle: String,
+    isPrimary: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    Column(
+        modifier = modifier
+            .height(168.dp)
+            .clip(RoundedCornerShape(20.dp))
+            .background(if (isPrimary) TteOrange else TteFieldBackground)
+            .border(
+                1.dp,
+                if (isPrimary) Color.Transparent else TteOrange.copy(alpha = 0.15f),
+                RoundedCornerShape(20.dp),
+            )
+            .clickable(onClick = onClick)
+            .padding(18.dp),
+    ) {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier
+                .size(44.dp)
+                .clip(CircleShape)
+                .background(if (isPrimary) Color.White.copy(alpha = 0.22f) else TteOrange.copy(alpha = 0.12f)),
+        ) {
+            Icon(
+                icon,
+                contentDescription = null,
+                tint = if (isPrimary) Color.White else TteOrange,
+                modifier = Modifier.size(20.dp),
+            )
+        }
+        Spacer(Modifier.weight(1f))
+        Text(
+            title,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Bold,
+            lineHeight = 20.sp,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            color = if (isPrimary) Color.White else TteDarkGray,
+        )
+        Text(
+            subtitle,
+            fontSize = 11.5.sp,
+            lineHeight = 15.sp,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            color = if (isPrimary) Color.White.copy(alpha = 0.85f) else TteMediumGray,
+            modifier = Modifier.padding(top = 4.dp),
         )
     }
 }

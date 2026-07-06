@@ -16,6 +16,17 @@ data class Place(
     val id: String get() = "${order}_$placeName"
 }
 
+// 표시 전용 — 바로 연속되는 동일 장소(같은 곳에서 여러 번 촬영)를 하나로 접고 1부터 재번호.
+// 떨어져서 다시 방문한 동일 장소는 그대로 남는다. 저장·Vlog 합성은 원본 places를 사용할 것.
+fun List<Place>.mergedForDisplay(): List<Place> {
+    val collapsed = mutableListOf<Place>()
+    for (place in sortedBy { it.order }) {
+        if (place.placeName == collapsed.lastOrNull()?.placeName) continue
+        collapsed.add(place)
+    }
+    return collapsed.mapIndexed { idx, place -> place.copy(order = idx + 1) }
+}
+
 @Serializable
 data class Course(
     val id: String? = null, // Firestore 문서 ID
@@ -29,6 +40,9 @@ data class Course(
     val places: List<Place>,
     val mainPlaceOrder: Int? = null, // 유저가 지정한 대표 장소의 order (미지정 시 자동 선택)
 ) {
+    // 유저에게 보여줄 장소 목록 — 연속 중복이 병합된 표시용 (원본 places는 그대로 유지)
+    val displayPlaces: List<Place> get() = places.mergedForDisplay()
+
     // 대표 장소 — 핀·썸네일·날씨·추천의 기준점.
     // 유저가 지정했으면 그 장소, 아니면 자동 선택(경유지 후순위), 그것도 없으면 첫 장소.
     val mainPlace: Place?

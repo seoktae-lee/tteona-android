@@ -417,6 +417,15 @@ object AuthService {
         _errorMessage.value = null
     }
 
+    /**
+     * Firebase 초기화 실패(google-services.json 누락 등) 시 호출.
+     * 스플래시(isInitializing) 무한 로딩을 막고 로그인 화면으로 빠지게 한다.
+     */
+    fun abortInitialization() {
+        _isInitializing.value = false
+        _errorMessage.value = "앱 초기화에 실패했어요. 네트워크 확인 후 다시 실행해주세요."
+    }
+
     // MARK: - Helpers
     private suspend fun refreshOnboardingStatus(uid: String) {
         // 기존 가입 유저는 Firestore users 문서가 이미 존재하므로 온보딩을 다시 하지 않음

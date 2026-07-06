@@ -105,6 +105,16 @@ fun ActiveSessionScreen(
     val uid = AuthService.currentUser.value?.uid ?: ""
     val nickname = UserService.currentUser.value?.nickname?.takeIf { it.isNotEmpty() } ?: "멤버"
 
+    // 위치 권한 없이 isMyLocationEnabled=true를 주면 지도가 SecurityException으로 크래시하므로 게이팅
+    val hasLocationPermission = remember {
+        androidx.core.content.ContextCompat.checkSelfPermission(
+            context, android.Manifest.permission.ACCESS_FINE_LOCATION
+        ) == android.content.pm.PackageManager.PERMISSION_GRANTED ||
+            androidx.core.content.ContextCompat.checkSelfPermission(
+                context, android.Manifest.permission.ACCESS_COARSE_LOCATION
+            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+    }
+
     val locationService = remember { LocationService(context) }
     val currentLocation by locationService.currentLocation.collectAsState()
     val arrivedPlace by locationService.arrivedAtPlace.collectAsState()
@@ -297,7 +307,7 @@ fun ActiveSessionScreen(
         GoogleMap(
             modifier = Modifier.fillMaxSize(),
             cameraPositionState = cameraPositionState,
-            properties = MapProperties(isMyLocationEnabled = true),
+            properties = MapProperties(isMyLocationEnabled = hasLocationPermission),
             uiSettings = MapUiSettings(
                 zoomControlsEnabled = false,
                 myLocationButtonEnabled = false,

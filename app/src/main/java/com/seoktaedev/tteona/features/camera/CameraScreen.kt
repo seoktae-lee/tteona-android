@@ -30,6 +30,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -116,6 +117,8 @@ fun CameraScreen(
     var saveDone by remember { mutableStateOf(false) }
     var recordStartMs by remember { mutableStateOf(0L) }
     var elapsedSeconds by remember { mutableDoubleStateOf(0.0) }
+    // 이번 클립의 자동 종료 한도(초) — startRecording에서 갱신. 무료=5초, PRO=남은 예산.
+    var clipLimitSeconds by remember { mutableDoubleStateOf(5.0) }
     var selectedZoom by remember { mutableStateOf(1.0f) }
     var showTip by remember { mutableStateOf(true) }
 
@@ -134,10 +137,19 @@ fun CameraScreen(
         showTip = false
     }
 
-    // 촬영 중 경과시간 갱신 (예산 링/자동 종료용)
+    // 촬영 중 경과시간 갱신 (예산 링/자동 종료용).
+    // 자동 종료는 벽시계 경과시간 기준 — 에뮬레이터/일부 기기는 VideoRecordEvent.Status의
+    // recordedDurationNanos가 실제 촬영시간보다 뒤처져(느린 소프트 인코더) 클립 한도에 도달하지
+    // 못해 자동 종료가 안 걸리므로, 벽시계로 확실히 끊는다.
     LaunchedEffect(isRecording) {
         while (isRecording) {
             elapsedSeconds = (System.currentTimeMillis() - recordStartMs) / 1000.0
+            if (elapsedSeconds >= clipLimitSeconds) {
+                // stopRecording()과 동일 — 종료는 Finalize 이벤트에서 마무리된다.
+                isSaving = true
+                activeRecording?.stop()
+                break
+            }
             delay(50)
         }
         elapsedSeconds = 0.0
@@ -200,6 +212,7 @@ fun CameraScreen(
             return
         }
         val clipLimit = ProManager.vlogClipMaxSeconds?.coerceAtMost(remaining) ?: remaining
+        clipLimitSeconds = clipLimit
 
         val file = VlogClips.clipFile(context, place, sessionId)
         file.parentFile?.mkdirs()
@@ -262,9 +275,10 @@ fun CameraScreen(
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
+                .align(Alignment.TopCenter)
                 .statusBarsPadding()
                 .padding(horizontal = 20.dp, vertical = 12.dp)
-                .fillMaxSize(),
+                .fillMaxWidth(),
         ) {
             Box(
                 contentAlignment = Alignment.Center,

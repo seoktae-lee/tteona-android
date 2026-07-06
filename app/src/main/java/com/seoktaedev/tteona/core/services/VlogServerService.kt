@@ -123,10 +123,13 @@ object VlogServerService {
         // 3) 합성 시작
         startJob(jobId)
 
-        // 4) 진행률 폴링 (0.45 → 0.88) — 최대 30분 (멀티포맷 잡은 10분을 넘길 수 있음)
+        // 4) 진행률 폴링 (0.45 → 0.88) — 최대 30분 (멀티포맷 잡은 10분을 넘길 수 있음).
+        // 완료를 감지하면 즉시 루프를 빠져나가야 한다 (repeat의 return@repeat는 continue이므로 while 사용).
         var outputUrl: String? = null
         var outputs: List<OutputItem> = emptyList()
-        repeat(900) {
+        var polls = 0
+        while (outputUrl == null && polls < 900) {
+            polls++
             delay(2000)
             val st = status(jobId)
             when (st.status) {
@@ -137,7 +140,6 @@ object VlogServerService {
                 "failed" -> throw ServerVlogException("서버 편집 실패: ${st.errorMsg ?: "unknown"}")
                 else -> onProgress(0.45 + 0.43 * st.progress / 100.0, "서버에서 편집 중이에요")
             }
-            if (outputUrl != null) return@repeat
         }
         val mainUrl = outputUrl ?: throw ServerVlogException("서버 편집 시간 초과")
 

@@ -4,6 +4,10 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- Vlog 앨범 저장 — Android 9 이하(MediaStore insert)는 저장 권한 필요, Q(29)+는 Scoped Storage -->
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- 장소 촬영(CameraX) — iOS 카메라·마이크 권한 대응 -->
     <uses-permission android:name="android.permission.CAMERA" />
@@ -71,12 +75,19 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- 딥링크 (tteona.kr 코스 공유 링크) — iOS와 동일한 스킴을 추후 정합 -->
+            <!-- 딥링크 (tteona.kr 코스/그룹 공유 링크). autoVerify는 서버 assetlinks.json 배포 후 검증됨 -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="https" android:host="tteona.kr" />
+            </intent-filter>
+            <!-- 커스텀 스킴 딥링크 (tteona://course?id=..., tteona://room?code=...) — DeepLinkHandler 대응 -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="tteona" />
             </intent-filter>
         </activity>
     </application>

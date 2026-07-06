@@ -16,6 +16,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -41,6 +42,7 @@ import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CropSquare
 import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.MusicOff
@@ -74,6 +76,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -81,6 +84,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.FileProvider
+import com.seoktaedev.tteona.R
 import com.seoktaedev.tteona.core.auth.AuthService
 import com.seoktaedev.tteona.core.model.Course
 import com.seoktaedev.tteona.core.services.CourseThumbnailService
@@ -114,7 +118,7 @@ fun VlogGenerationScreen(
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var progress by remember { mutableDoubleStateOf(0.0) }
     var stageText by remember { mutableStateOf("추억을 만들고 있어요...") }
-    var savedFormatsCount by remember { mutableIntStateOf(1) }
+    var savedFormatsCount by remember { mutableIntStateOf(0) }
     var selectedFormats by remember { mutableStateOf<Set<String>>(emptySet()) }
     var didGenerate by remember { mutableStateOf(false) }
     var shotPortrait by remember { mutableStateOf<Boolean?>(null) }
@@ -122,6 +126,21 @@ fun VlogGenerationScreen(
     var showProNotice by remember { mutableStateOf(false) }
 
     val baseFormat = if (shotPortrait ?: true) "reels" else "youtube"
+
+    // Android 9 이하는 MediaStore 저장에 WRITE_EXTERNAL_STORAGE 런타임 권한이 필요하다.
+    // 합성이 오래 걸리므로 화면 진입 시 미리 요청해, 완료 시점엔 권한이 확정돼 있게 한다.
+    val storagePermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { }
+    LaunchedEffect(Unit) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q &&
+            androidx.core.content.ContextCompat.checkSelfPermission(
+                context, android.Manifest.permission.WRITE_EXTERNAL_STORAGE
+            ) != android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            storagePermissionLauncher.launch(android.Manifest.permission.WRITE_EXTERNAL_STORAGE)
+        }
+    }
 
     // 촬영 방향 판별 — 클립 다수 방향 (iOS detectShotOrientation)
     LaunchedEffect(Unit) {
@@ -214,11 +233,12 @@ fun VlogGenerationScreen(
                     }
                 },
             )
-            // 앨범 저장 — 기본본 + 추가 포맷 (iOS saveToPhotoLibrary)
+            // 앨범 저장 — 기본본 + 추가 포맷 (iOS saveToPhotoLibrary).
+            // 저장 실패 시 실제 저장 개수(0)를 그대로 반영해 프리뷰에서 거짓 안내를 하지 않는다.
             var saved = 0
             if (saveToGallery(context, result.main)) saved++
             result.extras.forEach { (_, file) -> if (saveToGallery(context, file)) saved++ }
-            savedFormatsCount = maxOf(saved, 1)
+            savedFormatsCount = saved
             vlogFile = result.main
             Haptics.success(view)
             phase = Phase.PREVIEW
@@ -650,38 +670,81 @@ private fun VlogPreviewView(
 
     BackHandler(onBack = onDismiss)
 
-    Column(Modifier.fillMaxSize().background(Color.Black)) {
-        // 비디오 플레이어
-        AndroidView(
-            factory = { ctx ->
-                VideoView(ctx).apply {
-                    setVideoPath(vlogFile.absolutePath)
-                    setOnPreparedListener { mp ->
-                        mp.isLooping = true
-                        start()
-                    }
-                }
-            },
+    Box(Modifier.fillMaxSize()) {
+        VlogAuroraBackground()
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.fillMaxSize(),
+        ) {
+        // 완성 헤더 — 축하하는 나루 + 폭죽 + 문구 + 자동 저장 안내
+        Spacer(Modifier.height(40.dp))
+        Box(contentAlignment = Alignment.TopEnd) {
+            Image(
+                painter = painterResource(R.drawable.tteoni_jump),
+                contentDescription = null,
+                modifier = Modifier.height(96.dp),
+            )
+            Text("🎉", fontSize = 26.sp, modifier = Modifier.offset(x = 10.dp, y = (-2).dp))
+        }
+        Spacer(Modifier.height(8.dp))
+        Text("Vlog가 완성됐어요!", fontSize = 23.sp, fontWeight = FontWeight.Bold, color = Color.White)
+        Spacer(Modifier.height(10.dp))
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(5.dp),
             modifier = Modifier
+                .clip(CircleShape)
+                .background(Color.White.copy(alpha = 0.12f))
+                .padding(horizontal = 12.dp, vertical = 7.dp),
+        ) {
+            Icon(
+                if (savedFormatsCount > 0) Icons.Filled.CheckCircle else Icons.Filled.Warning,
+                contentDescription = null,
+                tint = if (savedFormatsCount > 0) Color(0xFF34C759) else Color(0xFFFFCC00),
+                modifier = Modifier.size(14.dp),
+            )
+            Text(
+                when {
+                    savedFormatsCount > 1 -> "${savedFormatsCount}가지 버전이 앨범에 자동 저장됐어요"
+                    savedFormatsCount == 1 -> "완성된 영상은 앨범에 자동 저장됐어요"
+                    else -> "앨범 저장에 실패했어요 · 공유로 저장할 수 있어요"
+                },
+                fontSize = 13.sp, fontWeight = FontWeight.Medium, color = Color.White.copy(alpha = 0.9f),
+            )
+        }
+
+        // 비디오 플레이어 — 라운드 카드
+        Box(
+            modifier = Modifier
+                .padding(horizontal = 24.dp)
+                .padding(top = 20.dp)
                 .fillMaxWidth()
-                .weight(1f),
-        )
+                .weight(1f)
+                .clip(RoundedCornerShape(22.dp))
+                .background(Color.Black)
+                .border(1.dp, Color.White.copy(alpha = 0.18f), RoundedCornerShape(22.dp)),
+        ) {
+            AndroidView(
+                factory = { ctx ->
+                    VideoView(ctx).apply {
+                        setVideoPath(vlogFile.absolutePath)
+                        setOnPreparedListener { mp ->
+                            mp.isLooping = true
+                            start()
+                        }
+                    }
+                },
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
 
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
             modifier = Modifier
-                .background(Color.Black)
                 .navigationBarsPadding()
-                .padding(top = 20.dp),
+                .padding(top = 22.dp),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = Color(0xFF34C759), modifier = Modifier.size(18.dp))
-                Text(
-                    if (savedFormatsCount > 1) "${savedFormatsCount}가지 버전이 앨범에 저장됨" else "앨범에 저장됨",
-                    fontSize = 14.sp, color = Color.White.copy(alpha = 0.8f),
-                )
-            }
 
             // 탐색탭 썸네일 선택 (이번 세션에서 저장한 코스일 때만)
             if (thumbnailCourseId != null) {
@@ -729,24 +792,34 @@ private fun VlogPreviewView(
                     .padding(horizontal = 24.dp)
                     .fillMaxWidth()
                     .height(54.dp)
-                    .clip(RoundedCornerShape(14.dp))
+                    .clip(RoundedCornerShape(16.dp))
                     .background(TteOrange)
                     .clickable { shareVideo(context, vlogFile) },
             ) {
                 Spacer(Modifier.weight(1f))
                 Icon(Icons.Filled.Share, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
-                Text("공유하기", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+                Text("공유하기", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White)
                 Spacer(Modifier.weight(1f))
             }
 
-            Text(
-                "홈으로 돌아가기",
-                fontSize = 15.sp,
-                color = Color.White.copy(alpha = 0.7f),
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
                 modifier = Modifier
-                    .padding(bottom = 40.dp)
+                    .padding(horizontal = 24.dp)
+                    .padding(bottom = 34.dp)
+                    .fillMaxWidth()
+                    .height(48.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(Color.White.copy(alpha = 0.10f))
                     .clickable(onClick = onDismiss),
-            )
+            ) {
+                Spacer(Modifier.weight(1f))
+                Icon(Icons.Filled.Home, contentDescription = null, tint = Color.White.copy(alpha = 0.85f), modifier = Modifier.size(16.dp))
+                Text("홈으로 돌아가기", fontSize = 15.sp, fontWeight = FontWeight.Medium, color = Color.White.copy(alpha = 0.85f))
+                Spacer(Modifier.weight(1f))
+            }
+        }
         }
     }
 }

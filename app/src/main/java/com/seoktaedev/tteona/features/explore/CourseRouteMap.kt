@@ -112,7 +112,7 @@ fun CourseRouteMap(course: Course) {
 @Composable
 private fun RouteMapContent(course: Course, interactive: Boolean) {
     val points = remember(course.courseId) {
-        course.places.sortedBy { it.order }.map { LatLng(it.latitude, it.longitude) }
+        course.displayPlaces.map { LatLng(it.latitude, it.longitude) }
     }
     if (points.isEmpty()) return
 

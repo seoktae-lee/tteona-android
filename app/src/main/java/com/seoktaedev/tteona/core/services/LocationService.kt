@@ -104,7 +104,7 @@ class LocationService(context: Context) {
             android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE,
         )
         val notification = androidx.core.app.NotificationCompat.Builder(appContext, "tteona_default")
-            .setSmallIcon(com.seoktaedev.tteona.R.drawable.ic_launcher_foreground)
+            .setSmallIcon(com.seoktaedev.tteona.R.drawable.ic_stat_tteona)
             .setContentTitle("📍 ${placeName}에 도착했어요!")
             .setContentText("지금 촬영하세요")
             .setAutoCancel(true)

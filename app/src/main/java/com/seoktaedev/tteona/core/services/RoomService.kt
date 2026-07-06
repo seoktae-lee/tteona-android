@@ -1,6 +1,5 @@
 package com.seoktaedev.tteona.core.services
 
-import android.location.Location
 import com.google.firebase.Firebase
 import com.google.firebase.Timestamp
 import com.google.firebase.firestore.CollectionReference
@@ -12,7 +11,6 @@ import com.google.firebase.firestore.firestore
 import com.seoktaedev.tteona.core.model.FeedComment
 import com.seoktaedev.tteona.core.model.FeedItem
 import com.seoktaedev.tteona.core.model.FeedType
-import com.seoktaedev.tteona.core.model.MemberLocation
 import com.seoktaedev.tteona.core.model.Room
 import com.seoktaedev.tteona.core.model.RoomMember
 import com.seoktaedev.tteona.core.network.ApiClient
@@ -39,9 +37,6 @@ object RoomService {
     private val _currentRoomMembers = MutableStateFlow<List<RoomMember>>(emptyList())
     val currentRoomMembers: StateFlow<List<RoomMember>> = _currentRoomMembers
 
-    private val _memberLocations = MutableStateFlow<List<MemberLocation>>(emptyList())
-    val memberLocations: StateFlow<List<MemberLocation>> = _memberLocations
-
     private val _feedItems = MutableStateFlow<List<FeedItem>>(emptyList())
     val feedItems: StateFlow<List<FeedItem>> = _feedItems
 
@@ -49,12 +44,8 @@ object RoomService {
     val unreadRoomIds: StateFlow<Set<String>> = _unreadRoomIds
 
     private var roomsListener: ListenerRegistration? = null
-    private var locationsListener: ListenerRegistration? = null
     private var feedListener: ListenerRegistration? = null
     private var memberFeedListener: ListenerRegistration? = null
-
-    private data class LocationUploadState(val lastSentAt: Long, val lastSentLocation: Location)
-    private val locationUploadStates = mutableMapOf<String, LocationUploadState>()
 
     class RoomNotFoundException : Exception("해당 초대 코드의 방을 찾을 수 없어요.")
     class InappropriateContentException : Exception("부적절한 표현이 포함되어 있어 등록할 수 없어요.")
@@ -146,69 +137,7 @@ object RoomService {
         _currentRoomMembers.value = snapshot?.documents?.mapNotNull { it.toRoomMember() } ?: emptyList()
     }
 
-    // MARK: - 동행 세션: 위치 업데이트 (Firestore — 소켓 보조용 영속 기록)
-    fun updateMyLocation(roomId: String, userId: String, nickname: String, latitude: Double, longitude: Double) {
-        db.collection("rooms").document(roomId)
-            .collection("locations").document(userId)
-            .set(
-                mapOf(
-                    "userId" to userId,
-                    "nickname" to nickname,
-                    "latitude" to latitude,
-                    "longitude" to longitude,
-                    "updatedAt" to FieldValue.serverTimestamp(),
-                ),
-                com.google.firebase.firestore.SetOptions.merge(),
-            )
-    }
-
-    // 속도 기반 스로틀 — iOS updateMyLocationThrottled와 동일 정책
-    fun updateMyLocationThrottled(roomId: String, userId: String, nickname: String, location: Location) {
-        val key = "$roomId|$userId"
-        val now = System.currentTimeMillis()
-
-        val speed = maxOf(0f, if (location.hasSpeed()) location.speed else 0f)
-        val (minIntervalSec, minDistanceM) = when {
-            speed < 1.5f -> 10 to 50f   // 걷기/정지
-            speed < 6f -> 15 to 100f    // 자전거/도심 이동
-            else -> 25 to 200f          // 차량
-        }
-
-        locationUploadStates[key]?.let { state ->
-            val elapsedSec = (now - state.lastSentAt) / 1000.0
-            val moved = location.distanceTo(state.lastSentLocation)
-            if (elapsedSec < minIntervalSec || moved < minDistanceM) {
-                // 60초에 1번은 무조건 전송 (너무 오래 멈춘 것처럼 보이지 않게)
-                if (elapsedSec < 60) return
-            }
-        }
-
-        locationUploadStates[key] = LocationUploadState(now, location)
-        updateMyLocation(roomId, userId, nickname, location.latitude, location.longitude)
-    }
-
-    fun stopSharingLocation(roomId: String, userId: String) {
-        db.collection("rooms").document(roomId)
-            .collection("locations").document(userId).delete()
-    }
-
-    // MARK: - 동행 세션: 멤버 위치 실시간 구독
-    fun startListeningLocations(roomId: String, myUserId: String) {
-        locationsListener?.remove()
-        locationsListener = db.collection("rooms").document(roomId)
-            .collection("locations")
-            .addSnapshotListener { snapshot, _ ->
-                val docs = snapshot?.documents ?: return@addSnapshotListener
-                _memberLocations.value = docs.mapNotNull { it.toMemberLocation() }
-                    .filter { it.userId != myUserId }
-            }
-    }
-
-    fun stopListeningLocations() {
-        locationsListener?.remove()
-        locationsListener = null
-        _memberLocations.value = emptyList()
-    }
+    // 동행 세션 중 실시간 위치 공유는 LocationSocketService(WebSocket) 경로가 담당한다.
 
     // MARK: - 방 나가기 및 자동 파기
     suspend fun leaveRoom(roomId: String, userId: String) {
@@ -477,12 +406,10 @@ object RoomService {
     // 로그아웃 시 상태 초기화 (iOS RootView onChange 대응)
     fun clear() {
         stopListeningMyRooms()
-        stopListeningLocations()
         stopListeningFeed()
         stopListeningMemberFeed()
         _myRooms.value = emptyList()
         _currentRoomMembers.value = emptyList()
-        locationUploadStates.clear()
     }
 
     private fun generateInviteCode(): String {
@@ -543,18 +470,6 @@ private fun DocumentSnapshot.toRoomMember(): RoomMember? {
         joinedAt = (d["joinedAt"] as? Timestamp)?.toDate()?.time ?: 0L,
         lastReadAt = (d["lastReadAt"] as? Timestamp)?.toDate()?.time,
         lastReadPerMember = lastReadPerMember,
-    )
-}
-
-private fun DocumentSnapshot.toMemberLocation(): MemberLocation? {
-    val d = data ?: return null
-    return MemberLocation(
-        id = id,
-        userId = d["userId"] as? String ?: id,
-        nickname = d["nickname"] as? String ?: "",
-        latitude = (d["latitude"] as? Number)?.toDouble() ?: return null,
-        longitude = (d["longitude"] as? Number)?.toDouble() ?: return null,
-        updatedAt = (d["updatedAt"] as? Timestamp)?.toDate()?.time ?: 0L,
     )
 }
 

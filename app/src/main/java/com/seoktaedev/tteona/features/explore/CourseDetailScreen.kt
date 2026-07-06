@@ -268,6 +268,8 @@ fun CourseDetailScreen(
                         scope.launch {
                             runCatching { com.seoktaedev.tteona.core.services.UserService.blockUser(uid, course.authorId) }
                                 .onSuccess {
+                                    // 차단 즉시 목록에서 이 작성자의 코스를 숨긴다 (홈/탐색 재조회 전까지 노출 방지)
+                                    CourseService.hideAuthorCourses(course.authorId)
                                     infoAlert = "차단 완료" to "작성자가 차단되었습니다."
                                 }
                                 .onFailure {
@@ -385,7 +387,7 @@ private fun TitleBlock(
                 }
             }
             Text(
-                "장소 ${course.places.size}곳 · ♥ ${course.likeCount}",
+                "장소 ${course.displayPlaces.size}곳 · ♥ ${course.likeCount}",
                 fontSize = 13.sp,
                 color = TteMediumGray,
             )
@@ -483,7 +485,8 @@ private fun PlacesBlock(course: Course) {
 
         CourseRouteMap(course)
 
-        course.places.sortedBy { it.order }.forEachIndexed { idx, place ->
+        // 연속 중복 장소는 하나로 병합해 표시 (저장 데이터는 원본 유지)
+        course.displayPlaces.forEachIndexed { idx, place ->
             Box(Modifier.clickable { selectedPlace = place }) {
                 PlaceCardRow(index = idx, place = place)
             }

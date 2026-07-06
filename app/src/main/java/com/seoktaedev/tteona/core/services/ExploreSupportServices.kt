@@ -49,8 +49,11 @@ object PlacesPhotoService {
 
     private suspend fun ensureFetched(placeName: String, latitude: Double?, longitude: Double?) {
         if (cache.containsKey(placeName)) return
+        // 네트워크 실패(result == null)는 캐시하지 않는다 — 일시적 실패가 영구 빈칸으로 굳는 것을 방지.
+        // 호출은 성공했으나 사진이 없는 경우(url == null)는 정상 결과이므로 캐시한다.
         val result = runCatching { ApiClient.api.getTourPhoto(placeName, latitude, longitude) }.getOrNull()
-        cache[placeName] = Info(result?.url?.takeIf { it.isNotEmpty() }, result?.category)
+            ?: return
+        cache[placeName] = Info(result.url?.takeIf { it.isNotEmpty() }, result.category)
     }
 }
 

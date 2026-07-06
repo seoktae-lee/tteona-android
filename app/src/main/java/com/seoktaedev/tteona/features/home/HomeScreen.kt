@@ -616,7 +616,8 @@ private fun CoursePreviewCard(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             contentPadding = PaddingValues(horizontal = 16.dp),
         ) {
-            items(course.places.sortedBy { it.order }, key = { it.id }) { place ->
+            // 연속 중복 장소는 하나로 병합해 표시 (저장 데이터는 원본 유지)
+            items(course.displayPlaces, key = { it.id }) { place ->
                 PlacePhotoThumbnail(place)
             }
         }
@@ -648,7 +649,7 @@ private fun CoursePreviewCard(
                             .background(TteOrange.copy(alpha = 0.12f))
                             .padding(horizontal = 8.dp, vertical = 3.dp),
                     )
-                    Text("장소 ${course.places.size}개", fontSize = 12.sp, color = TteMediumGray)
+                    Text("장소 ${course.displayPlaces.size}개", fontSize = 12.sp, color = TteMediumGray)
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
                         Icon(Icons.Filled.Favorite, contentDescription = null, tint = TteMediumGray, modifier = Modifier.size(11.dp))
                         Text("${course.likeCount}", fontSize = 12.sp, color = TteMediumGray)

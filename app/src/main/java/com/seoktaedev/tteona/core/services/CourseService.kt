@@ -139,6 +139,11 @@ object CourseService {
         _likedCourseIds.value = _likedCourseIds.value - course.courseId
     }
 
+    /** 작성자 차단 즉시 해당 작성자의 코스를 목록에서 숨김 (다음 재조회 전까지 노출 방지) */
+    fun hideAuthorCourses(authorId: String) {
+        _courses.value = _courses.value.filter { it.authorId != authorId }
+    }
+
     fun clearUserData() {
         _likedCourseIds.value = emptySet()
         likedCourseIdsFetched = false

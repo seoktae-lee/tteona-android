@@ -2,6 +2,7 @@ package com.seoktaedev.tteona.features.group
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -12,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -33,6 +35,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -47,11 +50,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.seoktaedev.tteona.core.auth.AuthService
@@ -195,7 +200,7 @@ fun GroupListScreen(onClose: (() -> Unit)? = null) {
                     )
                 }
                 Text(
-                    "피드",
+                    "채팅",
                     fontSize = 17.sp,
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.align(Alignment.Center),
@@ -258,35 +263,100 @@ fun GroupListScreen(onClose: (() -> Unit)? = null) {
     }
 }
 
-// MARK: - Room Card (iOS RoomCard)
+// MARK: - Room Card (iOS RoomCard — 그라데이션 아바타 + NEW 뱃지)
+private val roomAvatarGradients = listOf(
+    listOf(TteOrange, Color(0xFFFF9E4D)),
+    listOf(Color(0xFFFA7373), Color(0xFFFFA673)),
+    listOf(Color(0xFF59A6F2), Color(0xFF73D1E6)),
+    listOf(Color(0xFF8C73F2), Color(0xFFBF8CFA)),
+    listOf(Color(0xFF40BF9E), Color(0xFF80DE99)),
+    listOf(Color(0xFFF28CBF), Color(0xFFFFB89E)),
+)
+
 @Composable
 private fun RoomCard(room: Room, hasNewFeed: Boolean, onClick: () -> Unit) {
+    // 방마다 고정되는 아바타 그라데이션 (roomId 해시 기반 — iOS와 동일 규칙)
+    val hash = room.roomId.sumOf { it.code }
+    val gradient = roomAvatarGradients[hash % roomAvatarGradients.size]
+    val initial = room.name.trim().take(1)
+
     Row(
         verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(20.dp))
             .background(TteFieldBackground)
+            .border(
+                1.2.dp,
+                if (hasNewFeed) TteOrange.copy(alpha = 0.35f) else Color.Transparent,
+                RoundedCornerShape(20.dp),
+            )
             .clickable(onClick = onClick)
-            .padding(16.dp),
+            .padding(horizontal = 16.dp, vertical = 14.dp),
     ) {
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(room.name, fontSize = 21.sp, fontWeight = FontWeight.SemiBold, color = TteDarkGray)
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                Icon(Icons.Filled.Person, contentDescription = null, tint = TteMediumGray, modifier = Modifier.size(13.dp))
-                Text("${room.memberIds.size}명", fontSize = 13.sp, color = TteMediumGray)
+        // 그라데이션 아바타 + 방 이름 첫 글자 + 새 소식 dot
+        Box {
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .size(54.dp)
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(Brush.linearGradient(gradient)),
+            ) {
+                Text(initial, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color.White)
+            }
+            if (hasNewFeed) {
+                Box(
+                    Modifier
+                        .align(Alignment.TopEnd)
+                        .offset(x = 3.dp, y = (-3).dp)
+                        .size(12.dp)
+                        .clip(CircleShape)
+                        .background(Color.Red)
+                        .border(2.dp, MaterialTheme.colorScheme.background, CircleShape),
+                )
             }
         }
-        if (hasNewFeed) {
-            Box(
-                Modifier
-                    .padding(end = 8.dp)
-                    .size(10.dp)
-                    .clip(CircleShape)
-                    .background(TteOrange)
-            )
+
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(
+                    room.name,
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = TteDarkGray,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                if (hasNewFeed) {
+                    Text(
+                        "NEW",
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Black,
+                        color = Color.White,
+                        maxLines = 1,
+                        softWrap = false,
+                        modifier = Modifier
+                            .clip(CircleShape)
+                            .background(TteOrange)
+                            .padding(horizontal = 6.dp, vertical = 2.5.dp),
+                    )
+                }
+            }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                Icon(Icons.Filled.Person, contentDescription = null, tint = TteMediumGray, modifier = Modifier.size(12.dp))
+                Text("멤버 ${room.memberIds.size}명", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = TteMediumGray)
+            }
         }
-        Icon(Icons.Filled.ChevronRight, contentDescription = null, tint = TteMediumGray, modifier = Modifier.size(18.dp))
+
+        Icon(
+            Icons.Filled.ChevronRight,
+            contentDescription = null,
+            tint = TteMediumGray.copy(alpha = 0.7f),
+            modifier = Modifier.size(18.dp),
+        )
     }
 }
 

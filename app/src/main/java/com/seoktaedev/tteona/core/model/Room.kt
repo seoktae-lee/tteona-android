@@ -28,16 +28,6 @@ data class RoomMember(
 )
 
 @Serializable
-data class MemberLocation(
-    val id: String? = null,
-    val userId: String,
-    val nickname: String,
-    val latitude: Double,
-    val longitude: Double,
-    val updatedAt: Long,
-)
-
-@Serializable
 enum class FeedType {
     @SerialName("tripStart") TRIP_START,
     @SerialName("tripEnd") TRIP_END,

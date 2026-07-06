@@ -2,6 +2,7 @@ package com.seoktaedev.tteona.core.services
 
 import android.util.Log
 import com.seoktaedev.tteona.core.model.CreatorRank
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import com.seoktaedev.tteona.core.model.StatsEvent
 import com.seoktaedev.tteona.core.model.TravelStats
 import com.seoktaedev.tteona.core.network.ApiClient
@@ -15,6 +16,16 @@ object CourseThumbnailService {
         runCatching { ApiClient.api.getThumbnails() }
             .onFailure { Log.w("ThumbnailService", "fetch 실패", it) }
             .getOrDefault(emptyMap())
+
+    /** 코스 커스텀 썸네일 업로드 — 성공 시 url 반환 (iOS upload) */
+    suspend fun upload(courseId: String, imageBytes: ByteArray): String? =
+        runCatching {
+            val part = okhttp3.MultipartBody.Part.createFormData(
+                "image", "thumb.jpg",
+                okhttp3.RequestBody.create("image/jpeg".toMediaTypeOrNull(), imageBytes),
+            )
+            ApiClient.api.uploadCourseThumbnail(courseId, part).url
+        }.onFailure { Log.w("ThumbnailService", "upload 실패", it) }.getOrNull()
 }
 
 /**

@@ -52,4 +52,13 @@ object PushService {
             )
         }
     }
+
+    // 코스 좋아요 알림 트리거 (iOS PushService.notifyCourseLiked)
+    suspend fun notifyCourseLiked(courseOwnerId: String, likerNickname: String, courseName: String) {
+        runCatching {
+            ApiClient.api.notifyCourseLiked(
+                com.seoktaedev.tteona.core.network.CourseLikedRequest(courseOwnerId, likerNickname, courseName)
+            )
+        }
+    }
 }

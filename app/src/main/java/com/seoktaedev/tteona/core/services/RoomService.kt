@@ -45,6 +45,9 @@ object RoomService {
     private val _feedItems = MutableStateFlow<List<FeedItem>>(emptyList())
     val feedItems: StateFlow<List<FeedItem>> = _feedItems
 
+    private val _unreadRoomIds = MutableStateFlow<Set<String>>(emptySet())
+    val unreadRoomIds: StateFlow<Set<String>> = _unreadRoomIds
+
     private var roomsListener: ListenerRegistration? = null
     private var locationsListener: ListenerRegistration? = null
     private var feedListener: ListenerRegistration? = null
@@ -424,9 +427,32 @@ object RoomService {
 
     // MARK: - 읽음 처리
     fun markRoomAsRead(roomId: String, userId: String) {
+        _unreadRoomIds.value = _unreadRoomIds.value - roomId
         db.collection("rooms").document(roomId)
             .collection("members").document(userId)
             .set(mapOf("lastReadAt" to FieldValue.serverTimestamp()), com.google.firebase.firestore.SetOptions.merge())
+    }
+
+    /** 방별 마지막 읽음 시각과 최신 피드 시각을 비교해 안읽음 방 집합 갱신 (iOS refreshUnreadStatus — 채팅 탭 배지 공용) */
+    suspend fun refreshUnreadStatus(userId: String) {
+        val rooms = _myRooms.value
+        val unread = coroutineScope {
+            rooms.map { room ->
+                async {
+                    val memberDoc = async { fetchMyMemberDoc(room.roomId, userId) }
+                    val latestFeeds = async { fetchLatestFeedPerMember(room.roomId, room.memberIds) }
+                    val latestDate = latestFeeds.await().values.maxOfOrNull { it.createdAt }
+                        ?: return@async room.roomId to false
+                    val readAt = memberDoc.await()?.lastReadAt
+                        ?: return@async room.roomId to true
+                    room.roomId to (latestDate > readAt)
+                }
+            }.awaitAll()
+                .filter { it.second }
+                .map { it.first }
+                .toSet()
+        }
+        _unreadRoomIds.value = unread
     }
 
     fun markMemberFeedAsRead(roomId: String, userId: String, memberUserId: String) {

@@ -5,6 +5,12 @@
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- 장소 촬영(CameraX) — iOS 카메라·마이크 권한 대응 -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- 세션 상시 알림 + 백그라운드 위치 유지 (iOS Live Activity 대응) -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
 
     <application
         android:name=".TteonaApplication"
@@ -25,6 +31,23 @@
                 <action android:name="com.google.firebase.MESSAGING_EVENT" />
             </intent-filter>
         </service>
+
+        <!-- 세션 진행 상시 알림 + 백그라운드 위치 (iOS Live Activity 대응) -->
+        <service
+            android:name=".core.services.SessionForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="location" />
+
+        <!-- Vlog 완성본 공유 (iOS ShareSheet 대응) -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
 
         <!-- 카카오 로그인 리다이렉트 (kakao{NATIVE_APP_KEY}://oauth) -->
         <activity

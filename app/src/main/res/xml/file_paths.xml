@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- Vlog 완성본(cacheDir) 공유용 -->
+    <cache-path name="cache" path="." />
+    <!-- 세션 클립(filesDir) 공유용 -->
+    <files-path name="files" path="." />
+</paths>

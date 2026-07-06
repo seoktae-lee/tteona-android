@@ -65,11 +65,8 @@ object CourseService {
         likedCourseIdsFetched = true
     }
 
-    /**
-     * 좋아요 토글 — iOS와 동일한 낙관적 업데이트 + 실패 시 롤백.
-     * TODO: 좋아요 시 코스 작성자 푸시 알림(PushService)·통계 이벤트(StatsService)는 해당 서비스 이식 후 연결.
-     */
-    suspend fun toggleLike(courseId: String, userId: String) {
+    /** 좋아요 토글 — iOS와 동일한 낙관적 업데이트 + 실패 시 롤백 + 작성자 푸시·통계 이벤트 */
+    suspend fun toggleLike(courseId: String, userId: String, likerNickname: String = "") {
         val alreadyLiked = courseId in _likedCourseIds.value
         val previousLiked = _likedCourseIds.value
         val previousCourses = _courses.value
@@ -94,12 +91,52 @@ object CourseService {
                 batch.update(courseRef, "likeCount", FieldValue.increment(1))
             }
             batch.commit().await()
+
+            if (!alreadyLiked) {
+                // 좋아요 시 코스 작성자에게 푸시 (본인 제외) + 통계 이벤트 (iOS와 동일)
+                val course = _courses.value.firstOrNull { it.courseId == courseId }
+                if (course != null && course.authorId != userId) {
+                    PushService.notifyCourseLiked(course.authorId, likerNickname, course.courseName)
+                }
+                StatsService.postEvent(com.seoktaedev.tteona.core.model.StatsEvent.COURSE_LIKED, userId)
+            }
         } catch (e: Exception) {
             // 실패 시 롤백
             _likedCourseIds.value = previousLiked
             _courses.value = previousCourses
             throw e
         }
+    }
+
+    /** 코스 저장 — 즉흥 세션의 "코스로 저장" (iOS saveCourse) */
+    suspend fun saveCourse(course: Course) {
+        val data = mapOf(
+            "courseId" to course.courseId,
+            "authorId" to course.authorId,
+            "courseName" to course.courseName,
+            "tag" to course.tag.label,
+            "region" to course.region,
+            "likeCount" to course.likeCount,
+            "createdAt" to Timestamp(java.util.Date(course.createdAt)),
+            "places" to course.places.map { p ->
+                buildMap<String, Any> {
+                    put("order", p.order)
+                    put("placeName", p.placeName)
+                    put("latitude", p.latitude)
+                    put("longitude", p.longitude)
+                    p.clipFileName?.let { put("clipFileName", it) }
+                }
+            },
+        )
+        db.collection("courses").document(course.courseId).set(data).await()
+        _courses.value = listOf(course) + _courses.value
+    }
+
+    /** 내 코스 삭제 (iOS deleteCourse) */
+    suspend fun deleteCourse(course: Course) {
+        db.collection("courses").document(course.courseId).delete().await()
+        _courses.value = _courses.value.filter { it.courseId != course.courseId }
+        _likedCourseIds.value = _likedCourseIds.value - course.courseId
     }
 
     fun clearUserData() {

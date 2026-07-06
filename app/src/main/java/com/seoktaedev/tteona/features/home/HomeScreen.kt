@@ -88,6 +88,7 @@ import com.seoktaedev.tteona.core.model.CourseTag
 import com.seoktaedev.tteona.core.model.Place
 import com.seoktaedev.tteona.core.services.CourseService
 import com.seoktaedev.tteona.core.services.CourseThumbnailService
+import com.seoktaedev.tteona.core.services.PlaceSearchService
 import com.seoktaedev.tteona.core.services.PlacesPhotoService
 import com.seoktaedev.tteona.core.services.UserService
 import com.seoktaedev.tteona.ui.theme.TteDarkGray
@@ -123,6 +124,8 @@ fun HomeScreen(
     modifier: Modifier = Modifier,
     onCourseClick: (Course, String?) -> Unit = { _, _ -> },
     onResumeCourse: () -> Unit = {},
+    onImpromptuTap: () -> Unit = {},
+    onResumeImpromptu: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -139,6 +142,7 @@ fun HomeScreen(
     var thumbnails by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     var locationGranted by remember { mutableStateOf(false) }
     var didMoveToUser by remember { mutableStateOf(false) }
+    var showRegionSearch by remember { mutableStateOf(false) }
 
     val cameraPositionState = rememberCameraPositionState {
         // 최초 카메라: 한반도 전체 (iOS initialCamera와 동일)
@@ -289,6 +293,21 @@ fun HomeScreen(
                             .clickable { searchText = "" },
                     )
                 }
+                // 지역 검색 (iOS map.fill 버튼)
+                Box(
+                    Modifier
+                        .width(1.dp)
+                        .height(16.dp)
+                        .background(TteMediumGray.copy(alpha = 0.4f))
+                )
+                Icon(
+                    Icons.Filled.Map,
+                    contentDescription = "지역 검색",
+                    tint = TteOrange,
+                    modifier = Modifier
+                        .size(18.dp)
+                        .clickable { showRegionSearch = true },
+                )
             }
 
             // 필터 캡슐 (전체/좋아요/내 코스)
@@ -383,29 +402,74 @@ fun HomeScreen(
                     Text("나의 오늘", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White)
                 }
 
-                // 코스 이어하기 — 좌측 (iOS activeSessionStore.hasTodaySession 버튼)
-                val hasTodaySession by com.seoktaedev.tteona.core.services.ActiveSessionStore.hasTodaySession.collectAsState()
-                if (hasTodaySession) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(3.dp),
-                        modifier = Modifier
-                            .align(Alignment.CenterStart)
-                            .padding(start = 24.dp)
-                            .size(48.dp)
-                            .shadow(8.dp, CircleShape)
-                            .clip(CircleShape)
-                            .background(Color.White)
-                            .clickable(onClick = onResumeCourse)
-                            .padding(top = 8.dp),
-                    ) {
-                        Icon(
-                            Icons.Filled.Map,
-                            contentDescription = null,
-                            tint = TteOrange,
-                            modifier = Modifier.size(16.dp),
-                        )
-                        Text("코스", fontSize = 9.sp, fontWeight = FontWeight.Medium, color = TteOrange)
+                // 나의 오늘 — 정중앙 고정 (iOS createCourseButton)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .shadow(12.dp, CircleShape)
+                        .clip(CircleShape)
+                        .background(TteOrange)
+                        .clickable(onClick = onImpromptuTap)
+                        .padding(horizontal = 32.dp, vertical = 16.dp),
+                ) {
+                    Icon(Icons.AutoMirrored.Filled.DirectionsWalk, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+                    Text("나의 오늘", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                }
+
+                // 좌측 — 이어하기 버튼들 (나의 오늘 / 코스)
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier
+                        .align(Alignment.CenterStart)
+                        .padding(start = 24.dp),
+                ) {
+                    val hasImpromptuSession by com.seoktaedev.tteona.core.services.ImpromptuSessionStore.hasTodaySession.collectAsState()
+                    if (hasImpromptuSession) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(3.dp),
+                            modifier = Modifier
+                                .size(48.dp)
+                                .shadow(8.dp, CircleShape)
+                                .clip(CircleShape)
+                                .background(Color.White)
+                                .clickable(onClick = onResumeImpromptu)
+                                .padding(top = 8.dp),
+                        ) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.DirectionsWalk,
+                                contentDescription = null,
+                                tint = TteOrange,
+                                modifier = Modifier.size(16.dp),
+                            )
+                            Text("이어하기", fontSize = 9.sp, fontWeight = FontWeight.Medium, color = TteOrange)
+                        }
+                    }
+
+                    // 코스 이어하기 (iOS activeSessionStore.hasTodaySession 버튼)
+                    val hasTodaySession by com.seoktaedev.tteona.core.services.ActiveSessionStore.hasTodaySession.collectAsState()
+                    if (hasTodaySession) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(3.dp),
+                            modifier = Modifier
+                                .size(48.dp)
+                                .shadow(8.dp, CircleShape)
+                                .clip(CircleShape)
+                                .background(Color.White)
+                                .clickable(onClick = onResumeCourse)
+                                .padding(top = 8.dp),
+                        ) {
+                            Icon(
+                                Icons.Filled.Map,
+                                contentDescription = null,
+                                tint = TteOrange,
+                                modifier = Modifier.size(16.dp),
+                            )
+                            Text("코스", fontSize = 9.sp, fontWeight = FontWeight.Medium, color = TteOrange)
+                        }
                     }
                 }
 
@@ -452,10 +516,24 @@ fun HomeScreen(
         }
 
         SnackbarHost(snackbarHostState, modifier = Modifier.align(Alignment.BottomCenter))
+
+        // 지역 검색 시트 (iOS RegionSearchView)
+        if (showRegionSearch) {
+            com.seoktaedev.tteona.features.main.RegionSearchSheet(
+                onSelect = { _, lat, lng ->
+                    scope.launch {
+                        cameraPositionState.animate(
+                            CameraUpdateFactory.newLatLngZoom(LatLng(lat, lng), zoomFor(0.05))
+                        )
+                    }
+                },
+                onDismiss = { showRegionSearch = false },
+            )
+        }
     }
 }
 
-// 지역/장소명 지오코딩 → 카메라 이동 (iOS performMapSearch의 폴백 경로)
+// iOS performMapSearch 대응 — 카카오 우선(한국 지명 정확) → 없으면 Geocoder 폴백 (PlaceSearchService 내부 처리)
 private suspend fun geocodeAndMove(
     context: Context,
     query: String,
@@ -463,14 +541,9 @@ private suspend fun geocodeAndMove(
 ) {
     val q = query.trim()
     if (q.isEmpty()) return
-    val addr = withContext(Dispatchers.IO) {
-        runCatching {
-            @Suppress("DEPRECATION")
-            Geocoder(context).getFromLocationName(q, 1)?.firstOrNull()
-        }.getOrNull()
-    } ?: return
+    val first = PlaceSearchService.search(context, q).firstOrNull() ?: return
     cameraPositionState.animate(
-        CameraUpdateFactory.newLatLngZoom(LatLng(addr.latitude, addr.longitude), zoomFor(0.1))
+        CameraUpdateFactory.newLatLngZoom(LatLng(first.latitude, first.longitude), zoomFor(0.1))
     )
 }
 

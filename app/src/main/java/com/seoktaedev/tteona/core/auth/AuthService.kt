@@ -82,9 +82,12 @@ object AuthService {
                     refreshOnboardingStatus(user.uid)
                     // FCM 토큰 등록 (iOS RootView의 saveFCMToken 대응)
                     com.seoktaedev.tteona.core.services.TteonaMessagingService.registerCurrentToken(user.uid)
+                    // PRO 구독 계정 동기화 (iOS ProManager.logIn 대응)
+                    com.seoktaedev.tteona.core.services.ProManager.logIn(user.uid)
                 } else {
                     _currentUser.value = null
                     _onboardingComplete.value = false
+                    com.seoktaedev.tteona.core.services.ProManager.logOut()
                 }
                 _isInitializing.value = false
             }

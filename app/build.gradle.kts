@@ -32,6 +32,12 @@ android {
         // local.properties에 MAPS_API_KEY=... 형태로 저장 (VCS 제외 대상)
         manifestPlaceholders["MAPS_API_KEY"] = localProps.getProperty("MAPS_API_KEY") ?: ""
 
+        // RevenueCat Google Play 공개 SDK 키(goog_...) — 미설정 시 무료 모드 (iOS REVENUECAT_API_KEY 대응)
+        buildConfigField(
+            "String", "REVENUECAT_API_KEY",
+            "\"${localProps.getProperty("REVENUECAT_API_KEY") ?: ""}\"",
+        )
+
         // 카카오 네이티브 앱 키 (클라이언트 공개 키 — Kakao Developers > 플랫폼 키 > tteona-ver.android)
         val kakaoNativeAppKey = "e6df456a5ce81d4a4bfb77d290a127d2"
         manifestPlaceholders["KAKAO_NATIVE_APP_KEY"] = kakaoNativeAppKey
@@ -56,6 +62,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
@@ -108,4 +115,14 @@ dependencies {
     implementation(libs.play.services.location)
     implementation(libs.maps.compose)
 
+    // 장소 촬영 (CameraX — iOS AVFoundation CameraService 대응)
+    implementation(libs.camerax.core)
+    implementation(libs.camerax.camera2)
+    implementation(libs.camerax.lifecycle)
+    implementation(libs.camerax.video)
+    implementation(libs.camerax.view)
+    implementation(libs.guava) // CameraX ListenableFuture 반환 타입 참조용
+
+    // PRO 구독 (RevenueCat — iOS와 동일한 entitlement "pro" 공유)
+    implementation(libs.revenuecat)
 }

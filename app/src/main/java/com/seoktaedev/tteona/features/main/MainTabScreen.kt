@@ -9,9 +9,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -37,6 +40,7 @@ import com.seoktaedev.tteona.core.services.AppNotificationManager
 import com.seoktaedev.tteona.core.services.CourseService
 import com.seoktaedev.tteona.core.services.CourseThumbnailService
 import com.seoktaedev.tteona.core.services.DeepLinkHandler
+import com.seoktaedev.tteona.core.services.ImpromptuSessionStore
 import com.seoktaedev.tteona.core.services.TteonaMessagingService
 import com.seoktaedev.tteona.features.explore.CourseDetailScreen
 import com.seoktaedev.tteona.features.explore.ExploreScreen
@@ -45,12 +49,13 @@ import com.seoktaedev.tteona.features.home.HomeScreen
 import com.seoktaedev.tteona.features.session.ActiveSessionScreen
 import com.seoktaedev.tteona.features.settings.SettingsScreen
 
-// iOS MainTabView와 동일한 3탭 구성: 홈(지도) / 탐색 / 설정
+// iOS MainTabView와 동일한 4탭 구성: 홈(지도) / 탐색 / 채팅(그룹) / 설정
 private data class TabItem(val label: String, val icon: ImageVector)
 
 private val tabs = listOf(
     TabItem("홈", Icons.Filled.Map),
     TabItem("탐색", Icons.Filled.GridView),
+    TabItem("채팅", Icons.AutoMirrored.Filled.Chat),
     TabItem("설정", Icons.Filled.Settings),
 )
 
@@ -61,8 +66,9 @@ private data class CourseSelection(val course: Course, val thumbnailUrl: String?
 fun MainTabScreen() {
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     var courseSelection by remember { mutableStateOf<CourseSelection?>(null) }
-    var showGroups by rememberSaveable { mutableStateOf(false) }
     var sessionInfo by remember { mutableStateOf<CourseSessionInfo?>(null) }
+    var impromptuRoomIds by remember { mutableStateOf<Set<String>?>(null) }
+    var showImpromptuRoomSelect by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
     val pendingChatRoom by AppNotificationManager.pendingChatRoom.collectAsState()
@@ -83,14 +89,25 @@ fun MainTabScreen() {
         }
     }
 
-    // 채팅 푸시 탭 → 그룹 화면 자동 오픈 (iOS pendingChatRoom → showGroups)
+    // 채팅 푸시 탭 → 채팅 탭 자동 전환 (iOS pendingChatRoom → selectedTab = 2)
     LaunchedEffect(pendingChatRoom) {
-        if (pendingChatRoom != null) showGroups = true
+        if (pendingChatRoom != null) selectedTab = 2
     }
 
-    // 그룹 초대 딥링크 → 그룹 화면(코드 참여) 오픈
+    // 그룹 초대 딥링크 → 채팅 탭(코드 참여) 전환
     LaunchedEffect(pendingRoomCode) {
-        if (pendingRoomCode != null) showGroups = true
+        if (pendingRoomCode != null) selectedTab = 2
+    }
+
+    // 채팅 탭 안읽음 배지 갱신 (iOS refreshUnreadStatus)
+    val authUser by com.seoktaedev.tteona.core.auth.AuthService.currentUser.collectAsState()
+    val myRooms by com.seoktaedev.tteona.core.services.RoomService.myRooms.collectAsState()
+    val unreadRoomIds by com.seoktaedev.tteona.core.services.RoomService.unreadRoomIds.collectAsState()
+    LaunchedEffect(authUser?.uid) {
+        authUser?.uid?.let { com.seoktaedev.tteona.core.services.RoomService.startListeningMyRooms(it) }
+    }
+    LaunchedEffect(myRooms, selectedTab) {
+        authUser?.uid?.let { com.seoktaedev.tteona.core.services.RoomService.refreshUnreadStatus(it) }
     }
 
     // 코스 공유 딥링크 → 코스 상세 오픈 (iOS deepLinkedCourse)
@@ -110,7 +127,15 @@ fun MainTabScreen() {
                         NavigationBarItem(
                             selected = selectedTab == index,
                             onClick = { selectedTab = index },
-                            icon = { Icon(tab.icon, contentDescription = tab.label) },
+                            icon = {
+                                if (index == 2 && unreadRoomIds.isNotEmpty()) {
+                                    BadgedBox(badge = { Badge { Text("${unreadRoomIds.size}") } }) {
+                                        Icon(tab.icon, contentDescription = tab.label)
+                                    }
+                                } else {
+                                    Icon(tab.icon, contentDescription = tab.label)
+                                }
+                            },
                             label = { Text(tab.label) },
                         )
                     }
@@ -134,19 +159,30 @@ fun MainTabScreen() {
                             )
                         }
                     },
+                    onImpromptuTap = {
+                        // iOS handleImpromptuTap — 저장 세션이 있거나 그룹이 없으면 바로 시작, 아니면 방 선택
+                        val saved = ImpromptuSessionStore.loadTodaySession()
+                        val hasSaved = saved?.places?.isNotEmpty() == true
+                        if (hasSaved || myRooms.isEmpty()) {
+                            impromptuRoomIds = saved?.roomIds?.toSet() ?: emptySet()
+                        } else {
+                            showImpromptuRoomSelect = true
+                        }
+                    },
+                    onResumeImpromptu = {
+                        ImpromptuSessionStore.loadTodaySession()?.let { saved ->
+                            impromptuRoomIds = saved.roomIds.toSet()
+                        }
+                    },
                 )
                 1 -> ExploreScreen(
                     modifier = modifier,
                     onCourseClick = { course, thumb -> courseSelection = CourseSelection(course, thumb) },
-                    onOpenGroups = { showGroups = true },
+                    onOpenGroups = { selectedTab = 2 },
                 )
-                2 -> SettingsScreen(modifier)
+                2 -> Box(modifier) { GroupListScreen() }
+                3 -> SettingsScreen(modifier)
             }
-        }
-
-        // 그룹(피드) — iOS FeedTabView 시트 대응 풀스크린
-        if (showGroups) {
-            GroupListScreen(onClose = { showGroups = false })
         }
 
         // 코스 상세 — 탭바 위를 전부 덮는 풀스크린 (iOS fullScreenCover 대응)
@@ -170,6 +206,49 @@ fun MainTabScreen() {
                 roomIds = info.roomIds,
                 isResuming = info.isResuming,
                 onClose = { sessionInfo = null },
+            )
+        }
+
+        // 즉흥 '나의 오늘' — 방 선택 시트 → 세션 (iOS showRoomSelect → ImpromptuSessionView)
+        if (showImpromptuRoomSelect) {
+            com.seoktaedev.tteona.features.session.RoomSelectSheet(
+                onConfirm = { roomIds ->
+                    showImpromptuRoomSelect = false
+                    impromptuRoomIds = roomIds
+                },
+                onDismiss = { showImpromptuRoomSelect = false },
+            )
+        }
+        impromptuRoomIds?.let { roomIds ->
+            com.seoktaedev.tteona.features.session.ImpromptuSessionScreen(
+                selectedRoomIds = roomIds,
+                onClose = { impromptuRoomIds = null },
+            )
+        }
+
+        // 첫 진입 나루 내비게이션 가이드 — 계정별 1회 (iOS hasSeenNavGuide, 딥링크 진입 시 방해 안 함)
+        var showNavGuide by remember { mutableStateOf(false) }
+        LaunchedEffect(authUser?.uid) {
+            val uid = authUser?.uid ?: return@LaunchedEffect
+            val prefs = context.getSharedPreferences("tteona", android.content.Context.MODE_PRIVATE)
+            if (!prefs.getBoolean("hasSeenNavGuide_$uid", false) &&
+                DeepLinkHandler.pendingCourseId.value == null &&
+                DeepLinkHandler.pendingRoomCode.value == null
+            ) {
+                kotlinx.coroutines.delay(800)
+                showNavGuide = true
+            }
+        }
+        if (showNavGuide) {
+            NavGuideOverlay(
+                onSelectTab = { selectedTab = it },
+                onFinish = {
+                    authUser?.uid?.let { uid ->
+                        context.getSharedPreferences("tteona", android.content.Context.MODE_PRIVATE)
+                            .edit().putBoolean("hasSeenNavGuide_$uid", true).apply()
+                    }
+                    showNavGuide = false
+                },
             )
         }
     }

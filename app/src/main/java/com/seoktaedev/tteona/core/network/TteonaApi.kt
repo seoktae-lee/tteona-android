@@ -36,6 +36,32 @@ data class TourPhotoResponse(val url: String? = null, val category: String? = nu
 @Serializable
 data class StatsEventRequest(val userId: String, val type: String)
 
+// 장소 상세 캐시 (iOS PlaceDetailService — WAS PostgreSQL 캐시)
+@Serializable
+data class PlaceCachePayload(
+    val photos: List<String> = emptyList(),
+    val rating: Double? = null,
+    val reviewCount: Int = 0,
+    val reviews: List<PlaceCacheReview> = emptyList(),
+)
+
+@Serializable
+data class PlaceCacheReview(
+    val authorName: String = "",
+    val rating: Int = 0,
+    val text: String = "",
+    val publishTime: String = "",
+)
+
+@Serializable
+data class PlaceCacheSaveRequest(
+    val cacheKey: String,
+    val photos: List<String> = emptyList(),
+    val rating: Double? = null,
+    val reviewCount: Int = 0,
+    val reviews: List<PlaceCacheReview> = emptyList(),
+)
+
 @Serializable
 data class UploadResponse(val url: String? = null)
 
@@ -69,6 +95,13 @@ data class ChatReactionRow(val emoji: String, val userId: String)
 data class CourseFollowedRequest(
     val courseOwnerId: String,
     val followerNickname: String,
+    val courseName: String,
+)
+
+@Serializable
+data class CourseLikedRequest(
+    val courseOwnerId: String,
+    val likerNickname: String,
     val courseName: String,
 )
 
@@ -111,6 +144,13 @@ interface TteonaApi {
         @Query("lng") lng: Double? = null,
     ): TourPhotoResponse
 
+    // 장소 상세 캐시 조회/저장 (iOS PlaceDetailService의 WAS 캐시 경로)
+    @GET("places/cache")
+    suspend fun getPlaceCache(@Query("key") key: String): PlaceCachePayload
+
+    @POST("places/cache")
+    suspend fun savePlaceCache(@Body body: PlaceCacheSaveRequest)
+
     // 개인 누적 통계 (iOS StatsService.fetchMyStats)
     @GET("users/{uid}/stats")
     suspend fun getMyStats(@Path("uid") uid: String): TravelStats
@@ -124,6 +164,14 @@ interface TteonaApi {
     @Multipart
     @POST("users/{uid}/avatar")
     suspend fun uploadAvatar(@Path("uid") uid: String, @Part image: MultipartBody.Part): UploadResponse
+
+    // 코스 커스텀 썸네일 업로드 (iOS CourseThumbnailService.upload — 탐색탭 그리드용)
+    @Multipart
+    @POST("courses/{courseId}/thumbnail")
+    suspend fun uploadCourseThumbnail(
+        @Path("courseId") courseId: String,
+        @Part image: MultipartBody.Part,
+    ): UploadResponse
 
     // 콘텐츠 모더레이션 — 부적절 텍스트 검사 (iOS StatsService.isTextAllowed)
     @POST("moderate")
@@ -139,4 +187,8 @@ interface TteonaApi {
     // 코스 작성자 알림 (iOS PushService.notifyCourseFollowed)
     @POST("push/course-followed")
     suspend fun notifyCourseFollowed(@Body body: CourseFollowedRequest)
+
+    // 코스 좋아요 알림 (iOS PushService.notifyCourseLiked)
+    @POST("push/course-liked")
+    suspend fun notifyCourseLiked(@Body body: CourseLikedRequest)
 }

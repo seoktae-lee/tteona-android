@@ -18,8 +18,9 @@ import kotlinx.coroutines.flow.StateFlow
  * 세션 중 위치 추적 + 장소 도착 감지 (iOS는 지오펜스, 안드로이드는 업데이트마다 거리 검사).
  */
 class LocationService(context: Context) {
+    private val appContext = context.applicationContext
     private val client: FusedLocationProviderClient =
-        LocationServices.getFusedLocationProviderClient(context.applicationContext)
+        LocationServices.getFusedLocationProviderClient(appContext)
 
     private val _currentLocation = MutableStateFlow<Location?>(null)
     val currentLocation: StateFlow<Location?> = _currentLocation
@@ -80,7 +81,39 @@ class LocationService(context: Context) {
             if (results[0] <= arrivalRadiusM) {
                 notifiedOrders.add(place.order)
                 _arrivedAtPlace.value = place
+                sendArrivalNotification(place.placeName)
             }
+        }
+    }
+
+    /** 도착 로컬 알림 — 탭하면 해당 장소 카메라 열기 (iOS sendArrivalNotification) */
+    private fun sendArrivalNotification(placeName: String) {
+        if (androidx.core.content.ContextCompat.checkSelfPermission(
+                appContext, android.Manifest.permission.POST_NOTIFICATIONS
+            ) != android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) return
+
+        TteonaMessagingService.ensureChannel(appContext)
+        val intent = android.content.Intent(appContext, com.seoktaedev.tteona.MainActivity::class.java).apply {
+            flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP
+            putExtra("action", "openCamera")
+            putExtra("placeName", placeName)
+        }
+        val pending = android.app.PendingIntent.getActivity(
+            appContext, placeName.hashCode(), intent,
+            android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE,
+        )
+        val notification = androidx.core.app.NotificationCompat.Builder(appContext, "tteona_default")
+            .setSmallIcon(com.seoktaedev.tteona.R.drawable.ic_launcher_foreground)
+            .setContentTitle("📍 ${placeName}에 도착했어요!")
+            .setContentText("지금 촬영하세요")
+            .setAutoCancel(true)
+            .setPriority(androidx.core.app.NotificationCompat.PRIORITY_HIGH)
+            .setContentIntent(pending)
+            .build()
+        runCatching {
+            androidx.core.app.NotificationManagerCompat.from(appContext)
+                .notify("arrival_$placeName".hashCode(), notification)
         }
     }
 }

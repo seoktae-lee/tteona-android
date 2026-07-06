@@ -18,7 +18,6 @@ import kotlinx.coroutines.launch
 
 /**
  * iOS ExploreGridView의 상태 로직 이식본.
- * TODO: 위치 확보 후 추천 재조회(refetchRecommendations)는 LocationService 이식 시 연결.
  */
 class ExploreViewModel : ViewModel() {
 
@@ -55,8 +54,10 @@ class ExploreViewModel : ViewModel() {
             coroutineScope {
                 // iOS loadAll과 동일하게 4개 요청 병렬 수행
                 val coursesJob = async {
-                    // TODO: UserService 이식 후 차단 유저 필터(blockedUserIds) 전달
-                    CourseService.fetchCourses()
+                    CourseService.fetchCourses(
+                        com.seoktaedev.tteona.core.services.UserService.currentUser.value?.blockedUserIds
+                            ?: emptyList()
+                    )
                 }
                 val thumbsJob = async { CourseThumbnailService.fetchAllThumbnails() }
                 val recJob = async {
@@ -83,6 +84,20 @@ class ExploreViewModel : ViewModel() {
 
     fun setSortMode(mode: SortMode) {
         _uiState.update { it.copy(sortMode = mode) }
+    }
+
+    // 위치를 처음 확보하면 위치 기반으로 추천 1회 재조회 (iOS didRefetchWithLocation)
+    private var didRefetchWithLocation = false
+
+    fun refetchRecommendationsWithLocation(lat: Double, lng: Double) {
+        if (didRefetchWithLocation) return
+        didRefetchWithLocation = true
+        viewModelScope.launch {
+            val ids = RecommendationService.fetchRecommended(
+                userId = AuthService.currentUser.value?.uid, lat = lat, lng = lng,
+            )
+            if (ids.isNotEmpty()) _uiState.update { it.copy(recommendedIds = ids) }
+        }
     }
 
     // iOS sortedCourses 계산 프로퍼티와 동일한 정렬 규칙

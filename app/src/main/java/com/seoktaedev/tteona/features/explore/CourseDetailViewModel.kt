@@ -61,8 +61,9 @@ class CourseDetailViewModel : ViewModel() {
 
     fun toggleLike(courseId: String) {
         val userId = AuthService.currentUser.value?.uid ?: return
+        val nickname = com.seoktaedev.tteona.core.services.UserService.currentUser.value?.nickname ?: ""
         viewModelScope.launch {
-            runCatching { CourseService.toggleLike(courseId, userId) }
+            runCatching { CourseService.toggleLike(courseId, userId, nickname) }
         }
     }
 }

@@ -93,7 +93,9 @@ fun LoginScreen(viewModel: AuthViewModel = viewModel()) {
         return
     }
 
-    Surface(modifier = Modifier.fillMaxSize()) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        // 주황 일렁임 배경 (iOS AuthView의 TteonaSplashBackground)
+        com.seoktaedev.tteona.ui.theme.TteonaSplashBackground()
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -317,7 +319,9 @@ private fun VerificationSentView(
         }
     }
 
-    Surface(modifier = Modifier.fillMaxSize()) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        // 주황 일렁임 배경 (iOS AuthView와 동일)
+        com.seoktaedev.tteona.ui.theme.TteonaSplashBackground()
         Column(
             modifier = Modifier
                 .fillMaxSize()

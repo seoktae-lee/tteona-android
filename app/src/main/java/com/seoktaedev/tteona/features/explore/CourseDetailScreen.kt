@@ -26,11 +26,15 @@ import androidx.compose.material.icons.filled.DirectionsCar
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Map
+import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Place
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -58,7 +62,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil3.compose.SubcomposeAsyncImage
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
+import com.seoktaedev.tteona.core.auth.AuthService
 import com.seoktaedev.tteona.core.model.AppUser
+import com.seoktaedev.tteona.core.services.CourseService
+import com.seoktaedev.tteona.core.util.Haptics
 import com.seoktaedev.tteona.core.model.Course
 import com.seoktaedev.tteona.core.model.Place
 import com.seoktaedev.tteona.core.model.RouteInfo
@@ -88,7 +97,13 @@ fun CourseDetailScreen(
     val isLiked = course.courseId in likedIds
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+    val view = LocalView.current
     var showRoomSelect by remember { androidx.compose.runtime.mutableStateOf(false) }
+    var showOverflowMenu by remember { androidx.compose.runtime.mutableStateOf(false) }
+    var showReportDialog by remember { androidx.compose.runtime.mutableStateOf(false) }
+    var showBlockConfirm by remember { androidx.compose.runtime.mutableStateOf(false) }
+    var showDeleteConfirm by remember { androidx.compose.runtime.mutableStateOf(false) }
+    var infoAlert by remember { androidx.compose.runtime.mutableStateOf<Pair<String, String>?>(null) }
 
     BackHandler(onBack = onClose)
     LaunchedEffect(course.courseId) { viewModel.load(course) }
@@ -105,7 +120,10 @@ fun CourseDetailScreen(
                         modifier = Modifier.padding(20.dp),
                         verticalArrangement = Arrangement.spacedBy(20.dp),
                     ) {
-                        TitleBlock(course, state.author, isLiked) { viewModel.toggleLike(course.courseId) }
+                        TitleBlock(course, state.author, isLiked) {
+                            Haptics.light(view)
+                            viewModel.toggleLike(course.courseId)
+                        }
                         WeatherCard(state.weather)
                         TransportSection(state)
                         PlacesBlock(course)
@@ -126,6 +144,68 @@ fun CourseDetailScreen(
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "닫기", tint = Color.White)
             }
 
+            // 우상단: 공유 + 더보기 (iOS ToolbarItem topBarTrailing)
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(end = 16.dp, top = 52.dp),
+            ) {
+                val context = LocalContext.current
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .size(38.dp)
+                        .clip(CircleShape)
+                        .background(Color.Black.copy(alpha = 0.35f))
+                        .clickable {
+                            // iOS CourseShareHelper와 동일한 공유 URL
+                            val url = android.net.Uri.Builder()
+                                .scheme("https").authority("tteona.kr").path("/course")
+                                .appendQueryParameter("id", course.courseId)
+                                .appendQueryParameter("name", course.courseName)
+                                .appendQueryParameter("places", course.places.size.toString())
+                                .build().toString()
+                            val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(android.content.Intent.EXTRA_TEXT, url)
+                            }
+                            context.startActivity(android.content.Intent.createChooser(intent, "코스 공유"))
+                        },
+                ) {
+                    Icon(Icons.Filled.Share, contentDescription = "공유", tint = Color.White, modifier = Modifier.size(18.dp))
+                }
+                Box {
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier
+                            .size(38.dp)
+                            .clip(CircleShape)
+                            .background(Color.Black.copy(alpha = 0.35f))
+                            .clickable { showOverflowMenu = true },
+                    ) {
+                        Icon(Icons.Filled.MoreHoriz, contentDescription = "더보기", tint = Color.White, modifier = Modifier.size(18.dp))
+                    }
+                    DropdownMenu(expanded = showOverflowMenu, onDismissRequest = { showOverflowMenu = false }) {
+                        if (course.authorId == AuthService.currentUser.value?.uid) {
+                            DropdownMenuItem(
+                                text = { Text("코스 삭제", color = Color.Red) },
+                                onClick = { showOverflowMenu = false; showDeleteConfirm = true },
+                            )
+                        } else {
+                            DropdownMenuItem(
+                                text = { Text("코스 신고하기", color = Color.Red) },
+                                onClick = { showOverflowMenu = false; showReportDialog = true },
+                            )
+                            DropdownMenuItem(
+                                text = { Text("작성자 차단하기") },
+                                onClick = { showOverflowMenu = false; showBlockConfirm = true },
+                            )
+                        }
+                    }
+                }
+            }
+
             // 하단 시작 버튼 (iOS startButton)
             Column(
                 modifier = Modifier
@@ -140,6 +220,7 @@ fun CourseDetailScreen(
             ) {
                 Button(
                     onClick = {
+                        Haptics.light(view)
                         if (onStartCourse != null) showRoomSelect = true
                         else scope.launch { snackbarHostState.showSnackbar("그룹 여행 시작 기능은 준비 중이에요.") }
                     },
@@ -151,6 +232,69 @@ fun CourseDetailScreen(
                 ) {
                     Text("이 코스 따라가기", fontSize = 17.sp, fontWeight = FontWeight.Bold)
                 }
+            }
+
+            // 신고/차단/삭제 다이얼로그 (iOS confirmationDialog·alert 대응)
+            if (showReportDialog) {
+                com.seoktaedev.tteona.features.common.ReportReasonDialog(
+                    onSelect = { reason ->
+                        val uid = AuthService.currentUser.value?.uid ?: return@ReportReasonDialog
+                        scope.launch {
+                            runCatching {
+                                com.seoktaedev.tteona.core.services.ReportService.reportContent(
+                                    reporterId = uid,
+                                    targetType = "course",
+                                    targetId = course.courseId,
+                                    targetAuthorId = course.authorId,
+                                    reason = reason,
+                                )
+                            }.onSuccess {
+                                infoAlert = "신고 완료" to "신고가 정상 접수되었습니다. 24시간 이내에 검토 및 삭제 처리됩니다."
+                            }.onFailure {
+                                infoAlert = "오류" to "신고 접수에 실패했어요. 잠시 후 다시 시도해주세요."
+                            }
+                        }
+                    },
+                    onDismiss = { showReportDialog = false },
+                )
+            }
+            if (showBlockConfirm) {
+                com.seoktaedev.tteona.features.common.DestructiveConfirmDialog(
+                    title = "작성자 차단",
+                    message = "이 작성자를 차단하시겠어요? 차단하시면 이 작성자가 등록한 모든 코스와 후기가 숨겨집니다.",
+                    confirmLabel = "차단",
+                    onConfirm = {
+                        val uid = AuthService.currentUser.value?.uid ?: return@DestructiveConfirmDialog
+                        scope.launch {
+                            runCatching { com.seoktaedev.tteona.core.services.UserService.blockUser(uid, course.authorId) }
+                                .onSuccess {
+                                    infoAlert = "차단 완료" to "작성자가 차단되었습니다."
+                                }
+                                .onFailure {
+                                    infoAlert = "오류" to "차단에 실패했어요. 잠시 후 다시 시도해주세요."
+                                }
+                        }
+                    },
+                    onDismiss = { showBlockConfirm = false },
+                )
+            }
+            if (showDeleteConfirm) {
+                com.seoktaedev.tteona.features.common.DestructiveConfirmDialog(
+                    title = "코스 삭제",
+                    message = "이 코스를 삭제할까요? 되돌릴 수 없어요.",
+                    confirmLabel = "삭제",
+                    onConfirm = {
+                        scope.launch {
+                            runCatching { CourseService.deleteCourse(course) }
+                                .onSuccess { onClose() }
+                                .onFailure { infoAlert = "오류" to "코스 삭제에 실패했어요. 잠시 후 다시 시도해주세요." }
+                        }
+                    },
+                    onDismiss = { showDeleteConfirm = false },
+                )
+            }
+            infoAlert?.let { (title, message) ->
+                com.seoktaedev.tteona.features.common.InfoAlert(title, message) { infoAlert = null }
             }
 
             // 공유할 그룹 선택 → 세션 시작 (iOS RoomSelectView 시트 대응)
@@ -331,14 +475,23 @@ private fun TransportRow(
 
 @Composable
 private fun PlacesBlock(course: Course) {
+    // 장소 탭 → 상세 시트 (iOS CourseDetailView의 PlaceDetailSheet 진입)
+    var selectedPlace by remember { androidx.compose.runtime.mutableStateOf<Place?>(null) }
+
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("코스 동선", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = TteDarkGray)
 
         CourseRouteMap(course)
 
         course.places.sortedBy { it.order }.forEachIndexed { idx, place ->
-            PlaceCardRow(index = idx, place = place)
+            Box(Modifier.clickable { selectedPlace = place }) {
+                PlaceCardRow(index = idx, place = place)
+            }
         }
+    }
+
+    selectedPlace?.let { place ->
+        PlaceDetailSheet(place = place, onDismiss = { selectedPlace = null })
     }
 }
 

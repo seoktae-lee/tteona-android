@@ -30,6 +30,7 @@ fun TteonaTheme(
 ) {
     MaterialTheme(
         colorScheme = if (darkTheme) DarkColors else LightColors,
+        typography = TteonaTypography,
         content = content,
     )
 }

@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import kotlinx.coroutines.tasks.await
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -66,6 +67,22 @@ fun ExploreScreen(
     val courses by viewModel.courses.collectAsState()
 
     LaunchedEffect(Unit) { viewModel.loadIfNeeded() }
+
+    // 위치를 처음 확보하면 위치 기반 추천으로 1회 재조회 (iOS didRefetchWithLocation)
+    val exploreContext = androidx.compose.ui.platform.LocalContext.current
+    LaunchedEffect(Unit) {
+        if (androidx.core.content.ContextCompat.checkSelfPermission(
+                exploreContext, android.Manifest.permission.ACCESS_FINE_LOCATION
+            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            runCatching {
+                com.google.android.gms.location.LocationServices
+                    .getFusedLocationProviderClient(exploreContext).lastLocation.await()
+            }.getOrNull()?.let { loc ->
+                viewModel.refetchRecommendationsWithLocation(loc.latitude, loc.longitude)
+            }
+        }
+    }
 
     val sorted = viewModel.sortedCourses(courses, state)
 

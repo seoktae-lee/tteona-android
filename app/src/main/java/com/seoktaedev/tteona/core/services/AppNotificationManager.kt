@@ -14,6 +14,14 @@ object AppNotificationManager {
     private val _pendingChatRoom = MutableStateFlow<PendingChatRoom?>(null)
     val pendingChatRoom: StateFlow<PendingChatRoom?> = _pendingChatRoom
 
+    // 도착 알림 탭 → 해당 장소 카메라 열기 (iOS pendingPlaceName)
+    private val _pendingPlaceName = MutableStateFlow<String?>(null)
+    val pendingPlaceName: StateFlow<String?> = _pendingPlaceName
+
+    fun clearPendingPlaceName() {
+        _pendingPlaceName.value = null
+    }
+
     // 현재 보고 있는 채팅방 — 이 방의 알림은 포그라운드에서 표시하지 않음 (iOS activeChatRoom)
     @Volatile
     var activeChatRoomId: String? = null
@@ -26,6 +34,11 @@ object AppNotificationManager {
     // (iOS didReceive response 대응 — 서버 data 페이로드: type/roomId/senderUserId/targetUserId)
     fun handleNotificationExtras(extras: Bundle?) {
         extras ?: return
+        // 도착 알림 (iOS action == "openCamera")
+        if (extras.getString("action") == "openCamera") {
+            extras.getString("placeName")?.let { _pendingPlaceName.value = it }
+            return
+        }
         val type = extras.getString("type") ?: return
         val roomId = extras.getString("roomId")?.takeIf { it.isNotEmpty() } ?: return
         val senderUserId = extras.getString("senderUserId") ?: return

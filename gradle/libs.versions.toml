@@ -18,6 +18,7 @@ mapsCompose = "6.7.0"
 socketio = "2.1.2"
 credentials = "1.5.0"
 googleid = "1.1.1"
+camerax = "1.4.2"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -54,6 +55,13 @@ play-services-location = { group = "com.google.android.gms", name = "play-servic
 maps-compose = { group = "com.google.maps.android", name = "maps-compose", version.ref = "mapsCompose" }
 socketio = { group = "io.socket", name = "socket.io-client", version.ref = "socketio" }
 kakao-user = { group = "com.kakao.sdk", name = "v2-user", version = "2.24.0" }
+camerax-core = { group = "androidx.camera", name = "camera-core", version.ref = "camerax" }
+camerax-camera2 = { group = "androidx.camera", name = "camera-camera2", version.ref = "camerax" }
+camerax-lifecycle = { group = "androidx.camera", name = "camera-lifecycle", version.ref = "camerax" }
+camerax-video = { group = "androidx.camera", name = "camera-video", version.ref = "camerax" }
+camerax-view = { group = "androidx.camera", name = "camera-view", version.ref = "camerax" }
+guava = { group = "com.google.guava", name = "guava", version = "33.4.0-android" }
+revenuecat = { group = "com.revenuecat.purchases", name = "purchases", version = "8.19.2" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

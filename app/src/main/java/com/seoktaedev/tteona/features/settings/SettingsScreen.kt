@@ -38,7 +38,9 @@ import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.PersonOff
 import androidx.compose.material.icons.filled.PersonRemove
 import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material.icons.filled.VerifiedUser
+import androidx.compose.material.icons.filled.WorkspacePremium
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -117,6 +119,7 @@ private fun SettingsMain(
     val profileUser by UserService.currentUser.collectAsState()
 
     var showSignOutAlert by rememberSaveable { mutableStateOf(false) }
+    var showPaywall by rememberSaveable { mutableStateOf(false) }
     var showDeleteAlert by rememberSaveable { mutableStateOf(false) }
     var isDeleting by remember { mutableStateOf(false) }
     var deleteFailed by remember { mutableStateOf(false) }
@@ -198,6 +201,45 @@ private fun SettingsMain(
                 SettingsRow(Icons.Filled.BarChart, "내 여행 통계", onClick = onOpenStats) { Chevron() }
             }
 
+            // tteona PRO (iOS proSection)
+            val isPro by com.seoktaedev.tteona.core.services.ProManager.isPro.collectAsState()
+            SectionCard {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable(enabled = !isPro) { showPaywall = true }
+                        .padding(14.dp),
+                ) {
+                    Icon(
+                        Icons.Filled.WorkspacePremium,
+                        contentDescription = null,
+                        tint = TteOrange,
+                        modifier = Modifier.size(24.dp),
+                    )
+                    Column(verticalArrangement = Arrangement.spacedBy(3.dp), modifier = Modifier.weight(1f)) {
+                        Text(
+                            if (isPro) "tteona PRO 이용 중" else "tteona PRO",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = TteDarkGray,
+                        )
+                        Text(
+                            if (isPro) "모든 프리미엄 기능이 켜져 있어요"
+                            else "워터마크 제거 · 멀티포맷 · 5분 영상 · 우선 렌더링",
+                            fontSize = 12.sp,
+                            color = TteMediumGray,
+                        )
+                    }
+                    if (isPro) {
+                        Icon(Icons.Filled.Verified, contentDescription = null, tint = TteOrange, modifier = Modifier.size(20.dp))
+                    } else {
+                        Chevron()
+                    }
+                }
+            }
+
             SectionHeader("앱 정보")
             SectionCard {
                 val versionName = remember {
@@ -276,6 +318,11 @@ private fun SettingsMain(
             }
 
             Spacer(Modifier.height(24.dp))
+        }
+
+        // PRO 페이월 (iOS sheet showPaywall)
+        if (showPaywall) {
+            com.seoktaedev.tteona.features.pro.ProPaywallScreen(onDismiss = { showPaywall = false })
         }
 
         // 탈퇴 진행 오버레이 (iOS isDeletingAccount overlay 대응)

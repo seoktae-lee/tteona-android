@@ -2,6 +2,7 @@ package com.seoktaedev.tteona.features.root
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -10,6 +11,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.seoktaedev.tteona.core.auth.AuthService
 import com.seoktaedev.tteona.features.auth.LoginScreen
@@ -30,10 +32,14 @@ fun AppRoot() {
 
     when {
         isInitializing -> {
-            Surface(modifier = Modifier.fillMaxSize()) {
-                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                    Text("tteona", fontSize = 52.sp, fontWeight = FontWeight.Bold, color = TteOrange)
-                }
+            // 앱 진입 스플래시 — 주황 일렁임 배경 위 워드마크 로고 (iOS RootView.SplashView)
+            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                com.seoktaedev.tteona.ui.theme.TteonaSplashBackground()
+                androidx.compose.foundation.Image(
+                    painter = androidx.compose.ui.res.painterResource(com.seoktaedev.tteona.R.drawable.tteona_logo),
+                    contentDescription = "tteona",
+                    modifier = Modifier.height(46.dp),
+                )
             }
         }
         currentUser == null || verificationEmailSent -> LoginScreen()

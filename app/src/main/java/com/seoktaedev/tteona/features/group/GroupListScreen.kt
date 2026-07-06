@@ -71,7 +71,7 @@ import kotlinx.coroutines.launch
 private enum class GroupSubScreen { LIST, CREATE, JOIN }
 
 @Composable
-fun GroupListScreen(onClose: () -> Unit) {
+fun GroupListScreen(onClose: (() -> Unit)? = null) {
     val authUser by AuthService.currentUser.collectAsState()
     val profileUser by UserService.currentUser.collectAsState()
     val myRooms by RoomService.myRooms.collectAsState()
@@ -168,7 +168,8 @@ fun GroupListScreen(onClose: () -> Unit) {
         GroupSubScreen.LIST -> Unit
     }
 
-    BackHandler(onBack = onClose)
+    // 탭 임베드 시(onClose == null)에는 뒤로가기/닫기 버튼 없이 표시 (iOS 채팅 탭 대응)
+    onClose?.let { BackHandler(onBack = it) }
     Surface(Modifier.fillMaxSize()) {
         Column(
             Modifier
@@ -181,16 +182,18 @@ fun GroupListScreen(onClose: () -> Unit) {
                     .fillMaxWidth()
                     .padding(vertical = 10.dp),
             ) {
-                Icon(
-                    Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "닫기",
-                    tint = TteDarkGray,
-                    modifier = Modifier
-                        .align(Alignment.CenterStart)
-                        .padding(start = 12.dp)
-                        .size(24.dp)
-                        .clickable(onClick = onClose),
-                )
+                if (onClose != null) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "닫기",
+                        tint = TteDarkGray,
+                        modifier = Modifier
+                            .align(Alignment.CenterStart)
+                            .padding(start = 12.dp)
+                            .size(24.dp)
+                            .clickable(onClick = onClose),
+                    )
+                }
                 Text(
                     "피드",
                     fontSize = 17.sp,

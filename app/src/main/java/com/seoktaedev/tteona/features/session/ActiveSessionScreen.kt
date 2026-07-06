@@ -44,6 +44,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
+import com.seoktaedev.tteona.core.util.Haptics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
@@ -71,6 +73,7 @@ import com.seoktaedev.tteona.core.services.LocationSocketService
 import com.seoktaedev.tteona.core.services.PushService
 import com.seoktaedev.tteona.core.services.RoomService
 import com.seoktaedev.tteona.core.services.SavedActiveSession
+import com.seoktaedev.tteona.core.services.SessionForegroundService
 import com.seoktaedev.tteona.core.services.StatsService
 import com.seoktaedev.tteona.core.services.UserService
 import com.seoktaedev.tteona.core.model.StatsEvent
@@ -97,6 +100,7 @@ fun ActiveSessionScreen(
     onClose: () -> Unit,
 ) {
     val context = LocalContext.current
+    val view = LocalView.current
     val scope = rememberCoroutineScope()
     val uid = AuthService.currentUser.value?.uid ?: ""
     val nickname = UserService.currentUser.value?.nickname?.takeIf { it.isNotEmpty() } ?: "멤버"
@@ -113,7 +117,13 @@ fun ActiveSessionScreen(
     var showArrivalBanner by remember { mutableStateOf(false) }
     var showResumeSheet by remember { mutableStateOf(false) }
     var showPlaceEditor by remember { mutableStateOf(false) }
-    var showVisitConfirm by remember { mutableStateOf(false) }
+    var showCamera by remember { mutableStateOf(false) }
+    var showVlog by remember { mutableStateOf(false) }
+    var showFarCaptureConfirm by remember { mutableStateOf(false) }
+    var farCaptureDistance by remember { mutableStateOf<Float?>(null) }
+    var showBudgetAlert by remember { mutableStateOf(false) }
+    var showPaywall by remember { mutableStateOf(false) }
+    var ratingPlace by remember { mutableStateOf<Place?>(null) }
     var didStart by remember { mutableStateOf(false) }
 
     val currentPlace = orderedPlaces.getOrNull(currentPlaceIndex)
@@ -142,6 +152,7 @@ fun ActiveSessionScreen(
     }
 
     fun startNewSession() {
+        Haptics.medium(view)
         ActiveSessionStore.clear()
         orderedPlaces = course.places.sortedBy { it.order }
         visitedPlaces = emptySet()
@@ -191,7 +202,22 @@ fun ActiveSessionScreen(
         onDispose {
             locationService.stopTracking()
             if (roomIds.isNotEmpty()) LocationSocketService.disconnect()
+            SessionForegroundService.stop(context)
         }
+    }
+
+    // 세션 진행 상시 알림 갱신 (iOS Live Activity 대응) — 진행률·다음 장소 표시,
+    // location 타입 FGS라 앱이 백그라운드로 가도 위치 추적·소켓 공유가 유지된다
+    LaunchedEffect(didStart, visitedPlaces, skippedPlaces, currentPlaceIndex) {
+        if (!didStart) return@LaunchedEffect
+        val done = orderedPlaces.count { it.order in visitedPlaces || it.order in skippedPlaces }
+        val body = if (allVisited) {
+            "모든 장소 방문 완료! 🎉"
+        } else {
+            "방문 $done/${orderedPlaces.size}" +
+                (currentPlace?.let { " · 다음: ${it.placeName}" } ?: "")
+        }
+        SessionForegroundService.start(context, course.courseName, body)
     }
 
     // 그룹 위치 공유 — 위치 변경 시 소켓 전송 (iOS onChange(currentLocation))
@@ -200,9 +226,21 @@ fun ActiveSessionScreen(
         if (roomIds.isNotEmpty()) LocationSocketService.sendLocation(loc.latitude, loc.longitude)
     }
 
+    // 도착 알림 탭 → 해당 장소로 이동 후 카메라 열기 (iOS pendingPlaceName onChange)
+    val pendingPlaceName by com.seoktaedev.tteona.core.services.AppNotificationManager.pendingPlaceName.collectAsState()
+    LaunchedEffect(pendingPlaceName) {
+        val placeName = pendingPlaceName ?: return@LaunchedEffect
+        orderedPlaces.indexOfFirst { it.placeName == placeName }.takeIf { it >= 0 }?.let {
+            currentPlaceIndex = it
+        }
+        showCamera = true
+        com.seoktaedev.tteona.core.services.AppNotificationManager.clearPendingPlaceName()
+    }
+
     // 도착 감지 배너 + 통계 이벤트
     LaunchedEffect(arrivedPlace) {
         val place = arrivedPlace ?: return@LaunchedEffect
+        Haptics.success(view)
         showArrivalBanner = true
         if (uid.isNotEmpty()) StatsService.postEvent(StatsEvent.PLACE_VISITED, uid)
         delay(4000)
@@ -212,6 +250,7 @@ fun ActiveSessionScreen(
 
     fun completeCurrentPlace() {
         val place = currentPlace ?: return
+        Haptics.success(view)
         visitedPlaces = visitedPlaces + place.order
         if (roomIds.isNotEmpty() && uid.isNotEmpty()) {
             val lat = currentLocation?.latitude ?: place.latitude
@@ -232,14 +271,14 @@ fun ActiveSessionScreen(
         saveSession()
     }
 
-    fun finishTrip() {
+    // 여행 종료 피드/알림만 발행 — 세션 정리는 Vlog 화면을 닫을 때 (iOS postTripEnd)
+    fun finishTripFeeds() {
         if (roomIds.isNotEmpty() && uid.isNotEmpty()) {
             roomIds.forEach { rid ->
                 RoomService.postFeed(rid, FeedType.TRIP_END, uid, nickname, course.courseId, course.courseName)
             }
         }
-        ActiveSessionStore.clear()
-        onClose()
+        SessionForegroundService.stop(context)
     }
 
     BackHandler {
@@ -377,13 +416,13 @@ fun ActiveSessionScreen(
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(16.dp))
                         .background(TteOrange)
-                        .clickable { showVisitConfirm = true }
+                        .clickable { showCamera = true }
                         .padding(16.dp),
                 ) {
                     Text("📍", fontSize = 20.sp)
                     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Text("${place.placeName}에 도착했어요!", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
-                        Text("탭하여 방문 기록", fontSize = 12.sp, color = Color.White.copy(alpha = 0.8f))
+                        Text("탭하여 촬영하기", fontSize = 12.sp, color = Color.White.copy(alpha = 0.8f))
                     }
                 }
             }
@@ -449,10 +488,17 @@ fun ActiveSessionScreen(
                         .height(54.dp)
                         .clip(RoundedCornerShape(14.dp))
                         .background(if (isNearby) TteOrange else Color.Gray.copy(alpha = 0.4f))
-                        .clickable(enabled = isNearby) { showVisitConfirm = true },
+                        .clickable {
+                            // iOS: 도착 전이면 확인 후 촬영 허용 (GPS 부정확·실내 대비)
+                            if (isNearby) showCamera = true
+                            else {
+                                farCaptureDistance = distance
+                                showFarCaptureConfirm = true
+                            }
+                        },
                 ) {
                     Text(
-                        if (isNearby) "📍 ${currentPlace.placeName} 도착! 방문 기록하기"
+                        if (isNearby) "📸 ${currentPlace.placeName} 도착! 촬영하기"
                         else "📍 ${currentPlace.placeName}으로 이동 중...",
                         fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Color.White,
                     )
@@ -467,28 +513,97 @@ fun ActiveSessionScreen(
                         .height(54.dp)
                         .clip(RoundedCornerShape(14.dp))
                         .background(TteOrange)
-                        .clickable { finishTrip() },
+                        .clickable {
+                            // iOS: postTripEnd + Vlog 생성 화면 (완료 후 세션 화면까지 닫힘)
+                            finishTripFeeds()
+                            showVlog = true
+                        },
                 ) {
-                    Text("🎉 여행 완료", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+                    Text("🎬 Vlog 만들기", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
                 }
             }
         }
     }
 
-    // 방문 기록 확인 (iOS 카메라 촬영 자리 — CameraX 단계 전까지 방문 체크로 대체)
-    if (showVisitConfirm) {
+    // 도착 전 촬영 확인 (iOS showFarCaptureConfirm)
+    if (showFarCaptureConfirm) {
         AlertDialog(
-            onDismissRequest = { showVisitConfirm = false },
-            title = { Text(currentPlace?.placeName ?: "") },
-            text = { Text("이 장소 방문을 기록할까요?\n그룹에 소식이 공유돼요.") },
+            onDismissRequest = { showFarCaptureConfirm = false },
+            title = { Text("아직 도착 전이에요") },
+            text = {
+                Text(
+                    farCaptureDistance?.let { d ->
+                        "${currentPlace?.placeName}까지 ${formatDistance(d)} 남았어요.\nGPS가 부정확하거나 실내라면 지금 촬영해도 괜찮아요."
+                    } ?: "현재 위치를 확인할 수 없어요. 지금 촬영해도 괜찮아요."
+                )
+            },
             confirmButton = {
                 TextButton(onClick = {
-                    showVisitConfirm = false
-                    completeCurrentPlace()
-                }) { Text("방문 기록", color = TteOrange, fontWeight = FontWeight.SemiBold) }
+                    showFarCaptureConfirm = false
+                    showCamera = true
+                }) { Text("그래도 촬영하기", color = TteOrange, fontWeight = FontWeight.SemiBold) }
             },
-            dismissButton = { TextButton(onClick = { showVisitConfirm = false }) { Text("취소") } },
+            dismissButton = { TextButton(onClick = { showFarCaptureConfirm = false }) { Text("취소") } },
         )
+    }
+
+    // Vlog 생성 (iOS fullScreenCover showVlog) — 재정렬 반영된 코스로 순서 보장
+    if (showVlog) {
+        val reorderedCourse = course.copy(places = orderedPlaces)
+        com.seoktaedev.tteona.features.vlog.VlogGenerationScreen(
+            course = reorderedCourse,
+            sessionId = course.courseId,
+            onDismissToHome = {
+                showVlog = false
+                ActiveSessionStore.clear()
+                onClose()
+            },
+        )
+    }
+
+    // 장소 촬영 (iOS CameraView fullScreenCover) — 저장 성공 시 방문 처리 + 평점 프롬프트
+    if (showCamera) {
+        currentPlace?.let { place ->
+            com.seoktaedev.tteona.features.camera.CameraScreen(
+                place = place,
+                sessionId = course.courseId,
+                onSaved = {
+                    showCamera = false
+                    val visitedPlace = currentPlace
+                    completeCurrentPlace()
+                    ratingPlace = visitedPlace
+                },
+                onClose = { showCamera = false },
+                onBudgetExhausted = { showBudgetAlert = true },
+            )
+        }
+    }
+
+    // 촬영 예산 소진 팝업 (iOS VlogLimitPopupView) — 무료 유저는 PRO 페이월로 연결
+    if (showBudgetAlert) {
+        com.seoktaedev.tteona.features.pro.VlogLimitPopup(
+            isPro = com.seoktaedev.tteona.core.services.ProManager.isPro.value,
+            onUpgrade = {
+                showBudgetAlert = false
+                showPaywall = true
+            },
+            onDismiss = { showBudgetAlert = false },
+        )
+    }
+    if (showPaywall) {
+        com.seoktaedev.tteona.features.pro.ProPaywallScreen(onDismiss = { showPaywall = false })
+    }
+
+    // 방문 후 평점 프롬프트 (iOS showRatingPrompt 시트)
+    ratingPlace?.let { place ->
+        if (uid.isNotEmpty()) {
+            PlaceRatingPromptSheet(
+                place = place,
+                userId = uid,
+                nickname = nickname,
+                onDismiss = { ratingPlace = null },
+            )
+        }
     }
 
     // 이어하기 시트 (iOS resumeSheet)

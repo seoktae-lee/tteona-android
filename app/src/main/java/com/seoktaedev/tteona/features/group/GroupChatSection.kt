@@ -115,9 +115,13 @@ fun GroupChatSection(room: Room, modifier: Modifier = Modifier) {
         }
     }
 
-    val entries = remember(messages, feedItems) {
-        val all = messages.map { TimelineEntry.Message(it) } +
-            feedItems.filter { it.type in chatVisibleFeedTypes }.map { TimelineEntry.System(it) }
+    // 차단한 유저의 메시지·활동은 숨긴다 (iOS entries 필터와 동일)
+    val chatProfileUser by com.seoktaedev.tteona.core.services.UserService.currentUser.collectAsState()
+    val entries = remember(messages, feedItems, chatProfileUser) {
+        val blocked = chatProfileUser?.blockedUserIds?.toSet() ?: emptySet()
+        val all = messages.filter { it.userId !in blocked }.map { TimelineEntry.Message(it) } +
+            feedItems.filter { it.type in chatVisibleFeedTypes && it.userId !in blocked }
+                .map { TimelineEntry.System(it) }
         all.sortedBy { it.date }
     }
 

@@ -571,4 +571,17 @@
     <string name="vlogserver_error_compositeStartFailed">합성 시작 실패</string>
     <string name="vlogserver_error_statusFailed">상태 조회 실패</string>
     <string name="vlogserver_error_downloadFailed">완성본 다운로드 실패</string>
+
+    <!-- UI 개선 배치 2026-07-08: 닉네임 변경·여행 취향·검색 제안 -->
+    <string name="common_save">저장</string>
+    <string name="settings_editNickname">닉네임 변경</string>
+    <string name="settings_nickname_unchanged">현재 닉네임과 같아요</string>
+    <string name="settings_nickname_saveFailed">닉네임 변경에 실패했어요. 잠시 후 다시 시도해주세요.</string>
+    <string name="settings_travelStyle">여행 취향</string>
+    <string name="settings_travelStyle_none">선택 안 함</string>
+    <string name="onboarding_style_title">어떤 여행을\n주로 떠나세요?</string>
+    <string name="onboarding_style_subtitle">취향에 맞는 코스를 먼저 추천해드릴게요</string>
+    <string name="onboarding_style_skip">나중에 할게요</string>
+    <string name="main_courseResults">코스 검색 결과 %1$d개</string>
+    <string name="main_goToRegion">\'%1$s\' 위치로 지도 이동</string>
 </resources>

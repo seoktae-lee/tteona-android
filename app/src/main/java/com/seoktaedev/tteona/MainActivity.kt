@@ -22,9 +22,15 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         handleIntent(intent)
+        // 시각 검증용 (iOS -previewOnboarding 런치 아규먼트 대응, DEBUG 전용):
+        //   adb shell am start -n com.seoktaedev.tteona/.MainActivity --ez previewOnboarding true \
+        //     [--ei previewOnboardingStep N]
+        val previewOnboarding = BuildConfig.DEBUG &&
+            intent?.getBooleanExtra("previewOnboarding", false) == true
+        val previewStep = if (previewOnboarding) intent?.getIntExtra("previewOnboardingStep", 0) ?: 0 else 0
         setContent {
             TteonaTheme {
-                AppRoot()
+                AppRoot(previewOnboarding = previewOnboarding, previewOnboardingStep = previewStep)
             }
         }
     }

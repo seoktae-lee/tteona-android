@@ -15,4 +15,6 @@ data class AppUser(
     val creatorLabel: String? = null,
     val blockedUserIds: List<String>? = null,
     val profileImageUrl: String? = null,
+    /** 선호 여행 태그 (CourseTag rawValue, 한글) — 온보딩/설정에서 선택, 코스 추천 개인화에 사용 */
+    val preferredTag: String? = null,
 )

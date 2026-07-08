@@ -48,6 +48,10 @@ class ExploreViewModel : ViewModel() {
         loadAll()
     }
 
+    /** 유저 선호 태그 (온보딩/설정에서 선택, CourseTag rawValue) — 추천 API와 폴백 정렬에 반영 */
+    private val preferredTag: String?
+        get() = com.seoktaedev.tteona.core.services.UserService.currentUser.value?.preferredTag
+
     fun loadAll() {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
@@ -61,7 +65,10 @@ class ExploreViewModel : ViewModel() {
                 }
                 val thumbsJob = async { CourseThumbnailService.fetchAllThumbnails() }
                 val recJob = async {
-                    RecommendationService.fetchRecommended(userId = AuthService.currentUser.value?.uid)
+                    RecommendationService.fetchRecommended(
+                        userId = AuthService.currentUser.value?.uid,
+                        tag = preferredTag,
+                    )
                 }
                 val rankJob = async { StatsService.fetchCreatorRanking() }
                 val likedJob = async {
@@ -95,6 +102,18 @@ class ExploreViewModel : ViewModel() {
         viewModelScope.launch {
             val ids = RecommendationService.fetchRecommended(
                 userId = AuthService.currentUser.value?.uid, lat = lat, lng = lng,
+                tag = preferredTag,
+            )
+            if (ids.isNotEmpty()) _uiState.update { it.copy(recommendedIds = ids) }
+        }
+    }
+
+    // 설정에서 여행 취향 변경 시 추천만 재조회 (iOS onChange(preferredTag) 대응)
+    fun refetchRecommendationsForPreference() {
+        viewModelScope.launch {
+            val ids = RecommendationService.fetchRecommended(
+                userId = AuthService.currentUser.value?.uid,
+                tag = preferredTag,
             )
             if (ids.isNotEmpty()) _uiState.update { it.copy(recommendedIds = ids) }
         }
@@ -106,7 +125,16 @@ class ExploreViewModel : ViewModel() {
         SortMode.POPULAR -> courses.sortedByDescending { it.likeCount }
         SortMode.RECOMMENDED -> {
             if (state.recommendedIds.isEmpty()) {
-                courses.sortedByDescending { it.likeCount }
+                // 서버 추천 도착 전 폴백: 선호 태그 코스 우선 → 인기순 (iOS와 동일)
+                val pref = preferredTag
+                if (pref == null) {
+                    courses.sortedByDescending { it.likeCount }
+                } else {
+                    courses.sortedWith(
+                        compareByDescending<Course> { it.tag.label == pref }
+                            .thenByDescending { it.likeCount }
+                    )
+                }
             } else {
                 val map = courses.associateBy { it.courseId }
                 val ranked = state.recommendedIds.mapNotNull { map[it] }

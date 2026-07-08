@@ -39,6 +39,13 @@ object UserService {
         _currentUser.value = _currentUser.value?.copy(nickname = nickname)
     }
 
+    /** 선호 여행 태그 저장 (null이면 해제) — 탐색 탭 추천 개인화에 사용 (iOS updatePreferredTag) */
+    suspend fun updatePreferredTag(uid: String, tag: String?) {
+        db.collection("users").document(uid)
+            .update("preferredTag", tag ?: FieldValue.delete()).await()
+        _currentUser.value = _currentUser.value?.copy(preferredTag = tag)
+    }
+
     // WAS 업로드 라우트가 Firestore profileImageUrl 필드도 함께 저장하므로 로컬 상태만 갱신 (iOS와 동일)
     fun setProfileImageUrl(url: String) {
         _currentUser.value = _currentUser.value?.copy(profileImageUrl = url)
@@ -92,5 +99,6 @@ private fun DocumentSnapshot.toAppUser(): AppUser? {
         creatorLabel = d["creatorLabel"] as? String,
         blockedUserIds = blocked,
         profileImageUrl = d["profileImageUrl"] as? String,
+        preferredTag = d["preferredTag"] as? String,
     )
 }

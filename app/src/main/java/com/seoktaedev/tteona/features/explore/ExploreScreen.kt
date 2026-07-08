@@ -1,5 +1,6 @@
 package com.seoktaedev.tteona.features.explore
 
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -34,6 +35,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -69,6 +73,16 @@ fun ExploreScreen(
     val courses by viewModel.courses.collectAsState()
 
     LaunchedEffect(Unit) { viewModel.loadIfNeeded() }
+
+    // 설정에서 여행 취향 변경 시 추천 즉시 갱신 (iOS onChange(preferredTag) 대응)
+    val profileUser by com.seoktaedev.tteona.core.services.UserService.currentUser.collectAsState()
+    var lastPreferredTag by remember { mutableStateOf(profileUser?.preferredTag) }
+    LaunchedEffect(profileUser?.preferredTag) {
+        if (profileUser?.preferredTag != lastPreferredTag) {
+            lastPreferredTag = profileUser?.preferredTag
+            viewModel.refetchRecommendationsForPreference()
+        }
+    }
 
     // 위치를 처음 확보하면 위치 기반 추천으로 1회 재조회 (iOS didRefetchWithLocation)
     val exploreContext = androidx.compose.ui.platform.LocalContext.current
@@ -112,11 +126,7 @@ fun ExploreScreen(
         SortChips(current = state.sortMode, onSelect = viewModel::setSortMode)
 
         when {
-            state.isLoading && courses.isEmpty() -> {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = TteOrange)
-                }
-            }
+            state.isLoading && courses.isEmpty() -> SkeletonGrid()
             sorted.isEmpty() -> EmptyState()
             else -> {
                 LazyVerticalGrid(
@@ -336,21 +346,66 @@ private fun GridCell(course: Course, thumbnailUrl: String?, onClick: () -> Unit)
     }
 }
 
-// MARK: - 빈 상태 (iOS emptyState)
+// MARK: - 스켈레톤 로딩 (spinner 대신 카드 자리 표시 → 체감 로딩 개선, iOS SkeletonGridCell)
+@Composable
+private fun SkeletonGrid() {
+    val infinite = androidx.compose.animation.core.rememberInfiniteTransition(label = "skeleton")
+    val alpha by infinite.animateFloat(
+        initialValue = 1f,
+        targetValue = 0.45f,
+        animationSpec = androidx.compose.animation.core.infiniteRepeatable(
+            androidx.compose.animation.core.tween(900),
+            repeatMode = androidx.compose.animation.core.RepeatMode.Reverse,
+        ),
+        label = "skeleton-alpha",
+    )
+    LazyVerticalGrid(
+        columns = GridCells.Fixed(2),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        userScrollEnabled = false,
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(
+            start = 12.dp, end = 12.dp, top = 4.dp, bottom = 12.dp
+        ),
+    ) {
+        items(List(6) { it }, key = { it }) { _ ->
+            Box(
+                modifier = Modifier
+                    .aspectRatio(3f / 4f)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(TteFieldBackground.copy(alpha = alpha)),
+            ) {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(10.dp),
+                ) {
+                    Box(
+                        Modifier
+                            .size(width = 110.dp, height = 12.dp)
+                            .clip(CircleShape)
+                            .background(TteMediumGray.copy(alpha = 0.18f * alpha))
+                    )
+                    Box(
+                        Modifier
+                            .size(width = 70.dp, height = 9.dp)
+                            .clip(CircleShape)
+                            .background(TteMediumGray.copy(alpha = 0.18f * alpha))
+                    )
+                }
+            }
+        }
+    }
+}
+
+// MARK: - 빈 상태 (iOS emptyState) — 뜨오니 마스코트
 @Composable
 private fun EmptyState() {
-    Column(
-        modifier = Modifier.fillMaxSize(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        Icon(
-            Icons.Filled.GridView,
-            contentDescription = null,
-            tint = TteOrange.copy(alpha = 0.4f),
-            modifier = Modifier.size(44.dp),
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        com.seoktaedev.tteona.ui.components.TteEmptyState(
+            imageRes = R.drawable.tteoni_guide,
+            title = stringResource(R.string.explore_empty),
         )
-        Spacer(Modifier.height(12.dp))
-        Text(stringResource(R.string.explore_empty), fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
     }
 }

@@ -62,9 +62,12 @@ object RecommendationService {
         userId: String?,
         lat: Double? = null,
         lng: Double? = null,
+        tag: String? = null,
         limit: Int = 20,
     ): List<String> =
-        runCatching { ApiClient.api.getRecommended(limit = limit, userId = userId, lat = lat, lng = lng).courseIds }
+        runCatching {
+            ApiClient.api.getRecommended(limit = limit, userId = userId, lat = lat, lng = lng, tag = tag).courseIds
+        }
             .onFailure { Log.w("RecommendationService", "fetch 실패", it) }
             .getOrDefault(emptyList())
 }

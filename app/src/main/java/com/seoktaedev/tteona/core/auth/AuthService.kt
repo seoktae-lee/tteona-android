@@ -359,17 +359,19 @@ object AuthService {
         }
 
     // MARK: - 온보딩 완료 (users 문서 생성 — iOS OnboardingView의 저장 로직에 대응)
-    suspend fun completeOnboarding(nickname: String) {
+    suspend fun completeOnboarding(nickname: String, preferredTag: String? = null) {
         val user = auth.currentUser ?: return
         _isLoading.value = true
         try {
-            val data = mapOf(
-                "uid" to user.uid,
-                "email" to (user.email ?: ""),
-                "nickname" to nickname,
-                "createdAt" to Timestamp.now(),
-                "isVerified" to false,
-            )
+            val data = buildMap {
+                put("uid", user.uid)
+                put("email", user.email ?: "")
+                put("nickname", nickname)
+                put("createdAt", Timestamp.now())
+                put("isVerified", false)
+                // 온보딩 여행 취향 (건너뛰면 미저장) — 추천 개인화 시드
+                preferredTag?.let { put("preferredTag", it) }
+            }
             db.collection("users").document(user.uid).set(data).await()
             _currentUser.value = _currentUser.value?.copy(nickname = nickname)
             _onboardingComplete.value = true

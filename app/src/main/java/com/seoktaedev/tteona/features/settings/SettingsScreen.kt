@@ -29,8 +29,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Mail
@@ -130,6 +133,7 @@ private fun SettingsMain(
     var showSignOutAlert by rememberSaveable { mutableStateOf(false) }
     var showPaywall by rememberSaveable { mutableStateOf(false) }
     var showDeleteAlert by rememberSaveable { mutableStateOf(false) }
+    var showNicknameEdit by rememberSaveable { mutableStateOf(false) }
     var isDeleting by remember { mutableStateOf(false) }
     var deleteFailed by remember { mutableStateOf(false) }
     var isUploadingAvatar by remember { mutableStateOf(false) }
@@ -195,19 +199,42 @@ private fun SettingsMain(
                             )
                         },
                     )
-                    Column {
-                        Text(
-                            profileUser?.nickname?.takeIf { it.isNotEmpty() } ?: stringResource(R.string.settings_noNickname),
-                            fontSize = 17.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = TteDarkGray,
-                        )
+                    // 닉네임 영역 탭 → 변경 시트 (updateNickname 서비스는 있었지만 진입점이 없던 문제 해결)
+                    Column(Modifier.clickable { showNicknameEdit = true }) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            Text(
+                                profileUser?.nickname?.takeIf { it.isNotEmpty() } ?: stringResource(R.string.settings_noNickname),
+                                fontSize = 17.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = TteDarkGray,
+                            )
+                            Icon(
+                                Icons.Filled.Edit,
+                                contentDescription = stringResource(R.string.settings_editNickname),
+                                tint = TteMediumGray,
+                                modifier = Modifier.size(13.dp),
+                            )
+                        }
                         Spacer(Modifier.height(4.dp))
                         Text(authUser?.email ?: "", fontSize = 13.sp, color = TteMediumGray)
                     }
                 }
                 SettingsDivider()
                 SettingsRow(Icons.Filled.BarChart, stringResource(R.string.settings_travelStats), onClick = onOpenStats) { Chevron() }
+                SettingsDivider()
+                TravelStyleRow(
+                    currentTag = profileUser?.preferredTag,
+                    onSelect = { tag ->
+                        authUser?.uid?.let { uid ->
+                            scope.launch {
+                                runCatching { UserService.updatePreferredTag(uid, tag) }
+                            }
+                        }
+                    },
+                )
             }
 
             // tteona PRO (iOS proSection)
@@ -323,6 +350,11 @@ private fun SettingsMain(
             Spacer(Modifier.height(24.dp))
         }
 
+        // 닉네임 변경 시트 (iOS sheet showNicknameEdit)
+        if (showNicknameEdit) {
+            NicknameEditSheet(onDismiss = { showNicknameEdit = false })
+        }
+
         // PRO 페이월 (iOS sheet showPaywall)
         if (showPaywall) {
             com.seoktaedev.tteona.features.pro.ProPaywallScreen(onDismiss = { showPaywall = false })
@@ -395,6 +427,60 @@ private fun SettingsMain(
                 TextButton(onClick = { deleteFailed = false }) { Text(stringResource(R.string.common_ok), color = TteOrange) }
             },
         )
+    }
+}
+
+// MARK: - 여행 취향 행 (iOS travelStyleRow) — 온보딩을 건너뛴 유저·기존 유저의 설정 경로
+@Composable
+private fun TravelStyleRow(
+    currentTag: String?,
+    onSelect: (String?) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val tags = com.seoktaedev.tteona.core.model.CourseTag.entries
+    val current = tags.firstOrNull { it.label == currentTag }
+
+    Box {
+        SettingsRow(
+            Icons.Filled.FavoriteBorder,
+            stringResource(R.string.settings_travelStyle),
+            onClick = { expanded = true },
+        ) {
+            Text(
+                if (current != null) "${current.emoji} ${stringResource(current.labelRes)}"
+                else stringResource(R.string.settings_travelStyle_none),
+                fontSize = 14.sp,
+                color = TteMediumGray,
+            )
+            Chevron()
+        }
+        androidx.compose.material3.DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+        ) {
+            tags.forEach { tag ->
+                androidx.compose.material3.DropdownMenuItem(
+                    text = { Text("${tag.emoji} ${stringResource(tag.labelRes)}") },
+                    trailingIcon = {
+                        if (currentTag == tag.label) {
+                            Icon(Icons.Filled.Check, contentDescription = null, tint = TteOrange, modifier = Modifier.size(16.dp))
+                        }
+                    },
+                    onClick = {
+                        expanded = false
+                        onSelect(tag.label)
+                    },
+                )
+            }
+            androidx.compose.material3.HorizontalDivider()
+            androidx.compose.material3.DropdownMenuItem(
+                text = { Text(stringResource(R.string.settings_travelStyle_none)) },
+                onClick = {
+                    expanded = false
+                    onSelect(null)
+                },
+            )
+        }
     }
 }
 

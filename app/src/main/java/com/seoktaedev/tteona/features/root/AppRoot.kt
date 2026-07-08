@@ -24,11 +24,20 @@ import com.seoktaedev.tteona.ui.theme.TteOrange
  * 인증 상태에 따라 스플래시 / 로그인 / 온보딩 / 메인을 분기한다.
  */
 @Composable
-fun AppRoot() {
+fun AppRoot(
+    previewOnboarding: Boolean = false,
+    previewOnboardingStep: Int = 0,
+) {
     val isInitializing by AuthService.isInitializing.collectAsState()
     val currentUser by AuthService.currentUser.collectAsState()
     val verificationEmailSent by AuthService.verificationEmailSent.collectAsState()
     val onboardingComplete by AuthService.onboardingComplete.collectAsState()
+
+    // 시각 검증용 — 인증 없이 온보딩을 바로 표시 (DEBUG 빌드에서만 MainActivity가 활성화)
+    if (previewOnboarding) {
+        OnboardingScreen(initialStep = previewOnboardingStep)
+        return
+    }
 
     when {
         isInitializing -> {

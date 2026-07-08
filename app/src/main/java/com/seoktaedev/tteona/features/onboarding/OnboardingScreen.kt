@@ -110,12 +110,14 @@ import kotlin.math.sin
 
 /**
  * 온보딩 — iOS Features/Auth/OnboardingView.swift + OnboardingHero.swift의 이식본.
- * 5단계: 스플래시 히어로 → 기능 소개 슬라이드 → 닉네임 → 권한 → 약관 동의.
+ * 6단계: 스플래시 히어로 → 기능 소개 슬라이드 → 닉네임 → 여행 취향 → 권한 → 약관 동의.
  */
 @Composable
-fun OnboardingScreen() {
-    var step by rememberSaveable { mutableIntStateOf(0) }
+fun OnboardingScreen(initialStep: Int = 0) {
+    var step by rememberSaveable { mutableIntStateOf(initialStep) }
     var nickname by rememberSaveable { mutableStateOf("") }
+    // 선호 여행 태그 — CourseTag rawValue(한글). rememberSaveable을 위해 String으로 보관
+    var preferredTag by rememberSaveable { mutableStateOf<String?>(null) }
 
     Surface(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
@@ -128,7 +130,7 @@ fun OnboardingScreen() {
                         .padding(top = 16.dp)
                         .padding(horizontal = 24.dp),
                 ) {
-                    (1 until 5).forEach { i ->
+                    (1 until 6).forEach { i ->
                         Box(
                             Modifier
                                 .weight(1f)
@@ -157,8 +159,13 @@ fun OnboardingScreen() {
                         onNicknameChange = { nickname = it },
                         onNext = { step = 3 },
                     )
-                    3 -> PermissionStep(onNext = { step = 4 })
-                    else -> TermsStep(nickname = nickname)
+                    3 -> StyleStep(
+                        selectedTag = preferredTag,
+                        onSelect = { preferredTag = it },
+                        onNext = { step = 4 },
+                    )
+                    4 -> PermissionStep(onNext = { step = 5 })
+                    else -> TermsStep(nickname = nickname, preferredTag = preferredTag)
                 }
             }
         }
@@ -607,7 +614,97 @@ private fun NicknameStep(
     }
 }
 
-// ── Step 3: 권한 (iOS permissionStep) ───────────────────────────────────
+// ── Step 3: 여행 취향 (iOS styleStep — 건너뛰기 가능, 추천 개인화 시드) ────
+
+@Composable
+private fun StyleStep(
+    selectedTag: String?,
+    onSelect: (String?) -> Unit,
+    onNext: () -> Unit,
+) {
+    val view = LocalView.current
+    val tags = com.seoktaedev.tteona.core.model.CourseTag.entries
+
+    Column(Modifier.fillMaxSize()) {
+        Column(
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier.padding(horizontal = 24.dp, vertical = 24.dp),
+        ) {
+            Text(
+                stringResource(R.string.onboarding_style_title),
+                fontSize = 30.sp, fontWeight = FontWeight.Bold, color = TteDarkGray, lineHeight = 38.sp,
+            )
+            Text(stringResource(R.string.onboarding_style_subtitle), fontSize = 15.sp, color = TteMediumGray)
+        }
+
+        Spacer(Modifier.weight(1f))
+
+        // 2×2 취향 카드
+        Column(
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier.padding(horizontal = 24.dp),
+        ) {
+            tags.chunked(2).forEach { rowTags ->
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    rowTags.forEach { tag ->
+                        val isOn = selectedTag == tag.label
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterVertically),
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(110.dp)
+                                .clip(RoundedCornerShape(18.dp))
+                                .background(if (isOn) TteOrange.copy(alpha = 0.1f) else TteFieldBackground)
+                                .border(
+                                    1.5.dp,
+                                    if (isOn) TteOrange else Color.Transparent,
+                                    RoundedCornerShape(18.dp),
+                                )
+                                .clickable {
+                                    Haptics.light(view)
+                                    onSelect(if (isOn) null else tag.label)
+                                },
+                        ) {
+                            Text(tag.emoji, fontSize = 40.sp)
+                            Text(
+                                stringResource(tag.labelRes),
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (isOn) TteOrange else TteDarkGray,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        Spacer(Modifier.weight(1f))
+
+        Column(
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.padding(horizontal = 24.dp),
+        ) {
+            NextButton(stringResource(R.string.common_next), enabled = selectedTag != null) {
+                Haptics.light(view)
+                onNext()
+            }
+            Text(
+                stringResource(R.string.onboarding_style_skip),
+                fontSize = 14.sp,
+                color = TteMediumGray,
+                modifier = Modifier.clickable {
+                    onSelect(null)
+                    onNext()
+                },
+            )
+        }
+        Spacer(Modifier.height(40.dp))
+    }
+}
+
+// ── Step 4: 권한 (iOS permissionStep) ───────────────────────────────────
 
 @Composable
 private fun PermissionStep(onNext: () -> Unit) {
@@ -749,10 +846,10 @@ private fun PermissionRow(
     }
 }
 
-// ── Step 4: 약관 (iOS termsStep) ────────────────────────────────────────
+// ── Step 5: 약관 (iOS termsStep) ────────────────────────────────────────
 
 @Composable
-private fun TermsStep(nickname: String) {
+private fun TermsStep(nickname: String, preferredTag: String? = null) {
     val context = LocalContext.current
     val view = LocalView.current
     val scope = rememberCoroutineScope()
@@ -838,7 +935,7 @@ private fun TermsStep(nickname: String) {
             } else {
                 NextButton(stringResource(R.string.onboarding_letsGo), enabled = allAgreed) {
                     Haptics.medium(view)
-                    scope.launch { AuthService.completeOnboarding(nickname.trim()) }
+                    scope.launch { AuthService.completeOnboarding(nickname.trim(), preferredTag) }
                 }
             }
         }

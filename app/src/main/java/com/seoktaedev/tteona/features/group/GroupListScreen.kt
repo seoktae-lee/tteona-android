@@ -375,16 +375,11 @@ private fun GroupEmptyState(onCreate: () -> Unit, onJoin: () -> Unit) {
             .fillMaxSize()
             .padding(horizontal = 40.dp),
     ) {
-        Icon(
-            Icons.Filled.Groups,
-            contentDescription = null,
-            tint = TteOrange.copy(alpha = 0.4f),
-            modifier = Modifier.size(60.dp),
+        com.seoktaedev.tteona.ui.components.TteEmptyState(
+            imageRes = R.drawable.tteoni_travel,
+            title = stringResource(R.string.group_empty_title),
+            subtitle = stringResource(R.string.group_empty_subtitle),
         )
-        Spacer(Modifier.height(20.dp))
-        Text(stringResource(R.string.group_empty_title), fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = TteDarkGray)
-        Spacer(Modifier.height(6.dp))
-        Text(stringResource(R.string.group_empty_subtitle), fontSize = 14.sp, color = TteMediumGray)
         Spacer(Modifier.height(24.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Box(

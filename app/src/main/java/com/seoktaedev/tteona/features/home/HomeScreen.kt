@@ -59,6 +59,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -244,119 +245,186 @@ fun HomeScreen(
             }
         }
 
-        // 상단 검색 + 필터 (iOS topBar)
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-        ) {
-            // 검색 바
+        // 상단 검색 + 필터 (iOS topBar) + 검색 제안 카드
+        val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
+        var searchFocused by remember { mutableStateOf(false) }
+
+        Column(Modifier.fillMaxWidth()) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
                 modifier = Modifier
-                    .weight(1f)
-                    .height(42.dp)
-                    .shadow(4.dp, CircleShape)
-                    .clip(CircleShape)
-                    .background(Color.White.copy(alpha = 0.97f))
-                    .padding(horizontal = 14.dp),
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
             ) {
-                Icon(Icons.Filled.Search, contentDescription = null, tint = TteMediumGray, modifier = Modifier.size(17.dp))
-                BasicTextField(
-                    value = searchText,
-                    onValueChange = { searchText = it },
-                    singleLine = true,
-                    textStyle = TextStyle(fontSize = 14.sp, color = TteDarkGray),
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                    keyboardActions = KeyboardActions(onSearch = {
-                        scope.launch { geocodeAndMove(context, searchText, cameraPositionState) }
-                    }),
-                    decorationBox = { inner ->
-                        Box {
-                            if (searchText.isEmpty()) {
-                                Text(stringResource(R.string.main_searchPlaceholder), fontSize = 14.sp, color = TteMediumGray)
+                // 검색 바
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(42.dp)
+                        .shadow(4.dp, CircleShape)
+                        .clip(CircleShape)
+                        .background(Color.White.copy(alpha = 0.97f))
+                        .padding(horizontal = 14.dp),
+                ) {
+                    Icon(Icons.Filled.Search, contentDescription = null, tint = TteMediumGray, modifier = Modifier.size(17.dp))
+                    BasicTextField(
+                        value = searchText,
+                        onValueChange = { searchText = it },
+                        singleLine = true,
+                        textStyle = TextStyle(fontSize = 14.sp, color = TteDarkGray),
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                        keyboardActions = KeyboardActions(onSearch = {
+                            focusManager.clearFocus()
+                            scope.launch { geocodeAndMove(context, searchText, cameraPositionState) }
+                        }),
+                        decorationBox = { inner ->
+                            Box {
+                                if (searchText.isEmpty()) {
+                                    Text(stringResource(R.string.main_searchPlaceholder), fontSize = 14.sp, color = TteMediumGray)
+                                }
+                                inner()
                             }
-                            inner()
-                        }
-                    },
-                    modifier = Modifier.weight(1f),
-                )
-                if (searchText.isNotEmpty()) {
-                    Icon(
-                        Icons.Filled.Cancel,
-                        contentDescription = stringResource(R.string.main_clearSearch),
-                        tint = TteMediumGray,
+                        },
                         modifier = Modifier
-                            .size(17.dp)
-                            .clickable { searchText = "" },
+                            .weight(1f)
+                            .onFocusChanged { searchFocused = it.isFocused },
+                    )
+                    if (searchText.isNotEmpty()) {
+                        Icon(
+                            Icons.Filled.Cancel,
+                            contentDescription = stringResource(R.string.main_clearSearch),
+                            tint = TteMediumGray,
+                            modifier = Modifier
+                                .size(17.dp)
+                                .clickable { searchText = "" },
+                        )
+                    }
+                    // 지역 검색 (iOS map.fill 버튼)
+                    Box(
+                        Modifier
+                            .width(1.dp)
+                            .height(16.dp)
+                            .background(TteMediumGray.copy(alpha = 0.4f))
+                    )
+                    Icon(
+                        Icons.Filled.Map,
+                        contentDescription = stringResource(R.string.region_title),
+                        tint = TteOrange,
+                        modifier = Modifier
+                            .size(18.dp)
+                            .clickable { showRegionSearch = true },
                     )
                 }
-                // 지역 검색 (iOS map.fill 버튼)
-                Box(
-                    Modifier
-                        .width(1.dp)
-                        .height(16.dp)
-                        .background(TteMediumGray.copy(alpha = 0.4f))
-                )
-                Icon(
-                    Icons.Filled.Map,
-                    contentDescription = stringResource(R.string.region_title),
-                    tint = TteOrange,
+
+                // 필터 캡슐 (전체/좋아요/내 코스)
+                Row(
                     modifier = Modifier
-                        .size(18.dp)
-                        .clickable { showRegionSearch = true },
-                )
+                        .shadow(4.dp, CircleShape)
+                        .clip(CircleShape)
+                        .background(Color.White.copy(alpha = 0.97f)),
+                ) {
+                    listOf(
+                        Triple(Icons.Filled.GridView, CourseFilter.ALL, stringResource(R.string.main_filter_all)),
+                        Triple(Icons.Filled.Favorite, CourseFilter.LIKED, stringResource(R.string.main_filter_liked)),
+                        Triple(Icons.Filled.Person, CourseFilter.MINE, stringResource(R.string.main_filter_mine)),
+                    ).forEach { (icon, f, desc) ->
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier
+                                .size(42.dp)
+                                .clip(CircleShape)
+                                .background(if (filter == f) TteOrange else Color.Transparent)
+                                .clickable { filter = f },
+                        ) {
+                            Icon(
+                                icon,
+                                contentDescription = desc,
+                                tint = if (filter == f) Color.White else TteOrange,
+                                modifier = Modifier.size(17.dp),
+                            )
+                        }
+                    }
+                }
             }
 
-            // 필터 캡슐 (전체/좋아요/내 코스)
-            Row(
-                modifier = Modifier
-                    .shadow(4.dp, CircleShape)
-                    .clip(CircleShape)
-                    .background(Color.White.copy(alpha = 0.97f)),
-            ) {
-                listOf(
-                    Triple(Icons.Filled.GridView, CourseFilter.ALL, stringResource(R.string.main_filter_all)),
-                    Triple(Icons.Filled.Favorite, CourseFilter.LIKED, stringResource(R.string.main_filter_liked)),
-                    Triple(Icons.Filled.Person, CourseFilter.MINE, stringResource(R.string.main_filter_mine)),
-                ).forEach { (icon, f, desc) ->
-                    Box(
-                        contentAlignment = Alignment.Center,
+            // 검색 제안 카드 — "타이핑=코스 필터 / 지도 이동=명시적 선택"으로 이중 역할 분리 (iOS searchSuggestionCard)
+            if (searchFocused && searchText.isNotEmpty()) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                        .shadow(10.dp, RoundedCornerShape(16.dp))
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(Color.White),
+                ) {
+                    // 현재 입력으로 필터된 코스 수 — 탭하면 키보드를 내리고 지도에서 확인
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
                         modifier = Modifier
-                            .size(42.dp)
-                            .clip(CircleShape)
-                            .background(if (filter == f) TteOrange else Color.Transparent)
-                            .clickable { filter = f },
+                            .fillMaxWidth()
+                            .clickable { focusManager.clearFocus() }
+                            .padding(horizontal = 14.dp, vertical = 12.dp),
                     ) {
-                        Icon(
-                            icon,
-                            contentDescription = desc,
-                            tint = if (filter == f) Color.White else TteOrange,
-                            modifier = Modifier.size(17.dp),
+                        Icon(Icons.Filled.GridView, contentDescription = null, tint = TteOrange, modifier = Modifier.size(16.dp))
+                        Text(
+                            stringResource(R.string.main_courseResults, filteredCourses.size),
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = TteDarkGray,
+                        )
+                    }
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(start = 40.dp)
+                            .height(1.dp)
+                            .background(TteMediumGray.copy(alpha = 0.15f))
+                    )
+                    // 지역/장소로 지도 이동 — 기존 검색 키 액션의 숨은 동작을 눈에 보이는 선택지로
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                focusManager.clearFocus()
+                                scope.launch { geocodeAndMove(context, searchText, cameraPositionState) }
+                            }
+                            .padding(horizontal = 14.dp, vertical = 12.dp),
+                    ) {
+                        Icon(Icons.Filled.Map, contentDescription = null, tint = TteOrange, modifier = Modifier.size(16.dp))
+                        Text(
+                            stringResource(R.string.main_goToRegion, searchText.trim()),
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = TteDarkGray,
+                            maxLines = 1,
                         )
                     }
                 }
             }
         }
 
-        // 검색 결과 없음 오버레이
+        // 검색 결과 없음 오버레이 — 뜨오니 마스코트 (iOS emptySearchResultOverlay)
         if (searchText.isNotEmpty() && filteredCourses.isEmpty()) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(10.dp),
+            Box(
                 modifier = Modifier
                     .align(Alignment.Center)
                     .shadow(12.dp, RoundedCornerShape(24.dp))
                     .clip(RoundedCornerShape(24.dp))
                     .background(Color.White.copy(alpha = 0.95f))
-                    .padding(horizontal = 32.dp, vertical = 36.dp),
+                    .padding(horizontal = 12.dp, vertical = 36.dp),
             ) {
-                Icon(Icons.Filled.Search, contentDescription = null, tint = TteOrange.copy(alpha = 0.6f), modifier = Modifier.size(38.dp))
-                Text(stringResource(R.string.main_noSearchResults), fontSize = 17.sp, fontWeight = FontWeight.Bold, color = TteDarkGray)
-                Text(stringResource(R.string.main_tryOtherKeyword), fontSize = 14.sp, color = TteMediumGray)
+                com.seoktaedev.tteona.ui.components.TteEmptyState(
+                    imageRes = R.drawable.tteoni_wink,
+                    title = stringResource(R.string.main_noSearchResults),
+                    subtitle = stringResource(R.string.main_tryOtherKeyword),
+                    imageSize = 100.dp,
+                )
             }
         }
 
@@ -385,12 +453,12 @@ fun HomeScreen(
                     .fillMaxWidth()
                     .padding(bottom = 24.dp),
             ) {
-                // 나의 오늘 — 정중앙 고정 (iOS createCourseButton)
+                // 나의 오늘 — 하단 정중앙 고정 CTA (iOS createCourseButton)
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier
-                        .align(Alignment.Center)
+                        .align(Alignment.BottomCenter)
                         .shadow(12.dp, CircleShape, spotColor = TteOrange)
                         .clip(CircleShape)
                         .background(TteOrange)
@@ -401,83 +469,52 @@ fun HomeScreen(
                     Text(stringResource(R.string.main_myToday), fontSize = 17.sp, fontWeight = FontWeight.Bold, color = Color.White)
                 }
 
-                // 좌측 — 이어하기 버튼들 (나의 오늘 / 코스)
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                // 좌측 — 이어하기 도크 (세로 스택 → 중앙 CTA와 겹침 방지, iOS miniDockButton)
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
                     modifier = Modifier
-                        .align(Alignment.CenterStart)
+                        .align(Alignment.BottomStart)
                         .padding(start = 24.dp),
                 ) {
                     val hasImpromptuSession by com.seoktaedev.tteona.core.services.ImpromptuSessionStore.hasTodaySession.collectAsState()
                     if (hasImpromptuSession) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(3.dp, Alignment.CenterVertically),
-                            modifier = Modifier
-                                .size(48.dp)
-                                .shadow(8.dp, CircleShape)
-                                .clip(CircleShape)
-                                .background(Color.White)
-                                .clickable(onClick = onResumeImpromptu),
-                        ) {
-                            Icon(
-                                Icons.AutoMirrored.Filled.DirectionsWalk,
-                                contentDescription = null,
-                                tint = TteOrange,
-                                modifier = Modifier.size(16.dp),
-                            )
-                            Text(stringResource(R.string.main_resume), fontSize = 9.sp, fontWeight = FontWeight.Medium, color = TteOrange)
-                        }
+                        MiniDockButton(
+                            icon = Icons.AutoMirrored.Filled.DirectionsWalk,
+                            label = stringResource(R.string.main_resume),
+                            onClick = onResumeImpromptu,
+                        )
                     }
 
                     // 코스 이어하기 (iOS activeSessionStore.hasTodaySession 버튼)
                     val hasTodaySession by com.seoktaedev.tteona.core.services.ActiveSessionStore.hasTodaySession.collectAsState()
                     if (hasTodaySession) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(3.dp, Alignment.CenterVertically),
-                            modifier = Modifier
-                                .size(48.dp)
-                                .shadow(8.dp, CircleShape)
-                                .clip(CircleShape)
-                                .background(Color.White)
-                                .clickable(onClick = onResumeCourse),
-                        ) {
-                            Icon(
-                                Icons.Filled.Map,
-                                contentDescription = null,
-                                tint = TteOrange,
-                                modifier = Modifier.size(16.dp),
-                            )
-                            Text(stringResource(R.string.main_course), fontSize = 9.sp, fontWeight = FontWeight.Medium, color = TteOrange)
-                        }
+                        MiniDockButton(
+                            icon = Icons.Filled.Map,
+                            label = stringResource(R.string.main_course),
+                            onClick = onResumeCourse,
+                        )
                     }
                 }
 
                 // 현재 위치 — 우측
-                Box(
-                    contentAlignment = Alignment.Center,
+                MiniDockButton(
+                    icon = Icons.Filled.MyLocation,
+                    label = null,
+                    contentDescription = stringResource(R.string.main_moveToCurrentLocation),
                     modifier = Modifier
-                        .align(Alignment.CenterEnd)
-                        .padding(end = 24.dp)
-                        .size(48.dp)
-                        .shadow(8.dp, CircleShape)
-                        .clip(CircleShape)
-                        .background(Color.White)
-                        .clickable {
-                            if (locationGranted) {
-                                scope.launch { moveToUserLocation(animateDelta = 0.05) }
-                            } else {
-                                permissionLauncher.launch(
-                                    arrayOf(
-                                        Manifest.permission.ACCESS_FINE_LOCATION,
-                                        Manifest.permission.ACCESS_COARSE_LOCATION,
-                                    )
-                                )
-                            }
-                        },
+                        .align(Alignment.BottomEnd)
+                        .padding(end = 24.dp),
                 ) {
-                    Icon(Icons.Filled.MyLocation, contentDescription = stringResource(R.string.main_moveToCurrentLocation), tint = TteOrange, modifier = Modifier.size(20.dp))
+                    if (locationGranted) {
+                        scope.launch { moveToUserLocation(animateDelta = 0.05) }
+                    } else {
+                        permissionLauncher.launch(
+                            arrayOf(
+                                Manifest.permission.ACCESS_FINE_LOCATION,
+                                Manifest.permission.ACCESS_COARSE_LOCATION,
+                            )
+                        )
+                    }
                 }
             }
         }
@@ -510,6 +547,41 @@ fun HomeScreen(
                 },
                 onDismiss = { showRegionSearch = false },
             )
+        }
+    }
+}
+
+// MARK: - 지도 위 48dp 원형 보조 버튼 — 이어하기·현재위치 공용 (iOS miniDockButton)
+@Composable
+private fun MiniDockButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String?,
+    modifier: Modifier = Modifier,
+    contentDescription: String? = label,
+    onClick: () -> Unit,
+) {
+    val view = androidx.compose.ui.platform.LocalView.current
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(3.dp, Alignment.CenterVertically),
+        modifier = modifier
+            .size(48.dp)
+            .shadow(8.dp, CircleShape)
+            .clip(CircleShape)
+            .background(Color.White)
+            .clickable {
+                com.seoktaedev.tteona.core.util.Haptics.light(view)
+                onClick()
+            },
+    ) {
+        Icon(
+            icon,
+            contentDescription = contentDescription,
+            tint = TteOrange,
+            modifier = Modifier.size(if (label == null) 20.dp else 16.dp),
+        )
+        if (label != null) {
+            Text(label, fontSize = 9.sp, fontWeight = FontWeight.Medium, color = TteOrange)
         }
     }
 }

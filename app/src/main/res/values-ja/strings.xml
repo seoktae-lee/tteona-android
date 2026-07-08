@@ -571,4 +571,17 @@
     <string name="vlogserver_error_compositeStartFailed">合成開始に失敗しました</string>
     <string name="vlogserver_error_statusFailed">状態取得に失敗しました</string>
     <string name="vlogserver_error_downloadFailed">完成版のダウンロードに失敗しました</string>
+
+    <!-- UI改善バッチ 2026-07-08 -->
+    <string name="common_save">保存</string>
+    <string name="settings_editNickname">ニックネーム変更</string>
+    <string name="settings_nickname_unchanged">現在のニックネームと同じです</string>
+    <string name="settings_nickname_saveFailed">ニックネームの変更に失敗しました。しばらくしてからもう一度お試しください。</string>
+    <string name="settings_travelStyle">旅のスタイル</string>
+    <string name="settings_travelStyle_none">未設定</string>
+    <string name="onboarding_style_title">どんな旅に\nよく出かけますか？</string>
+    <string name="onboarding_style_subtitle">好みに合うコースを優先しておすすめします</string>
+    <string name="onboarding_style_skip">あとで設定する</string>
+    <string name="main_courseResults">コース検索結果 %1$d件</string>
+    <string name="main_goToRegion">「%1$s」へ地図を移動</string>
 </resources>

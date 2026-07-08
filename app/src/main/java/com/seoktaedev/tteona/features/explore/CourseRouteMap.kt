@@ -43,6 +43,8 @@ import com.google.maps.android.compose.MarkerComposable
 import com.google.maps.android.compose.Polyline
 import com.google.maps.android.compose.rememberCameraPositionState
 import com.google.maps.android.compose.rememberUpdatedMarkerState
+import androidx.compose.ui.res.stringResource
+import com.seoktaedev.tteona.R
 import com.seoktaedev.tteona.core.model.Course
 import com.seoktaedev.tteona.ui.theme.TteOrange
 
@@ -74,7 +76,7 @@ fun CourseRouteMap(course: Course) {
                 .padding(horizontal = 9.dp, vertical = 5.dp),
         ) {
             Icon(Icons.Filled.OpenInFull, contentDescription = null, tint = Color.White, modifier = Modifier.size(11.dp))
-            Text("주변 보기", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+            Text(stringResource(R.string.detail_viewNearby), fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
         }
 
         // 제스처 충돌 방지용 투명 오버레이 — 탭하면 전체화면 (iOS와 동일)
@@ -102,7 +104,7 @@ fun CourseRouteMap(course: Course) {
                         .background(Color.Black.copy(alpha = 0.45f))
                         .clickable { showFullMap = false },
                 ) {
-                    Icon(Icons.Filled.Close, contentDescription = "닫기", tint = Color.White, modifier = Modifier.size(18.dp))
+                    Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.common_close), tint = Color.White, modifier = Modifier.size(18.dp))
                 }
             }
         }

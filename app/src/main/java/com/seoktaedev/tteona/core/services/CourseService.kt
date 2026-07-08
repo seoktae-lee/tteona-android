@@ -1,6 +1,8 @@
 package com.seoktaedev.tteona.core.services
 
 import android.util.Log
+import com.seoktaedev.tteona.R
+import com.seoktaedev.tteona.core.i18n.LocaleManager
 import com.google.firebase.Firebase
 import com.google.firebase.Timestamp
 import com.google.firebase.firestore.DocumentSnapshot
@@ -162,7 +164,7 @@ fun DocumentSnapshot.toCourse(): Course? {
             authorId = authorId,
             courseName = d["courseName"] as? String ?: "",
             tag = CourseTag.entries.firstOrNull { it.label == d["tag"] } ?: CourseTag.FRIENDS,
-            region = d["region"] as? String ?: "기타",
+            region = d["region"] as? String ?: LocaleManager.string(R.string.region_other),
             likeCount = (d["likeCount"] as? Number)?.toInt() ?: 0,
             createdAt = (d["createdAt"] as? Timestamp)?.toDate()?.time ?: 0L,
             places = (d["places"] as? List<*>)?.mapNotNull { toPlace(it) } ?: emptyList(),

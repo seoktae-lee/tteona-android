@@ -57,9 +57,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.seoktaedev.tteona.R
 import com.seoktaedev.tteona.core.auth.AuthService
+import com.seoktaedev.tteona.core.i18n.LocaleManager
 import com.seoktaedev.tteona.core.model.Room
 import com.seoktaedev.tteona.core.services.RoomService
 import com.seoktaedev.tteona.core.services.UserService
@@ -81,7 +85,8 @@ fun GroupListScreen(onClose: (() -> Unit)? = null) {
     val profileUser by UserService.currentUser.collectAsState()
     val myRooms by RoomService.myRooms.collectAsState()
     val uid = authUser?.uid ?: ""
-    val nickname = profileUser?.nickname?.takeIf { it.isNotEmpty() } ?: "멤버"
+    val context = LocalContext.current
+    val nickname = profileUser?.nickname?.takeIf { it.isNotEmpty() } ?: LocaleManager.string(context, R.string.session_member)
 
     var subScreen by rememberSaveable { mutableStateOf(GroupSubScreen.LIST) }
     var selectedRoom by remember { mutableStateOf<Room?>(null) }
@@ -190,7 +195,7 @@ fun GroupListScreen(onClose: (() -> Unit)? = null) {
                 if (onClose != null) {
                     Icon(
                         Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "닫기",
+                        contentDescription = stringResource(R.string.common_close),
                         tint = TteDarkGray,
                         modifier = Modifier
                             .align(Alignment.CenterStart)
@@ -200,7 +205,7 @@ fun GroupListScreen(onClose: (() -> Unit)? = null) {
                     )
                 }
                 Text(
-                    "채팅",
+                    stringResource(R.string.tab_chat),
                     fontSize = 17.sp,
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.align(Alignment.Center),
@@ -208,7 +213,7 @@ fun GroupListScreen(onClose: (() -> Unit)? = null) {
                 Box(Modifier.align(Alignment.CenterEnd)) {
                     Icon(
                         Icons.Filled.Add,
-                        contentDescription = "추가",
+                        contentDescription = stringResource(R.string.common_add),
                         tint = TteOrange,
                         modifier = Modifier
                             .padding(end = 12.dp)
@@ -217,12 +222,12 @@ fun GroupListScreen(onClose: (() -> Unit)? = null) {
                     )
                     DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
                         DropdownMenuItem(
-                            text = { Text("방 만들기") },
+                            text = { Text(stringResource(R.string.group_createRoom)) },
                             leadingIcon = { Icon(Icons.Filled.AddCircleOutline, contentDescription = null) },
                             onClick = { showMenu = false; subScreen = GroupSubScreen.CREATE },
                         )
                         DropdownMenuItem(
-                            text = { Text("코드로 참여") },
+                            text = { Text(stringResource(R.string.group_joinWithCode)) },
                             leadingIcon = { Icon(Icons.Filled.Key, contentDescription = null) },
                             onClick = { showMenu = false; subScreen = GroupSubScreen.JOIN },
                         )
@@ -347,7 +352,7 @@ private fun RoomCard(room: Room, hasNewFeed: Boolean, onClick: () -> Unit) {
             }
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 Icon(Icons.Filled.Person, contentDescription = null, tint = TteMediumGray, modifier = Modifier.size(12.dp))
-                Text("멤버 ${room.memberIds.size}명", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = TteMediumGray)
+                Text(stringResource(R.string.roomselect_members, room.memberIds.size), fontSize = 12.sp, fontWeight = FontWeight.Medium, color = TteMediumGray)
             }
         }
 
@@ -377,9 +382,9 @@ private fun GroupEmptyState(onCreate: () -> Unit, onJoin: () -> Unit) {
             modifier = Modifier.size(60.dp),
         )
         Spacer(Modifier.height(20.dp))
-        Text("아직 참여한 그룹이 없어요", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = TteDarkGray)
+        Text(stringResource(R.string.group_empty_title), fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = TteDarkGray)
         Spacer(Modifier.height(6.dp))
-        Text("친구들과 함께 오늘을 공유해보세요!", fontSize = 14.sp, color = TteMediumGray)
+        Text(stringResource(R.string.group_empty_subtitle), fontSize = 14.sp, color = TteMediumGray)
         Spacer(Modifier.height(24.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Box(
@@ -391,7 +396,7 @@ private fun GroupEmptyState(onCreate: () -> Unit, onJoin: () -> Unit) {
                     .background(TteOrange)
                     .clickable(onClick = onCreate),
             ) {
-                Text("방 만들기", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+                Text(stringResource(R.string.group_createRoom), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
             }
             Box(
                 contentAlignment = Alignment.Center,
@@ -402,7 +407,7 @@ private fun GroupEmptyState(onCreate: () -> Unit, onJoin: () -> Unit) {
                     .background(TteOrange.copy(alpha = 0.12f))
                     .clickable(onClick = onJoin),
             ) {
-                Text("코드 입력", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = TteOrange)
+                Text(stringResource(R.string.group_enterCode), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = TteOrange)
             }
         }
     }
@@ -411,6 +416,7 @@ private fun GroupEmptyState(onCreate: () -> Unit, onJoin: () -> Unit) {
 // MARK: - 방 만들기 (iOS CreateRoomView)
 @Composable
 private fun CreateRoomScreen(uid: String, nickname: String, onDone: () -> Unit) {
+    val context = LocalContext.current
     var roomName by rememberSaveable { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
@@ -423,10 +429,10 @@ private fun CreateRoomScreen(uid: String, nickname: String, onDone: () -> Unit) 
                 .fillMaxSize()
                 .statusBarsPadding()
         ) {
-            GroupTopBar(title = "그룹 만들기", onClose = onDone)
+            GroupTopBar(title = stringResource(R.string.group_createGroup), onClose = onDone)
 
             Column(Modifier.padding(horizontal = 20.dp, vertical = 12.dp)) {
-                Text("그룹 이름", fontSize = 14.sp, fontWeight = FontWeight.Medium, color = TteMediumGray)
+                Text(stringResource(R.string.group_roomName), fontSize = 14.sp, fontWeight = FontWeight.Medium, color = TteMediumGray)
                 Spacer(Modifier.height(8.dp))
                 BasicTextField(
                     value = roomName,
@@ -441,7 +447,7 @@ private fun CreateRoomScreen(uid: String, nickname: String, onDone: () -> Unit) 
                                 .background(TteFieldBackground)
                                 .padding(14.dp),
                         ) {
-                            if (roomName.isEmpty()) Text("예: 제주 여행 친구들", fontSize = 17.sp, color = TteMediumGray)
+                            if (roomName.isEmpty()) Text(stringResource(R.string.group_roomName_placeholder), fontSize = 17.sp, color = TteMediumGray)
                             inner()
                         }
                     },
@@ -469,13 +475,13 @@ private fun CreateRoomScreen(uid: String, nickname: String, onDone: () -> Unit) 
                             isLoading = true
                             runCatching { RoomService.createRoom(roomName.trim(), uid, nickname) }
                                 .onSuccess { onDone() }
-                                .onFailure { errorMessage = "방 생성에 실패했어요. 다시 시도해주세요." }
+                                .onFailure { errorMessage = LocaleManager.string(context, R.string.group_createRoomFailed) }
                             isLoading = false
                         }
                     },
             ) {
                 if (isLoading) CircularProgressIndicator(color = Color.White, modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
-                else Text("방 만들기", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+                else Text(stringResource(R.string.group_createRoom), fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
             }
         }
     }
@@ -484,6 +490,7 @@ private fun CreateRoomScreen(uid: String, nickname: String, onDone: () -> Unit) 
 // MARK: - 코드로 참여 (iOS JoinRoomView — 5회 실패 시 1시간 잠금)
 @Composable
 private fun JoinRoomScreen(uid: String, nickname: String, onDone: () -> Unit, initialCode: String = "") {
+    val context = LocalContext.current
     var inviteCode by rememberSaveable { mutableStateOf(initialCode.uppercase().take(6)) }
     var isLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
@@ -502,10 +509,10 @@ private fun JoinRoomScreen(uid: String, nickname: String, onDone: () -> Unit, in
                 .fillMaxSize()
                 .statusBarsPadding()
         ) {
-            GroupTopBar(title = "코드로 참여", onClose = onDone)
+            GroupTopBar(title = stringResource(R.string.group_joinWithCode), onClose = onDone)
 
             Column(Modifier.padding(horizontal = 20.dp, vertical = 12.dp)) {
-                Text("초대 코드 6자리를 입력하세요", fontSize = 14.sp, fontWeight = FontWeight.Medium, color = TteMediumGray)
+                Text(stringResource(R.string.group_inviteCode_prompt), fontSize = 14.sp, fontWeight = FontWeight.Medium, color = TteMediumGray)
                 Spacer(Modifier.height(8.dp))
                 BasicTextField(
                     value = inviteCode,
@@ -528,7 +535,7 @@ private fun JoinRoomScreen(uid: String, nickname: String, onDone: () -> Unit, in
                                 .background(TteFieldBackground)
                                 .padding(14.dp),
                         ) {
-                            if (inviteCode.isEmpty()) Text("예: A3F7K2", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = TteMediumGray.copy(alpha = 0.5f))
+                            if (inviteCode.isEmpty()) Text(stringResource(R.string.group_inviteCode_placeholder), fontSize = 28.sp, fontWeight = FontWeight.Bold, color = TteMediumGray.copy(alpha = 0.5f))
                             inner()
                         }
                     },
@@ -537,14 +544,14 @@ private fun JoinRoomScreen(uid: String, nickname: String, onDone: () -> Unit, in
                 if (isLocked) {
                     val remainMin = ((lockUntil!! - System.currentTimeMillis()) / 60000).coerceAtLeast(0)
                     Text(
-                        "코드 입력 횟수를 초과했어요.\n${remainMin}분 후 다시 시도해주세요.",
+                        stringResource(R.string.group_codeCooldown, remainMin),
                         fontSize = 14.sp, color = Color.Red, textAlign = TextAlign.Center,
                         modifier = Modifier.fillMaxWidth(),
                     )
                 } else errorMessage?.let {
                     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
                         Text(it, fontSize = 14.sp, color = Color.Red)
-                        Text("$failCount/${maxAttempts}회 실패", fontSize = 12.sp, color = TteMediumGray)
+                        Text(stringResource(R.string.group_failCount, failCount, maxAttempts), fontSize = 12.sp, color = TteMediumGray)
                     }
                 }
             }
@@ -573,7 +580,7 @@ private fun JoinRoomScreen(uid: String, nickname: String, onDone: () -> Unit, in
                                         lockUntil = System.currentTimeMillis() + lockMillis
                                         errorMessage = null
                                     } else {
-                                        errorMessage = "해당 초대 코드의 방을 찾을 수 없어요."
+                                        errorMessage = LocaleManager.string(context, R.string.room_error_notFound)
                                     }
                                 }
                             isLoading = false
@@ -581,7 +588,7 @@ private fun JoinRoomScreen(uid: String, nickname: String, onDone: () -> Unit, in
                     },
             ) {
                 if (isLoading) CircularProgressIndicator(color = Color.White, modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
-                else Text("참여하기", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+                else Text(stringResource(R.string.group_join), fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
             }
         }
     }
@@ -597,7 +604,7 @@ internal fun GroupTopBar(title: String, onClose: () -> Unit) {
     ) {
         Icon(
             Icons.Filled.Close,
-            contentDescription = "취소",
+            contentDescription = stringResource(R.string.common_cancel),
             tint = TteDarkGray,
             modifier = Modifier
                 .align(Alignment.CenterStart)

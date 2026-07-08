@@ -32,6 +32,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import com.seoktaedev.tteona.R
+import com.seoktaedev.tteona.core.i18n.LocaleManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -47,6 +51,7 @@ import kotlinx.coroutines.launch
 /** 차단된 사용자 관리 — iOS Features/Settings/BlockedUsersView.swift의 이식본. */
 @Composable
 fun BlockedUsersScreen(modifier: Modifier = Modifier, onBack: () -> Unit) {
+    val context = LocalContext.current
     val profileUser by UserService.currentUser.collectAsState()
     var blockedUsers by remember { mutableStateOf<List<AppUser>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
@@ -60,13 +65,13 @@ fun BlockedUsersScreen(modifier: Modifier = Modifier, onBack: () -> Unit) {
             return@LaunchedEffect
         }
         blockedUsers = blockedIds.map { uid ->
-            UserService.fetchAuthor(uid) ?: AppUser(uid = uid, email = "", nickname = "탈퇴한 사용자")
+            UserService.fetchAuthor(uid) ?: AppUser(uid = uid, email = "", nickname = LocaleManager.string(context, R.string.user_deleted))
         }
         isLoading = false
     }
 
     Column(modifier.fillMaxSize()) {
-        SubScreenTopBar(title = "차단된 사용자 관리", onBack = onBack)
+        SubScreenTopBar(title = stringResource(R.string.settings_blockedUsers), onBack = onBack)
 
         when {
             isLoading -> Box(
@@ -90,7 +95,7 @@ fun BlockedUsersScreen(modifier: Modifier = Modifier, onBack: () -> Unit) {
                     tint = TteMediumGray.copy(alpha = 0.4f),
                     modifier = Modifier.size(44.dp),
                 )
-                Text("차단한 사용자가 없습니다.", fontSize = 15.sp, color = TteMediumGray)
+                Text(stringResource(R.string.blocked_empty), fontSize = 15.sp, color = TteMediumGray)
             }
             else -> LazyColumn(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -115,7 +120,7 @@ fun BlockedUsersScreen(modifier: Modifier = Modifier, onBack: () -> Unit) {
                             }
                         }
                         Text(
-                            "차단 해제",
+                            stringResource(R.string.blocked_unblock),
                             fontSize = 13.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = TteOrange,

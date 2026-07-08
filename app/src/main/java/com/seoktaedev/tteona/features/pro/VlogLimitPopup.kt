@@ -29,6 +29,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -90,13 +91,13 @@ fun VlogLimitPopup(
             }
 
             Text(
-                "촬영 한도에 도달했어요",
+                stringResource(R.string.vloglimit_title),
                 fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.White,
                 modifier = Modifier.padding(top = 16.dp),
             )
             Text(
-                if (isPro) "브이로그 영상은 최대 5분까지 담을 수 있어요.\n지금까지 담은 순간들로 멋진 영상을 만들어드릴게요."
-                else "무료로는 장소당 5초, 총 30초까지 담을 수 있어요.",
+                if (isPro) stringResource(R.string.vloglimit_durationMsg)
+                else stringResource(R.string.vloglimit_freeMsg),
                 fontSize = 14.sp,
                 color = Color.White.copy(alpha = 0.7f),
                 textAlign = TextAlign.Center,
@@ -120,7 +121,7 @@ fun VlogLimitPopup(
                         contentDescription = "tteona PRO",
                         modifier = Modifier.height(20.dp),
                     )
-                    Text("장소당 제한 없이 최대 5분까지 자유롭게", fontSize = 12.sp, color = Color.White.copy(alpha = 0.6f))
+                    Text(stringResource(R.string.vloglimit_proFeature), fontSize = 12.sp, color = Color.White.copy(alpha = 0.6f))
                 }
 
                 Box(
@@ -133,7 +134,7 @@ fun VlogLimitPopup(
                         .background(TteOrange)
                         .clickable(onClick = onUpgrade),
                 ) {
-                    Text("tteona PRO 알아보기", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                    Text(stringResource(R.string.vloglimit_learnPro), fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White)
                 }
             }
 
@@ -145,7 +146,7 @@ fun VlogLimitPopup(
                     .height(44.dp)
                     .clickable(onClick = onDismiss),
             ) {
-                Text("확인", fontSize = 15.sp, fontWeight = FontWeight.Medium, color = Color.White.copy(alpha = 0.65f))
+                Text(stringResource(R.string.common_ok), fontSize = 15.sp, fontWeight = FontWeight.Medium, color = Color.White.copy(alpha = 0.65f))
             }
         }
     }

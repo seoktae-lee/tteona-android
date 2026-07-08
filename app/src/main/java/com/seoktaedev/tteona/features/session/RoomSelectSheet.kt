@@ -32,8 +32,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.seoktaedev.tteona.R
 import com.seoktaedev.tteona.core.auth.AuthService
 import com.seoktaedev.tteona.core.services.RoomService
 import com.seoktaedev.tteona.ui.theme.TteDarkGray
@@ -64,9 +66,9 @@ fun RoomSelectSheet(
                 .fillMaxWidth()
                 .padding(bottom = 40.dp),
         ) {
-            Text("어디에 공유할까요?", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = TteDarkGray)
+            Text(stringResource(R.string.roomselect_title), fontSize = 22.sp, fontWeight = FontWeight.Bold, color = TteDarkGray)
             Spacer(Modifier.height(6.dp))
-            Text("선택한 그룹에 오늘의 기록이 공유돼요", fontSize = 14.sp, color = TteMediumGray)
+            Text(stringResource(R.string.roomselect_subtitle), fontSize = 14.sp, color = TteMediumGray)
             Spacer(Modifier.height(28.dp))
 
             Column(
@@ -102,7 +104,7 @@ fun RoomSelectSheet(
                         )
                         Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
                             Text(room.name, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = TteDarkGray)
-                            Text("멤버 ${room.memberIds.size}명", fontSize = 13.sp, color = TteMediumGray)
+                            Text(stringResource(R.string.roomselect_members, room.memberIds.size), fontSize = 13.sp, color = TteMediumGray)
                         }
                     }
                 }
@@ -121,7 +123,7 @@ fun RoomSelectSheet(
                     .clickable { onConfirm(selectedRoomIds) },
             ) {
                 Text(
-                    if (selectedRoomIds.isEmpty()) "공유 없이 시작" else "시작하기",
+                    if (selectedRoomIds.isEmpty()) stringResource(R.string.roomselect_startWithoutSharing) else stringResource(R.string.roomselect_start),
                     fontSize = 17.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White,
@@ -129,7 +131,7 @@ fun RoomSelectSheet(
             }
             Spacer(Modifier.height(12.dp))
             Text(
-                "취소",
+                stringResource(R.string.common_cancel),
                 fontSize = 15.sp,
                 color = TteMediumGray,
                 modifier = Modifier.clickable(onClick = onDismiss),

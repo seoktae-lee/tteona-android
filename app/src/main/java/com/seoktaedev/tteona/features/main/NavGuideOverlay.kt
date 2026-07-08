@@ -49,6 +49,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -79,15 +80,14 @@ fun NavGuideOverlay(
 
     data class GuideStep(val mascotRes: Int, val title: String, val message: String, val tabIndex: Int?)
 
-    val steps = remember {
-        listOf(
-            GuideStep(R.drawable.tteoni_guide, "안녕하세요, 나루예요!", "떠나를 30초만에 둘러볼까요?\n제가 안내해드릴게요", null),
-            GuideStep(R.drawable.tteoni_travel, "홈 — 지도에서 떠나기", "지도에서 마음에 드는 코스를 골라\n'떠나기'를 누르면 여행이 시작돼요", 0),
-            GuideStep(R.drawable.tteoni_wink, "탐색 — 코스 모아보기", "전 세계 코스를 카드로 넘겨보고\n인기 코스를 발견해보세요", 1),
-            GuideStep(R.drawable.tteoni_jump, "채팅 — 함께 떠나기", "그룹을 만들어 친구·가족과\n코스와 '나의 오늘'을 공유해요", 2),
-            GuideStep(R.drawable.tteoni_thumbsup, "준비 완료!", "이제 지도에서 첫 코스를 골라\n떠나볼 일만 남았어요", null),
-        )
-    }
+    // 언어 변경 시 액티비티가 recreate되므로 매 컴포지션 재구성해도 무방
+    val steps = listOf(
+        GuideStep(R.drawable.tteoni_guide, stringResource(R.string.navguide_step1_title), stringResource(R.string.navguide_step1_message), null),
+        GuideStep(R.drawable.tteoni_travel, stringResource(R.string.navguide_step2_title), stringResource(R.string.navguide_step2_message), 0),
+        GuideStep(R.drawable.tteoni_wink, stringResource(R.string.navguide_step3_title), stringResource(R.string.navguide_step3_message), 1),
+        GuideStep(R.drawable.tteoni_jump, stringResource(R.string.navguide_step4_title), stringResource(R.string.navguide_step4_message), 2),
+        GuideStep(R.drawable.tteoni_thumbsup, stringResource(R.string.navguide_step5_title), stringResource(R.string.navguide_step5_message), null),
+    )
     val step = steps[stepIndex]
     val isLast = stepIndex == steps.size - 1
 
@@ -211,7 +211,7 @@ fun NavGuideOverlay(
                                     onFinish()
                                 },
                         ) {
-                            Text("건너뛰기", fontSize = 15.sp, fontWeight = FontWeight.Medium, color = TteMediumGray)
+                            Text(stringResource(R.string.common_skip), fontSize = 15.sp, fontWeight = FontWeight.Medium, color = TteMediumGray)
                         }
                     }
                     Box(
@@ -224,7 +224,7 @@ fun NavGuideOverlay(
                             .clickable { advance() },
                     ) {
                         Text(
-                            if (index == steps.size - 1) "떠나볼까요!" else "다음 ${index + 1}/${steps.size}",
+                            if (index == steps.size - 1) stringResource(R.string.navguide_letsGo) else stringResource(R.string.navguide_next, index + 1, steps.size),
                             fontSize = 15.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = Color.White,

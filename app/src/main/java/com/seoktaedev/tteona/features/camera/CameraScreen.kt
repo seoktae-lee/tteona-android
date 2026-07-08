@@ -10,6 +10,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.CameraSelector
+import androidx.camera.core.FocusMeteringAction
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.lifecycle.awaitInstance
@@ -22,9 +23,12 @@ import androidx.camera.video.Recording
 import androidx.camera.video.VideoCapture
 import androidx.camera.video.VideoRecordEvent
 import androidx.camera.view.PreviewView
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -33,6 +37,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -52,24 +57,38 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableDoubleStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlin.math.roundToInt
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
+import com.seoktaedev.tteona.R
+import com.seoktaedev.tteona.core.i18n.LocaleManager
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.seoktaedev.tteona.core.model.Place
+import com.seoktaedev.tteona.core.services.NaruFilter
+import com.seoktaedev.tteona.core.services.NaruVideoFilter
 import com.seoktaedev.tteona.core.services.ProManager
 import com.seoktaedev.tteona.core.services.VlogClips
 import com.seoktaedev.tteona.core.util.Haptics
+import kotlinx.coroutines.launch
 import com.seoktaedev.tteona.ui.theme.TteOrange
 import kotlinx.coroutines.delay
 import java.util.concurrent.Executor
@@ -121,6 +140,12 @@ fun CameraScreen(
     var clipLimitSeconds by remember { mutableDoubleStateOf(5.0) }
     var selectedZoom by remember { mutableStateOf(1.0f) }
     var showTip by remember { mutableStateOf(true) }
+    // 탭 초점 인디케이터 위치 (px) — 잠시 표시 후 사라짐
+    var focusIndicator by remember { mutableStateOf<Offset?>(null) }
+    // 나루 무드 필터 — 저장된 선택 복원, 촬영 직후 클립에 굽는다
+    val scope = rememberCoroutineScope()
+    var selectedFilter by remember { mutableStateOf(NaruFilter.saved(context)) }
+    var isApplyingFilter by remember { mutableStateOf(false) }
 
     // 촬영 예산 (iOS refreshUsedSeconds) — 세션 폴더 클립 합계, 재촬영이면 이 장소 클립만큼 돌려받음
     var usedSeconds by remember { mutableDoubleStateOf(0.0) }
@@ -175,7 +200,10 @@ fun CameraScreen(
                 )
             )
             .build()
-        val capture = VideoCapture.withOutput(recorder)
+        // 손떨림 방지 — 미지원 기기에서는 CameraX가 조용히 무시한다 (iOS .auto 대응)
+        val capture = VideoCapture.Builder(recorder)
+            .setVideoStabilizationEnabled(true)
+            .build()
         provider.unbindAll()
         camera = runCatching {
             provider.bindToLifecycle(
@@ -241,11 +269,25 @@ fun CameraScreen(
                 is VideoRecordEvent.Finalize -> {
                     isRecording = false
                     activeRecording = null
-                    refreshUsedSeconds()
                     if (!event.hasError() && file.exists()) {
-                        Haptics.success(view)
-                        saveDone = true
+                        val filter = selectedFilter
+                        if (filter != NaruFilter.NONE) {
+                            // 촬영 직후 클립에 나루 필터를 굽고(교체) 저장 완료 처리
+                            isApplyingFilter = true
+                            scope.launch {
+                                NaruVideoFilter.apply(context, file, filter)
+                                isApplyingFilter = false
+                                refreshUsedSeconds()
+                                Haptics.success(view)
+                                saveDone = true
+                            }
+                        } else {
+                            refreshUsedSeconds()
+                            Haptics.success(view)
+                            saveDone = true
+                        }
                     } else {
+                        refreshUsedSeconds()
                         file.delete()
                         isSaving = false
                     }
@@ -268,7 +310,51 @@ fun CameraScreen(
 
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         if (hasPermission) {
-            AndroidView(factory = { previewView }, modifier = Modifier.fillMaxSize())
+            AndroidView(
+                factory = { previewView },
+                modifier = Modifier
+                    .fillMaxSize()
+                    // 핀치 줌 — 렌즈 교체 없이 현재 기기 배율만 연속 조정 (iOS handlePinch)
+                    .pointerInput(camera) {
+                        detectTransformGestures { _, _, zoom, _ ->
+                            val cam = camera ?: return@detectTransformGestures
+                            if (zoom == 1f) return@detectTransformGestures
+                            val state = cam.cameraInfo.zoomState.value ?: return@detectTransformGestures
+                            val newRatio = (state.zoomRatio * zoom)
+                                .coerceIn(state.minZoomRatio, minOf(state.maxZoomRatio, 15f))
+                            cam.cameraControl.setZoomRatio(newRatio)
+                            selectedZoom = 0f   // 커스텀 줌 중에는 프리셋 강조 해제
+                        }
+                    }
+                    // 탭 초점/노출 (iOS handleTap)
+                    .pointerInput(camera) {
+                        detectTapGestures { offset ->
+                            val cam = camera ?: return@detectTapGestures
+                            val point = previewView.meteringPointFactory.createPoint(offset.x, offset.y)
+                            cam.cameraControl.startFocusAndMetering(
+                                FocusMeteringAction.Builder(
+                                    point,
+                                    FocusMeteringAction.FLAG_AF or FocusMeteringAction.FLAG_AE,
+                                ).build()
+                            )
+                            focusIndicator = offset
+                        }
+                    },
+            )
+        }
+
+        // 탭 초점 인디케이터 (주황 박스, 잠시 후 사라짐)
+        focusIndicator?.let { p ->
+            LaunchedEffect(p) {
+                delay(900)
+                focusIndicator = null
+            }
+            Box(
+                Modifier
+                    .offset { IntOffset((p.x - 36.dp.toPx()).roundToInt(), (p.y - 36.dp.toPx()).roundToInt()) }
+                    .size(72.dp)
+                    .border(1.5.dp, TteOrange, RoundedCornerShape(6.dp))
+            )
         }
 
         // 상단: 닫기 / 장소명 / 렌즈 전환
@@ -288,7 +374,7 @@ fun CameraScreen(
                     .background(Color.Black.copy(alpha = 0.5f))
                     .clickable(enabled = !isSaving, onClick = onClose),
             ) {
-                Icon(Icons.Filled.Close, contentDescription = "닫기", tint = Color.White, modifier = Modifier.size(20.dp))
+                Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.common_close), tint = Color.White, modifier = Modifier.size(20.dp))
             }
             Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
                 Text(
@@ -313,14 +399,22 @@ fun CameraScreen(
                             CameraSelector.LENS_FACING_FRONT else CameraSelector.LENS_FACING_BACK
                     },
             ) {
-                Icon(Icons.Filled.Cameraswitch, contentDescription = "카메라 전환", tint = Color.White, modifier = Modifier.size(20.dp))
+                Icon(Icons.Filled.Cameraswitch, contentDescription = stringResource(R.string.camera_switchCamera), tint = Color.White, modifier = Modifier.size(20.dp))
             }
         }
 
         // 촬영 팁 칩 (3초 후 사라짐)
         if (showTip) {
+            // 촬영 예산 안내 토스트 — 3초 뒤 사라짐. PRO는 분 단위, 무료는 장소당/총 초
             Text(
-                "💡 버튼으로 촬영 시작·종료, 가로·세로 자유롭게",
+                if (ProManager.vlogClipMaxSeconds == null) {
+                    LocaleManager.string(context, R.string.camera_budgetToastPro, (ProManager.vlogBudgetSeconds / 60).toInt())
+                } else {
+                    LocaleManager.string(
+                        context, R.string.camera_budgetToastFree,
+                        (ProManager.vlogClipMaxSeconds ?: 5.0).toInt(), ProManager.vlogBudgetSeconds.toInt(),
+                    )
+                },
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Medium,
                 color = Color.White,
@@ -343,38 +437,70 @@ fun CameraScreen(
                 .navigationBarsPadding()
                 .padding(bottom = 16.dp),
         ) {
-            // 남은 예산 (iOS progressRing + countLabel)
-            val usedNow = (usedSeconds + if (isRecording) elapsedSeconds else 0.0).coerceAtMost(budgetSeconds)
-            val remainingNow = budgetSeconds - usedNow
-            Box(contentAlignment = Alignment.Center, modifier = Modifier.size(60.dp)) {
-                CircularProgressIndicator(
-                    progress = { (usedNow / budgetSeconds).toFloat() },
-                    color = if (usedNow / budgetSeconds > 0.9) Color.Red else TteOrange,
-                    trackColor = Color.White.copy(alpha = 0.2f),
-                    strokeWidth = 4.dp,
-                    modifier = Modifier.fillMaxSize(),
+            val isProUser = ProManager.vlogClipMaxSeconds == null
+            // 총 촬영 예산 UI(분절 링·캡션)는 카메라에서 제거 — 지도 장소칩에 이미 있고,
+            // 예산 안내는 상단 토스트(showTip)로 잠깐만 노출한다. (사용자 피드백 반영)
+
+            // 나루 무드 필터 칩 (iOS filterBar) — 녹화/필터적용 중에는 잠금
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                val filters = listOf(
+                    NaruFilter.NONE to R.string.camera_filter_none,
+                    NaruFilter.COZY to R.string.camera_filter_cozy,
+                    NaruFilter.FILM to R.string.camera_filter_film,
+                    NaruFilter.FRESH to R.string.camera_filter_fresh,
                 )
-                Text(formatBudget(remainingNow), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+                filters.forEach { (filter, labelRes) ->
+                    val selected = selectedFilter == filter
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier
+                            .height(32.dp)
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(if (selected) Color.White else Color.Black.copy(alpha = 0.45f))
+                            .clickable(enabled = !isRecording && !isSaving) {
+                                selectedFilter = filter
+                                NaruFilter.save(context, filter)
+                            }
+                            .padding(horizontal = 14.dp),
+                    ) {
+                        Text(
+                            stringResource(labelRes),
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = if (selected) Color.Black else Color.White,
+                        )
+                    }
+                }
             }
 
-            // 녹화 버튼
+            // 녹화 버튼 — 바깥 링이 이번 클립(장소당 한도) 게이지 (iOS clipProgress)
             Box(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier
                     .size(80.dp)
                     .clickable(enabled = !isSaving) {
                         if (isRecording) {
-                            stopRecording()
+                            // 무료 유저는 5초 고정 촬영 — 중간 종료 불가 ("한 번 탭 = 한 칸" 멘탈모델).
+                            // 실수한 컷은 같은 장소에서 재촬영하면 예산을 돌려받는다. (iOS와 동일)
+                            if (isProUser) stopRecording()
                         } else {
                             startRecording()
                         }
                     },
             ) {
-                Box(
-                    Modifier
-                        .size(76.dp)
-                        .border(4.dp, Color.White, CircleShape)
-                )
+                val clipFrac = if (isRecording) {
+                    (elapsedSeconds / clipLimitSeconds.coerceAtLeast(0.1)).coerceIn(0.0, 1.0)
+                } else 0.0
+                Canvas(Modifier.size(76.dp)) {
+                    val stroke = Stroke(width = 4.dp.toPx(), cap = StrokeCap.Round)
+                    val inset = stroke.width / 2
+                    val arcSize = Size(size.width - stroke.width, size.height - stroke.width)
+                    val topLeft = Offset(inset, inset)
+                    drawArc(Color.White.copy(alpha = 0.35f), 0f, 360f, false, topLeft, arcSize, style = stroke)
+                    if (clipFrac > 0) {
+                        drawArc(Color.White, -90f, (360.0 * clipFrac).toFloat(), false, topLeft, arcSize, style = stroke)
+                    }
+                }
                 Box(
                     Modifier
                         .size(if (isRecording) 32.dp else 60.dp)
@@ -382,6 +508,22 @@ fun CameraScreen(
                         .background(Color.Red)
                 )
             }
+
+            // 버튼 아래 힌트 — 대기: 이번 장소 한도 / 녹화 중: 경과 실시간 (iOS clipHint)
+            Text(
+                when {
+                    isRecording -> LocaleManager.string(
+                        context, R.string.camera_clipElapsed,
+                        String.format("%.1f", elapsedSeconds.coerceAtMost(clipLimitSeconds)),
+                        clipLimitSeconds.roundToInt(),
+                    )
+                    isProUser -> stringResource(R.string.camera_clipHintPro)
+                    else -> stringResource(R.string.camera_clipHintFree)
+                },
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = Color.White.copy(alpha = 0.9f),
+            )
 
             // 줌 바 (후면일 때만, iOS zoomBar)
             if (lensFacing == CameraSelector.LENS_FACING_BACK) {
@@ -417,7 +559,12 @@ fun CameraScreen(
             }
 
             Text(
-                if (isRecording) "촬영 중 · 버튼을 누르면 종료" else "버튼을 눌러 촬영 시작 · 다시 누르면 종료",
+                when {
+                    isRecording && isProUser -> stringResource(R.string.camera_recordingHint)
+                    isRecording -> stringResource(R.string.camera_recordingHintAuto)
+                    isProUser -> stringResource(R.string.camera_hint)
+                    else -> stringResource(R.string.camera_hintAuto)
+                },
                 fontSize = 13.sp,
                 color = Color.White.copy(alpha = 0.8f),
             )
@@ -443,10 +590,13 @@ fun CameraScreen(
                 ) {
                     if (saveDone) {
                         Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = Color(0xFF34C759), modifier = Modifier.size(48.dp))
-                        Text("영상 저장 성공!", fontSize = 16.sp, fontWeight = FontWeight.Medium, color = Color.White)
+                        Text(stringResource(R.string.camera_saveSuccess), fontSize = 16.sp, fontWeight = FontWeight.Medium, color = Color.White)
                     } else {
                         CircularProgressIndicator(color = Color.White)
-                        Text("영상 저장 중...", fontSize = 16.sp, fontWeight = FontWeight.Medium, color = Color.White)
+                        Text(
+                            stringResource(if (isApplyingFilter) R.string.camera_applyingFilter else R.string.camera_saving),
+                            fontSize = 16.sp, fontWeight = FontWeight.Medium, color = Color.White,
+                        )
                     }
                 }
             }
@@ -463,9 +613,9 @@ fun CameraScreen(
                     .padding(horizontal = 24.dp),
             ) {
                 Box(Modifier.weight(1f))
-                Text("카메라 권한이 필요해요", fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+                Text(stringResource(R.string.camera_permission_title), fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
                 Text(
-                    "설정에서 카메라 권한을 허용하면 촬영할 수 있어요.",
+                    stringResource(R.string.camera_permission_subtitle),
                     fontSize = 13.sp,
                     color = Color.White.copy(alpha = 0.75f),
                     textAlign = TextAlign.Center,
@@ -483,10 +633,10 @@ fun CameraScreen(
                         }
                         .padding(horizontal = 32.dp),
                 ) {
-                    Text("설정으로 이동", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+                    Text(stringResource(R.string.camera_openSettings), fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
                 }
                 Text(
-                    "닫기",
+                    stringResource(R.string.common_close),
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Medium,
                     color = Color.White.copy(alpha = 0.8f),
@@ -496,9 +646,4 @@ fun CameraScreen(
             }
         }
     }
-}
-
-private fun formatBudget(seconds: Double): String {
-    val v = seconds.toInt().coerceAtLeast(0)
-    return if (v >= 60) String.format("%d:%02d", v / 60, v % 60) else "${v}초"
 }

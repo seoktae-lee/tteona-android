@@ -12,6 +12,7 @@ import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import com.seoktaedev.tteona.MainActivity
 import com.seoktaedev.tteona.R
+import com.seoktaedev.tteona.core.i18n.LocaleManager
 
 /**
  * 세션 진행 상시 알림 + 백그라운드 위치 유지 — iOS Live Activity(TodaySessionActivityManager) 대응.
@@ -23,7 +24,7 @@ class SessionForegroundService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val title = intent?.getStringExtra(EXTRA_TITLE) ?: "여행 진행 중"
+        val title = intent?.getStringExtra(EXTRA_TITLE) ?: LocaleManager.string(R.string.session_foregroundTitle)
         val body = intent?.getStringExtra(EXTRA_BODY) ?: ""
         ensureChannel(this)
 
@@ -76,8 +77,8 @@ class SessionForegroundService : Service() {
             val manager = context.getSystemService(NOTIFICATION_SERVICE) as NotificationManager
             if (manager.getNotificationChannel(CHANNEL_ID) == null) {
                 manager.createNotificationChannel(
-                    NotificationChannel(CHANNEL_ID, "여행 진행", NotificationManager.IMPORTANCE_LOW).apply {
-                        description = "진행 중인 여행 세션 상태 (iOS Live Activity 대응)"
+                    NotificationChannel(CHANNEL_ID, LocaleManager.string(R.string.session_channelName), NotificationManager.IMPORTANCE_LOW).apply {
+                        description = LocaleManager.string(R.string.session_channelDesc)
                         setShowBadge(false)
                     }
                 )

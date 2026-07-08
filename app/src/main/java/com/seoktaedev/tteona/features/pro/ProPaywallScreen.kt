@@ -57,12 +57,14 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.revenuecat.purchases.Package
 import com.revenuecat.purchases.PackageType
 import com.seoktaedev.tteona.R
+import com.seoktaedev.tteona.core.i18n.LocaleManager
 import com.seoktaedev.tteona.core.services.ProManager
 import com.seoktaedev.tteona.core.util.Haptics
 import com.seoktaedev.tteona.features.common.InfoAlert
@@ -118,7 +120,7 @@ fun ProPaywallScreen(onDismiss: () -> Unit) {
                         .background(Color.White.copy(alpha = 0.12f))
                         .clickable(onClick = onDismiss),
                 ) {
-                    Icon(Icons.Filled.Close, contentDescription = "닫기", tint = Color.White.copy(alpha = 0.7f), modifier = Modifier.size(16.dp))
+                    Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.common_close), tint = Color.White.copy(alpha = 0.7f), modifier = Modifier.size(16.dp))
                 }
             }
 
@@ -134,7 +136,7 @@ fun ProPaywallScreen(onDismiss: () -> Unit) {
                     modifier = Modifier.padding(top = 12.dp).height(34.dp),
                 )
                 Text(
-                    "여행의 순간을 더 길게, 더 자유롭게",
+                    stringResource(R.string.paywall_tagline),
                     fontSize = 14.sp,
                     color = Color.White.copy(alpha = 0.7f),
                     modifier = Modifier.padding(top = 14.dp),
@@ -150,11 +152,11 @@ fun ProPaywallScreen(onDismiss: () -> Unit) {
                         .background(Color.White.copy(alpha = 0.07f))
                         .padding(20.dp),
                 ) {
-                    FeatureRow(Icons.Filled.AutoAwesome, "워터마크 제거", "로고 없는 깨끗한 영상으로 저장돼요")
-                    FeatureRow(Icons.Filled.ViewCarousel, "멀티포맷 제공", "릴스·유튜브·인스타 3가지 버전을 한 번에")
-                    FeatureRow(Icons.Filled.LibraryMusic, "BGM 전체 라이브러리", "모든 음악을 직접 골라 넣을 수 있어요")
-                    FeatureRow(Icons.Filled.Timer, "영상 길이 5분으로 확대", "장소당 5초·총 30초 제한 없이 최대 5분까지")
-                    FeatureRow(Icons.Filled.Bolt, "우선 렌더링", "대기 없이 내 영상부터 먼저 만들어드려요")
+                    FeatureRow(Icons.Filled.AutoAwesome, stringResource(R.string.paywall_feature_watermark), stringResource(R.string.paywall_feature_watermark_sub))
+                    FeatureRow(Icons.Filled.ViewCarousel, stringResource(R.string.paywall_feature_multiformat), stringResource(R.string.paywall_feature_multiformat_sub))
+                    FeatureRow(Icons.Filled.LibraryMusic, stringResource(R.string.paywall_feature_bgm), stringResource(R.string.paywall_feature_bgm_sub))
+                    FeatureRow(Icons.Filled.Timer, stringResource(R.string.paywall_feature_duration), stringResource(R.string.paywall_feature_duration_sub))
+                    FeatureRow(Icons.Filled.Bolt, stringResource(R.string.paywall_feature_priority), stringResource(R.string.paywall_feature_priority_sub))
                 }
 
                 if (packages.isEmpty()) {
@@ -163,9 +165,9 @@ fun ProPaywallScreen(onDismiss: () -> Unit) {
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                         modifier = Modifier.padding(vertical = 24.dp),
                     ) {
-                        Text("요금제를 불러오지 못했어요", fontSize = 14.sp, color = Color.White.copy(alpha = 0.7f))
+                        Text(stringResource(R.string.paywall_loadFailed), fontSize = 14.sp, color = Color.White.copy(alpha = 0.7f))
                         Text(
-                            "다시 시도",
+                            stringResource(R.string.paywall_retry),
                             fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = TteOrange,
                             modifier = Modifier.clickable { ProManager.loadOfferings() },
                         )
@@ -201,7 +203,7 @@ fun ProPaywallScreen(onDismiss: () -> Unit) {
                                 try {
                                     if (ProManager.purchase(activity, pkg)) Haptics.success(view)
                                 } catch (e: Exception) {
-                                    alertMessage = "결제에 실패했어요. 잠시 후 다시 시도해주세요."
+                                    alertMessage = LocaleManager.string(context, R.string.paywall_purchaseFailed)
                                 } finally {
                                     isPurchasing = false
                                 }
@@ -211,7 +213,7 @@ fun ProPaywallScreen(onDismiss: () -> Unit) {
                     if (isPurchasing) {
                         CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
                     } else {
-                        Text("구독 시작하기", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                        Text(stringResource(R.string.paywall_subscribe), fontSize = 17.sp, fontWeight = FontWeight.Bold, color = Color.White)
                     }
                 }
                 Row(
@@ -221,23 +223,23 @@ fun ProPaywallScreen(onDismiss: () -> Unit) {
                         .padding(bottom = 24.dp),
                 ) {
                     Text(
-                        "구매 복원", fontSize = 12.sp, color = Color.White.copy(alpha = 0.5f),
+                        stringResource(R.string.paywall_restore), fontSize = 12.sp, color = Color.White.copy(alpha = 0.5f),
                         modifier = Modifier.clickable {
                             scope.launch {
                                 alertMessage = try {
-                                    if (ProManager.restore()) "구독이 복원됐어요!" else "복원할 구독을 찾지 못했어요."
+                                    if (ProManager.restore()) LocaleManager.string(context, R.string.paywall_restored) else LocaleManager.string(context, R.string.paywall_nothingToRestore)
                                 } catch (e: Exception) {
-                                    "복원에 실패했어요. 잠시 후 다시 시도해주세요."
+                                    LocaleManager.string(context, R.string.paywall_restoreFailed)
                                 }
                             }
                         },
                     )
                     Text(
-                        "이용약관", fontSize = 12.sp, color = Color.White.copy(alpha = 0.5f),
+                        stringResource(R.string.settings_terms), fontSize = 12.sp, color = Color.White.copy(alpha = 0.5f),
                         modifier = Modifier.clickable { openUrl("https://tteona.kr/terms.html") },
                     )
                     Text(
-                        "개인정보처리방침", fontSize = 12.sp, color = Color.White.copy(alpha = 0.5f),
+                        stringResource(R.string.paywall_privacyPolicy), fontSize = 12.sp, color = Color.White.copy(alpha = 0.5f),
                         modifier = Modifier.clickable { openUrl("https://tteona.kr/privacy.html") },
                     )
                 }
@@ -245,7 +247,7 @@ fun ProPaywallScreen(onDismiss: () -> Unit) {
         }
     }
 
-    alertMessage?.let { InfoAlert("알림", it) { alertMessage = null } }
+    alertMessage?.let { InfoAlert(stringResource(R.string.common_notice), it) { alertMessage = null } }
 }
 
 @Composable
@@ -284,10 +286,10 @@ private fun PackageCard(pkg: Package, monthly: Package?, selected: Package?, onS
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(if (isAnnual) "연간" else "월간", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                Text(if (isAnnual) stringResource(R.string.paywall_annual) else stringResource(R.string.paywall_monthly), fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White)
                 savings?.let {
                     Text(
-                        "$it% 할인", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White,
+                        stringResource(R.string.paywall_discount, it), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White,
                         modifier = Modifier
                             .clip(CircleShape)
                             .background(TteOrange)
@@ -296,7 +298,7 @@ private fun PackageCard(pkg: Package, monthly: Package?, selected: Package?, onS
                 }
             }
             Text(
-                if (isAnnual) "1년에 한 번 결제" else "언제든 해지 가능",
+                if (isAnnual) stringResource(R.string.paywall_billedAnnually) else stringResource(R.string.paywall_cancelAnytime),
                 fontSize = 12.sp, color = Color.White.copy(alpha = 0.55f),
             )
         }

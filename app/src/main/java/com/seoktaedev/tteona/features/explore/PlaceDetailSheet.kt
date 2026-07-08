@@ -49,10 +49,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import com.seoktaedev.tteona.R
 import com.seoktaedev.tteona.core.auth.AuthService
+import com.seoktaedev.tteona.core.i18n.LocaleManager
 import com.seoktaedev.tteona.core.model.Place
 import com.seoktaedev.tteona.core.services.GooglePlaceReview
 import com.seoktaedev.tteona.core.services.PlaceDetail
@@ -87,6 +91,7 @@ fun PlaceDetailSheet(
     var isLoadingReviews by remember { mutableStateOf(true) }
     var selectedTab by remember { mutableIntStateOf(0) } // 0=구글, 1=떠나
 
+    val context = LocalContext.current
     var reviewForAction by remember { mutableStateOf<TteonaPlaceReview?>(null) }
     var showReportDialog by remember { mutableStateOf(false) }
     var showBlockDialog by remember { mutableStateOf(false) }
@@ -130,7 +135,7 @@ fun PlaceDetailSheet(
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                             StarRow(rating = rating, color = Color(0xFFF5C518), size = 12)
                             Text(String.format("%.1f", rating), fontSize = 13.sp, fontWeight = FontWeight.Medium, color = TteDarkGray)
-                            Text("리뷰 ${detail?.reviewCount ?: 0}개", fontSize = 12.sp, color = TteMediumGray)
+                            Text(stringResource(R.string.placedetail_reviewCount, detail?.reviewCount ?: 0), fontSize = 12.sp, color = TteMediumGray)
                         }
                     }
                 }
@@ -138,7 +143,7 @@ fun PlaceDetailSheet(
                 if (visitCount > 0) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(3.dp)) {
                         Icon(Icons.Filled.LocationOn, contentDescription = null, tint = TteOrange, modifier = Modifier.size(22.dp))
-                        Text("떠나 ${visitCount}명", fontSize = 10.sp, fontWeight = FontWeight.Medium, color = TteMediumGray)
+                        Text(stringResource(R.string.placedetail_visitorCount, visitCount), fontSize = 10.sp, fontWeight = FontWeight.Medium, color = TteMediumGray)
                     }
                 }
             }
@@ -180,8 +185,8 @@ fun PlaceDetailSheet(
 
             // 탭 바
             Row(Modifier.padding(horizontal = 20.dp)) {
-                TabButton("구글 리뷰", selectedTab == 0, Modifier.weight(1f)) { selectedTab = 0 }
-                TabButton("떠나 후기", selectedTab == 1, Modifier.weight(1f)) { selectedTab = 1 }
+                TabButton(stringResource(R.string.placedetail_googleReviews), selectedTab == 0, Modifier.weight(1f)) { selectedTab = 0 }
+                TabButton(stringResource(R.string.placedetail_tteonaReviews), selectedTab == 1, Modifier.weight(1f)) { selectedTab = 1 }
             }
             HorizontalDivider()
 
@@ -193,7 +198,7 @@ fun PlaceDetailSheet(
                         GoogleReviewRow(review)
                         HorizontalDivider(Modifier.padding(horizontal = 20.dp))
                     }
-                    else -> EmptyReviewState("구글 리뷰가 없어요")
+                    else -> EmptyReviewState(stringResource(R.string.placedetail_noGoogleReviews))
                 }
             } else {
                 when {
@@ -207,7 +212,7 @@ fun PlaceDetailSheet(
                         )
                         HorizontalDivider(Modifier.padding(horizontal = 20.dp))
                     }
-                    else -> EmptyReviewState("아직 떠나 방문 기록이 없어요\n이 코스를 따라가면 첫 번째가 되어보세요!")
+                    else -> EmptyReviewState(stringResource(R.string.placedetail_noVisits))
                 }
             }
         }
@@ -217,7 +222,7 @@ fun PlaceDetailSheet(
     if (showReportDialog) {
         AlertDialog(
             onDismissRequest = { showReportDialog = false },
-            title = { Text("신고 사유를 선택해주세요") },
+            title = { Text(stringResource(R.string.report_selectReason)) },
             text = {
                 Column {
                     ReportService.REASONS.forEach { reason ->
@@ -242,7 +247,7 @@ fun PlaceDetailSheet(
                                                     reason = reason,
                                                 )
                                             }.onSuccess {
-                                                resultMessage = "신고 완료" to "신고가 정상 접수되었습니다. 24시간 이내에 검토 및 삭제 처리됩니다."
+                                                resultMessage = LocaleManager.string(context, R.string.report_done_title) to LocaleManager.string(context, R.string.report_done_message)
                                             }
                                         }
                                     }
@@ -254,7 +259,7 @@ fun PlaceDetailSheet(
             },
             confirmButton = {},
             dismissButton = {
-                TextButton(onClick = { showReportDialog = false }) { Text("취소", color = TteMediumGray) }
+                TextButton(onClick = { showReportDialog = false }) { Text(stringResource(R.string.common_cancel), color = TteMediumGray) }
             },
         )
     }
@@ -263,8 +268,8 @@ fun PlaceDetailSheet(
     if (showBlockDialog) {
         AlertDialog(
             onDismissRequest = { showBlockDialog = false },
-            title = { Text("리뷰 작성자 차단") },
-            text = { Text("이 리뷰 작성자를 차단하시겠어요? 차단하시면 이 작성자가 등록한 모든 코스와 후기가 숨겨집니다.") },
+            title = { Text(stringResource(R.string.placedetail_blockReviewer_title)) },
+            text = { Text(stringResource(R.string.placedetail_blockReviewer_message)) },
             confirmButton = {
                 TextButton(onClick = {
                     showBlockDialog = false
@@ -276,14 +281,14 @@ fun PlaceDetailSheet(
                                     tteonaReviews = tteonaReviews.filter { it.userId != review.userId }
                                     // 차단 즉시 이 작성자의 코스도 홈/탐색 목록에서 숨긴다
                                     com.seoktaedev.tteona.core.services.CourseService.hideAuthorCourses(review.userId)
-                                    resultMessage = "차단 완료" to "작성자가 차단되었습니다. 목록에서 후기가 삭제되었습니다."
+                                    resultMessage = LocaleManager.string(context, R.string.block_done_title) to LocaleManager.string(context, R.string.placedetail_blockDone_message)
                                 }
                         }
                     }
-                }) { Text("차단", color = Color.Red) }
+                }) { Text(stringResource(R.string.block_action), color = Color.Red) }
             },
             dismissButton = {
-                TextButton(onClick = { showBlockDialog = false }) { Text("취소", color = TteMediumGray) }
+                TextButton(onClick = { showBlockDialog = false }) { Text(stringResource(R.string.common_cancel), color = TteMediumGray) }
             },
         )
     }
@@ -295,7 +300,7 @@ fun PlaceDetailSheet(
             title = { Text(title) },
             text = { Text(message) },
             confirmButton = {
-                TextButton(onClick = { resultMessage = null }) { Text("확인", color = TteOrange) }
+                TextButton(onClick = { resultMessage = null }) { Text(stringResource(R.string.common_ok), color = TteOrange) }
             },
         )
     }
@@ -425,22 +430,22 @@ private fun TteonaReviewRow(
             }
             Spacer(Modifier.weight(1f))
             Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(relativeTime(review.createdAt.time), fontSize = 11.sp, color = TteMediumGray)
+                Text(relativeTime(LocalContext.current, review.createdAt.time), fontSize = 11.sp, color = TteMediumGray)
                 if (currentUserId != null && review.userId != currentUserId) {
                     Box {
                         Icon(
                             Icons.Filled.MoreHoriz,
-                            contentDescription = "더보기",
+                            contentDescription = stringResource(R.string.common_more),
                             tint = TteMediumGray,
                             modifier = Modifier.size(18.dp).clickable { showMenu = true },
                         )
                         androidx.compose.material3.DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
                             androidx.compose.material3.DropdownMenuItem(
-                                text = { Text("신고하기", color = Color.Red) },
+                                text = { Text(stringResource(R.string.report_action), color = Color.Red) },
                                 onClick = { showMenu = false; onReport() },
                             )
                             androidx.compose.material3.DropdownMenuItem(
-                                text = { Text("작성자 차단하기") },
+                                text = { Text(stringResource(R.string.detail_blockAuthor)) },
                                 onClick = { showMenu = false; onBlock() },
                             )
                         }
@@ -453,13 +458,13 @@ private fun TteonaReviewRow(
 }
 
 /** iOS Text(date, style: .relative) 대응 간이 상대시간 */
-fun relativeTime(epochMs: Long): String {
+fun relativeTime(context: android.content.Context, epochMs: Long): String {
     val diff = System.currentTimeMillis() - epochMs
     val minutes = TimeUnit.MILLISECONDS.toMinutes(diff)
     return when {
-        minutes < 1 -> "방금"
-        minutes < 60 -> "${minutes}분 전"
-        minutes < 60 * 24 -> "${TimeUnit.MILLISECONDS.toHours(diff)}시간 전"
-        else -> "${TimeUnit.MILLISECONDS.toDays(diff)}일 전"
+        minutes < 1 -> LocaleManager.string(context, R.string.time_justNow)
+        minutes < 60 -> LocaleManager.string(context, R.string.time_minutesAgo, minutes.toInt())
+        minutes < 60 * 24 -> LocaleManager.string(context, R.string.time_hoursAgo, TimeUnit.MILLISECONDS.toHours(diff).toInt())
+        else -> LocaleManager.string(context, R.string.time_daysAgo, TimeUnit.MILLISECONDS.toDays(diff).toInt())
     }
 }

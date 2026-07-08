@@ -64,7 +64,10 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil3.compose.SubcomposeAsyncImage
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.res.stringResource
+import com.seoktaedev.tteona.R
 import com.seoktaedev.tteona.core.auth.AuthService
+import com.seoktaedev.tteona.core.i18n.LocaleManager
 import com.seoktaedev.tteona.core.model.AppUser
 import com.seoktaedev.tteona.core.services.CourseService
 import com.seoktaedev.tteona.core.util.Haptics
@@ -98,6 +101,7 @@ fun CourseDetailScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val view = LocalView.current
+    val context = LocalContext.current
     var showRoomSelect by remember { androidx.compose.runtime.mutableStateOf(false) }
     var showOverflowMenu by remember { androidx.compose.runtime.mutableStateOf(false) }
     var showReportDialog by remember { androidx.compose.runtime.mutableStateOf(false) }
@@ -141,7 +145,7 @@ fun CourseDetailScreen(
                     .background(Color.Black.copy(alpha = 0.35f))
                     .clickable(onClick = onClose),
             ) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "닫기", tint = Color.White)
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.common_close), tint = Color.White)
             }
 
             // 우상단: 공유 + 더보기 (iOS ToolbarItem topBarTrailing)
@@ -151,7 +155,6 @@ fun CourseDetailScreen(
                     .align(Alignment.TopEnd)
                     .padding(end = 16.dp, top = 52.dp),
             ) {
-                val context = LocalContext.current
                 Box(
                     contentAlignment = Alignment.Center,
                     modifier = Modifier
@@ -170,10 +173,10 @@ fun CourseDetailScreen(
                                 type = "text/plain"
                                 putExtra(android.content.Intent.EXTRA_TEXT, url)
                             }
-                            context.startActivity(android.content.Intent.createChooser(intent, "코스 공유"))
+                            context.startActivity(android.content.Intent.createChooser(intent, LocaleManager.string(context, R.string.detail_shareCourse)))
                         },
                 ) {
-                    Icon(Icons.Filled.Share, contentDescription = "공유", tint = Color.White, modifier = Modifier.size(18.dp))
+                    Icon(Icons.Filled.Share, contentDescription = stringResource(R.string.common_share), tint = Color.White, modifier = Modifier.size(18.dp))
                 }
                 Box {
                     Box(
@@ -184,21 +187,21 @@ fun CourseDetailScreen(
                             .background(Color.Black.copy(alpha = 0.35f))
                             .clickable { showOverflowMenu = true },
                     ) {
-                        Icon(Icons.Filled.MoreHoriz, contentDescription = "더보기", tint = Color.White, modifier = Modifier.size(18.dp))
+                        Icon(Icons.Filled.MoreHoriz, contentDescription = stringResource(R.string.common_more), tint = Color.White, modifier = Modifier.size(18.dp))
                     }
                     DropdownMenu(expanded = showOverflowMenu, onDismissRequest = { showOverflowMenu = false }) {
                         if (course.authorId == AuthService.currentUser.value?.uid) {
                             DropdownMenuItem(
-                                text = { Text("코스 삭제", color = Color.Red) },
+                                text = { Text(stringResource(R.string.coursedetail_delete), color = Color.Red) },
                                 onClick = { showOverflowMenu = false; showDeleteConfirm = true },
                             )
                         } else {
                             DropdownMenuItem(
-                                text = { Text("코스 신고하기", color = Color.Red) },
+                                text = { Text(stringResource(R.string.detail_reportCourse), color = Color.Red) },
                                 onClick = { showOverflowMenu = false; showReportDialog = true },
                             )
                             DropdownMenuItem(
-                                text = { Text("작성자 차단하기") },
+                                text = { Text(stringResource(R.string.detail_blockAuthor)) },
                                 onClick = { showOverflowMenu = false; showBlockConfirm = true },
                             )
                         }
@@ -222,7 +225,7 @@ fun CourseDetailScreen(
                     onClick = {
                         Haptics.light(view)
                         if (onStartCourse != null) showRoomSelect = true
-                        else scope.launch { snackbarHostState.showSnackbar("그룹 여행 시작 기능은 준비 중이에요.") }
+                        else scope.launch { snackbarHostState.showSnackbar(LocaleManager.string(context, R.string.detail_groupTripComingSoon)) }
                     },
                     modifier = Modifier
                         .fillMaxWidth()
@@ -230,7 +233,7 @@ fun CourseDetailScreen(
                     shape = RoundedCornerShape(16.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = TteOrange),
                 ) {
-                    Text("이 코스 따라가기", fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.detail_followCourse), fontSize = 17.sp, fontWeight = FontWeight.Bold)
                 }
             }
 
@@ -249,9 +252,9 @@ fun CourseDetailScreen(
                                     reason = reason,
                                 )
                             }.onSuccess {
-                                infoAlert = "신고 완료" to "신고가 정상 접수되었습니다. 24시간 이내에 검토 및 삭제 처리됩니다."
+                                infoAlert = LocaleManager.string(context, R.string.report_done_title) to LocaleManager.string(context, R.string.report_done_message)
                             }.onFailure {
-                                infoAlert = "오류" to "신고 접수에 실패했어요. 잠시 후 다시 시도해주세요."
+                                infoAlert = LocaleManager.string(context, R.string.common_error) to LocaleManager.string(context, R.string.detail_reportFailed)
                             }
                         }
                     },
@@ -260,9 +263,9 @@ fun CourseDetailScreen(
             }
             if (showBlockConfirm) {
                 com.seoktaedev.tteona.features.common.DestructiveConfirmDialog(
-                    title = "작성자 차단",
-                    message = "이 작성자를 차단하시겠어요? 차단하시면 이 작성자가 등록한 모든 코스와 후기가 숨겨집니다.",
-                    confirmLabel = "차단",
+                    title = stringResource(R.string.block_author_title),
+                    message = stringResource(R.string.block_author_message),
+                    confirmLabel = stringResource(R.string.block_action),
                     onConfirm = {
                         val uid = AuthService.currentUser.value?.uid ?: return@DestructiveConfirmDialog
                         scope.launch {
@@ -270,10 +273,10 @@ fun CourseDetailScreen(
                                 .onSuccess {
                                     // 차단 즉시 목록에서 이 작성자의 코스를 숨긴다 (홈/탐색 재조회 전까지 노출 방지)
                                     CourseService.hideAuthorCourses(course.authorId)
-                                    infoAlert = "차단 완료" to "작성자가 차단되었습니다."
+                                    infoAlert = LocaleManager.string(context, R.string.block_done_title) to LocaleManager.string(context, R.string.block_doneShort)
                                 }
                                 .onFailure {
-                                    infoAlert = "오류" to "차단에 실패했어요. 잠시 후 다시 시도해주세요."
+                                    infoAlert = LocaleManager.string(context, R.string.common_error) to LocaleManager.string(context, R.string.detail_blockFailed)
                                 }
                         }
                     },
@@ -282,14 +285,14 @@ fun CourseDetailScreen(
             }
             if (showDeleteConfirm) {
                 com.seoktaedev.tteona.features.common.DestructiveConfirmDialog(
-                    title = "코스 삭제",
-                    message = "이 코스를 삭제할까요? 되돌릴 수 없어요.",
-                    confirmLabel = "삭제",
+                    title = stringResource(R.string.coursedetail_delete),
+                    message = stringResource(R.string.detail_deleteMessage),
+                    confirmLabel = stringResource(R.string.common_delete),
                     onConfirm = {
                         scope.launch {
                             runCatching { CourseService.deleteCourse(course) }
                                 .onSuccess { onClose() }
-                                .onFailure { infoAlert = "오류" to "코스 삭제에 실패했어요. 잠시 후 다시 시도해주세요." }
+                                .onFailure { infoAlert = LocaleManager.string(context, R.string.common_error) to LocaleManager.string(context, R.string.detail_deleteFailed) }
                         }
                     },
                     onDismiss = { showDeleteConfirm = false },
@@ -340,7 +343,7 @@ private fun HeaderImage(course: Course, thumbnailUrl: String?) {
                 .padding(20.dp),
         ) {
             Text(
-                "${course.tag.emoji} ${course.tag.label} · ${course.region}",
+                "${course.tag.emoji} ${stringResource(course.tag.labelRes)} · ${course.region}",
                 fontSize = 13.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = Color.White.copy(alpha = 0.9f),
@@ -376,25 +379,25 @@ private fun TitleBlock(
         Column(modifier = Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    author?.nickname?.takeIf { it.isNotEmpty() } ?: "여행자",
+                    author?.nickname?.takeIf { it.isNotEmpty() } ?: stringResource(R.string.detail_traveler),
                     fontSize = 15.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = TteDarkGray,
                 )
                 if (author?.isVerified == true) {
                     Spacer(Modifier.width(4.dp))
-                    Icon(Icons.Filled.Verified, contentDescription = "인증됨", tint = TteOrange, modifier = Modifier.size(12.dp))
+                    Icon(Icons.Filled.Verified, contentDescription = stringResource(R.string.common_verified), tint = TteOrange, modifier = Modifier.size(12.dp))
                 }
             }
             Text(
-                "장소 ${course.displayPlaces.size}곳 · ♥ ${course.likeCount}",
+                stringResource(R.string.detail_placesLikes, course.displayPlaces.size, course.likeCount),
                 fontSize = 13.sp,
                 color = TteMediumGray,
             )
         }
         Icon(
             if (isLiked) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
-            contentDescription = "좋아요",
+            contentDescription = stringResource(R.string.detail_like),
             tint = TteOrange,
             modifier = Modifier
                 .size(26.dp)
@@ -416,7 +419,7 @@ private fun WeatherCard(weather: WeatherInfo?) {
     ) {
         Text(weather?.emoji ?: "🌡️", fontSize = 22.sp)
         Column {
-            Text("현재 날씨 (첫 장소 기준)", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = TteMediumGray)
+            Text(stringResource(R.string.detail_currentWeather), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = TteMediumGray)
             Text(
                 weather?.let { "${it.tempC.toInt()}° ${it.description}" } ?: "-",
                 fontSize = 15.sp,
@@ -430,7 +433,7 @@ private fun WeatherCard(weather: WeatherInfo?) {
 @Composable
 private fun TransportSection(state: CourseDetailViewModel.UiState) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text("이동 정보", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = TteDarkGray)
+        Text(stringResource(R.string.detail_transport), fontSize = 16.sp, fontWeight = FontWeight.Bold, color = TteDarkGray)
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -438,9 +441,9 @@ private fun TransportSection(state: CourseDetailViewModel.UiState) {
                 .background(TteFieldBackground)
                 .padding(vertical = 4.dp),
         ) {
-            TransportRow(Icons.Filled.DirectionsCar, "자동차", state.carRoute, state.isLoadingRoute)
-            TransportRow(Icons.Filled.DirectionsBus, "대중교통", state.transitRoute, state.isLoadingTransit, "정보 없음")
-            TransportRow(Icons.AutoMirrored.Filled.DirectionsWalk, "도보", state.walkRoute, state.isLoadingRoute)
+            TransportRow(Icons.Filled.DirectionsCar, stringResource(R.string.detail_transport_car), state.carRoute, state.isLoadingRoute)
+            TransportRow(Icons.Filled.DirectionsBus, stringResource(R.string.detail_transport_transit), state.transitRoute, state.isLoadingTransit, stringResource(R.string.detail_noInfo))
+            TransportRow(Icons.AutoMirrored.Filled.DirectionsWalk, stringResource(R.string.detail_transport_walk), state.walkRoute, state.isLoadingRoute)
         }
     }
 }
@@ -481,7 +484,7 @@ private fun PlacesBlock(course: Course) {
     var selectedPlace by remember { androidx.compose.runtime.mutableStateOf<Place?>(null) }
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("코스 동선", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = TteDarkGray)
+        Text(stringResource(R.string.detail_courseRoute), fontSize = 16.sp, fontWeight = FontWeight.Bold, color = TteDarkGray)
 
         CourseRouteMap(course)
 

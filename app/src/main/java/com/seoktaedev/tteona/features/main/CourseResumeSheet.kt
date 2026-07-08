@@ -30,8 +30,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.seoktaedev.tteona.R
 import com.seoktaedev.tteona.core.services.ActiveSessionStore
 import com.seoktaedev.tteona.ui.theme.TteDarkGray
 import com.seoktaedev.tteona.ui.theme.TteFieldBackground
@@ -69,10 +71,10 @@ fun CourseResumeSheet(
                 Icon(Icons.Filled.History, contentDescription = null, tint = TteOrange, modifier = Modifier.size(30.dp))
             }
             Spacer(Modifier.height(16.dp))
-            Text("진행 중인 코스가 있어요", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = TteDarkGray)
+            Text(stringResource(R.string.main_activeCourseBanner), fontSize = 20.sp, fontWeight = FontWeight.Bold, color = TteDarkGray)
             saved?.let {
                 Text(
-                    "${it.course.courseName} · ${it.visitedPlaceOrders.size}/${it.orderedPlaces.size}곳 완료",
+                    stringResource(R.string.main_courseProgress, it.course.courseName, it.visitedPlaceOrders.size, it.orderedPlaces.size),
                     fontSize = 14.sp, color = TteMediumGray,
                     modifier = Modifier.padding(top = 6.dp),
                 )
@@ -89,7 +91,7 @@ fun CourseResumeSheet(
                     .clickable(onClick = onResume),
             ) {
                 Icon(Icons.Filled.PlayArrow, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
-                Text("이어서 기록하기", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+                Text(stringResource(R.string.main_continueRecording), fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
             }
             Spacer(Modifier.height(12.dp))
             Row(
@@ -103,7 +105,7 @@ fun CourseResumeSheet(
                     .clickable(onClick = onStartNew),
             ) {
                 Icon(Icons.Filled.Refresh, contentDescription = null, tint = TteDarkGray, modifier = Modifier.size(18.dp))
-                Text("새로 시작하기", fontSize = 16.sp, fontWeight = FontWeight.Medium, color = TteDarkGray)
+                Text(stringResource(R.string.main_startFresh), fontSize = 16.sp, fontWeight = FontWeight.Medium, color = TteDarkGray)
             }
         }
     }

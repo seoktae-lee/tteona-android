@@ -18,6 +18,7 @@ import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.auth.auth
 import com.google.firebase.firestore.firestore
 import com.seoktaedev.tteona.R
+import com.seoktaedev.tteona.core.i18n.LocaleManager
 import com.seoktaedev.tteona.core.model.AppUser
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -56,7 +57,11 @@ object AuthService {
 
     val isLoggedIn: Boolean get() = _currentUser.value != null
 
+    // 현지화 에러 메시지용 앱 컨텍스트 — initialize/abortInitialization에서 주입
+    private lateinit var appContext: Context
+
     fun initialize(context: Context) {
+        appContext = context.applicationContext
         // 앱 재설치 시 남은 Firebase 토큰 제거 (iOS의 Keychain 잔존 토큰 처리와 동일)
         val prefs = context.getSharedPreferences("tteona", Context.MODE_PRIVATE)
         if (!prefs.getBoolean("app_installed", false)) {
@@ -101,8 +106,8 @@ object AuthService {
         _isLoading.value = true
         _errorMessage.value = null
         try {
-            if (!isValidEmail(email)) { _errorMessage.value = "올바른 이메일 형식이 아닙니다."; return }
-            if (password.length < 6) { _errorMessage.value = "비밀번호는 6자 이상이어야 합니다."; return }
+            if (!isValidEmail(email)) { _errorMessage.value = LocaleManager.string(appContext, R.string.auth_error_invalidEmail); return }
+            if (password.length < 6) { _errorMessage.value = LocaleManager.string(appContext, R.string.auth_error_shortPassword); return }
 
             val result = auth.signInWithEmailAndPassword(email, password).await()
             val user = result.user ?: return
@@ -126,8 +131,8 @@ object AuthService {
         _isLoading.value = true
         _errorMessage.value = null
         try {
-            if (!isValidEmail(email)) { _errorMessage.value = "올바른 이메일 형식이 아닙니다."; return }
-            if (password.length < 6) { _errorMessage.value = "비밀번호는 6자 이상이어야 합니다."; return }
+            if (!isValidEmail(email)) { _errorMessage.value = LocaleManager.string(appContext, R.string.auth_error_invalidEmail); return }
+            if (password.length < 6) { _errorMessage.value = LocaleManager.string(appContext, R.string.auth_error_shortPassword); return }
 
             val result = auth.createUserWithEmailAndPassword(email, password).await()
             result.user?.sendEmailVerification()?.await()
@@ -144,12 +149,12 @@ object AuthService {
                         _errorMessage.value = null
                     } else {
                         auth.signOut()
-                        _errorMessage.value = "이미 가입된 이메일입니다. 로그인해주세요."
+                        _errorMessage.value = LocaleManager.string(appContext, R.string.auth_error_emailInUse)
                     }
                 } catch (_: Exception) {
                     // 비밀번호가 달라 로그인 실패한 경우
                     _errorMessage.value =
-                        "이미 가입 진행 중인 이메일이에요.\n처음 설정한 비밀번호로 로그인해 인증을 완료하거나, 비밀번호 재설정을 진행해주세요."
+                        LocaleManager.string(appContext, R.string.auth_error_signupInProgress)
                 }
             } else {
                 _errorMessage.value = firebaseErrorMessage(e)
@@ -169,7 +174,7 @@ object AuthService {
             if (user == null) {
                 // 앱 재실행 등으로 세션이 없으면 입력된 계정으로 로그인 후 확인
                 if (email.isEmpty() || password.isEmpty()) {
-                    _errorMessage.value = "인증 확인을 위해 이메일/비밀번호를 다시 입력해주세요."
+                    _errorMessage.value = LocaleManager.string(appContext, R.string.auth_reenterForVerify)
                     return
                 }
                 user = auth.signInWithEmailAndPassword(email, password).await().user
@@ -184,10 +189,10 @@ object AuthService {
                 _verificationEmailSent.value = false
             } else {
                 if (auth.currentUser?.isEmailVerified == false && email.isNotEmpty()) auth.signOut()
-                _errorMessage.value = "아직 인증이 완료되지 않았어요.\n메일함에서 링크를 클릭한 후 다시 눌러주세요."
+                _errorMessage.value = LocaleManager.string(appContext, R.string.auth_notVerifiedYet)
             }
         } catch (e: Exception) {
-            _errorMessage.value = "로그인에 실패했어요. 다시 시도해주세요."
+            _errorMessage.value = LocaleManager.string(appContext, R.string.auth_signInFailed)
         } finally {
             _isLoading.value = false
         }
@@ -209,10 +214,10 @@ object AuthService {
                 _errorMessage.value = null
                 return true
             }
-            _errorMessage.value = "재전송을 위해 이메일/비밀번호를 입력해주세요."
+            _errorMessage.value = LocaleManager.string(appContext, R.string.auth_reenterForResend)
             return false
         } catch (e: Exception) {
-            _errorMessage.value = "인증 메일 재전송에 실패했어요. 잠시 후 다시 시도해주세요."
+            _errorMessage.value = LocaleManager.string(appContext, R.string.auth_resendFailed)
             return false
         }
     }
@@ -220,7 +225,7 @@ object AuthService {
     // MARK: - 비밀번호 재설정
     suspend fun sendPasswordReset(email: String): Boolean {
         if (!isValidEmail(email)) {
-            _errorMessage.value = "올바른 이메일 형식이 아닙니다."
+            _errorMessage.value = LocaleManager.string(appContext, R.string.auth_error_invalidEmail)
             return false
         }
         return try {
@@ -273,16 +278,16 @@ object AuthService {
                 _currentUser.value = AppUser(uid = user.uid, email = user.email ?: "")
                 refreshOnboardingStatus(user.uid)
             } else {
-                _errorMessage.value = "Google 인증 토큰을 가져올 수 없습니다."
+                _errorMessage.value = LocaleManager.string(appContext, R.string.auth_error_googleToken)
             }
         } catch (_: GetCredentialCancellationException) {
             // 사용자가 로그인 창을 닫음 — 에러 표시하지 않음
         } catch (e: NoCredentialException) {
             Log.w("Auth", "Google 로그인 실패 — 기기에 계정 없음", e)
-            _errorMessage.value = "이 기기에 로그인된 Google 계정이 없어요.\n설정 > 계정에서 Google 계정을 추가한 뒤 다시 시도해주세요."
+            _errorMessage.value = LocaleManager.string(appContext, R.string.auth_error_googleNoAccount)
         } catch (e: Exception) {
             Log.w("Auth", "Google 로그인 실패", e)
-            _errorMessage.value = "Google 로그인에 실패했습니다. (${e.javaClass.simpleName})\n잠시 후 다시 시도해주세요."
+            _errorMessage.value = LocaleManager.string(appContext, R.string.auth_error_googleFailedAndroid, e.javaClass.simpleName)
         } finally {
             _isLoading.value = false
         }
@@ -302,7 +307,7 @@ object AuthService {
                 .await()
             val customToken = (result.data as? Map<*, *>)?.get("customToken") as? String
             if (customToken.isNullOrEmpty()) {
-                _errorMessage.value = "서버 응답이 올바르지 않아요."
+                _errorMessage.value = LocaleManager.string(appContext, R.string.auth_error_invalidResponse)
                 return
             }
 
@@ -313,7 +318,7 @@ object AuthService {
             refreshOnboardingStatus(user.uid)
         } catch (e: Exception) {
             Log.w("Auth", "카카오 로그인 실패", e)
-            _errorMessage.value = "카카오 로그인에 실패했어요. 잠시 후 다시 시도해주세요."
+            _errorMessage.value = LocaleManager.string(appContext, R.string.auth_error_kakaoFailedSimple)
         } finally {
             _isLoading.value = false
         }
@@ -369,7 +374,7 @@ object AuthService {
             _currentUser.value = _currentUser.value?.copy(nickname = nickname)
             _onboardingComplete.value = true
         } catch (e: Exception) {
-            _errorMessage.value = "프로필 저장에 실패했어요. 다시 시도해주세요."
+            _errorMessage.value = LocaleManager.string(appContext, R.string.auth_error_profileSaveFailed)
         } finally {
             _isLoading.value = false
         }
@@ -406,7 +411,7 @@ object AuthService {
             true
         } catch (e: Exception) {
             Log.w("Auth", "회원탈퇴 실패", e)
-            _errorMessage.value = "회원 탈퇴에 실패했어요. 잠시 후 다시 시도해주세요."
+            _errorMessage.value = LocaleManager.string(appContext, R.string.settings_deleteFailed_message)
             false
         } finally {
             _isLoading.value = false
@@ -421,9 +426,10 @@ object AuthService {
      * Firebase 초기화 실패(google-services.json 누락 등) 시 호출.
      * 스플래시(isInitializing) 무한 로딩을 막고 로그인 화면으로 빠지게 한다.
      */
-    fun abortInitialization() {
+    fun abortInitialization(context: Context) {
+        appContext = context.applicationContext
         _isInitializing.value = false
-        _errorMessage.value = "앱 초기화에 실패했어요. 네트워크 확인 후 다시 실행해주세요."
+        _errorMessage.value = LocaleManager.string(appContext, R.string.auth_error_initFailed)
     }
 
     // MARK: - Helpers
@@ -437,15 +443,15 @@ object AuthService {
         Regex("^[A-Z0-9a-z._%+\\-]+@[A-Za-z0-9.\\-]+\\.[A-Za-z]{2,}$").matches(email)
 
     private fun firebaseErrorMessage(e: Exception): String {
-        if (e is FirebaseNetworkException) return "네트워크 오류가 발생했습니다."
+        if (e is FirebaseNetworkException) return LocaleManager.string(appContext, R.string.auth_error_network)
         val code = (e as? FirebaseAuthException)?.errorCode
         return when (code) {
-            "ERROR_EMAIL_ALREADY_IN_USE" -> "이미 사용 중인 이메일입니다."
-            "ERROR_INVALID_EMAIL" -> "올바른 이메일 형식이 아닙니다."
-            "ERROR_WRONG_PASSWORD", "ERROR_INVALID_CREDENTIAL" -> "비밀번호가 올바르지 않습니다."
-            "ERROR_USER_NOT_FOUND" -> "존재하지 않는 계정입니다."
-            "ERROR_WEAK_PASSWORD" -> "비밀번호는 6자 이상이어야 합니다."
-            else -> "오류가 발생했습니다. 다시 시도해주세요."
+            "ERROR_EMAIL_ALREADY_IN_USE" -> LocaleManager.string(appContext, R.string.auth_error_emailInUse)
+            "ERROR_INVALID_EMAIL" -> LocaleManager.string(appContext, R.string.auth_error_invalidEmail)
+            "ERROR_WRONG_PASSWORD", "ERROR_INVALID_CREDENTIAL" -> LocaleManager.string(appContext, R.string.auth_error_wrongPassword)
+            "ERROR_USER_NOT_FOUND" -> LocaleManager.string(appContext, R.string.auth_error_userNotFound)
+            "ERROR_WEAK_PASSWORD" -> LocaleManager.string(appContext, R.string.auth_error_shortPassword)
+            else -> LocaleManager.string(appContext, R.string.auth_error_generic)
         }
     }
 }

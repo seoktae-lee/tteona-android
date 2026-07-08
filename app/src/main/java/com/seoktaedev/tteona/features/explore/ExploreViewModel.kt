@@ -21,10 +21,10 @@ import kotlinx.coroutines.launch
  */
 class ExploreViewModel : ViewModel() {
 
-    enum class SortMode(val label: String) {
-        RECOMMENDED("추천순"),
-        LATEST("최신순"),
-        POPULAR("인기순"),
+    enum class SortMode(val labelRes: Int) {
+        RECOMMENDED(com.seoktaedev.tteona.R.string.explore_sort_recommended),
+        LATEST(com.seoktaedev.tteona.R.string.explore_sort_latest),
+        POPULAR(com.seoktaedev.tteona.R.string.explore_sort_popular),
     }
 
     data class UiState(

@@ -77,6 +77,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -86,6 +87,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.FileProvider
 import com.seoktaedev.tteona.R
 import com.seoktaedev.tteona.core.auth.AuthService
+import com.seoktaedev.tteona.core.i18n.LocaleManager
 import com.seoktaedev.tteona.core.model.Course
 import com.seoktaedev.tteona.core.services.CourseThumbnailService
 import com.seoktaedev.tteona.core.services.ProManager
@@ -112,12 +114,13 @@ fun VlogGenerationScreen(
     val context = LocalContext.current
     val view = LocalView.current
     val isPro by ProManager.isPro.collectAsState()
+    val creatingText = stringResource(R.string.vlog_creating)
 
     var phase by remember { mutableStateOf(Phase.CHOOSE_FORMAT) }
     var vlogFile by remember { mutableStateOf<File?>(null) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var progress by remember { mutableDoubleStateOf(0.0) }
-    var stageText by remember { mutableStateOf("추억을 만들고 있어요...") }
+    var stageText by remember { mutableStateOf(creatingText) }
     var savedFormatsCount by remember { mutableIntStateOf(0) }
     var selectedFormats by remember { mutableStateOf<Set<String>>(emptySet()) }
     var didGenerate by remember { mutableStateOf(false) }
@@ -186,7 +189,7 @@ fun VlogGenerationScreen(
             onClose = onDismissToHome,
         )
         Phase.CHOOSE_BGM -> ChooseBgmView(
-            courseTagLabel = course.tag.label,
+            courseTagLabel = stringResource(course.tag.labelRes),
             selectedBgm = selectedBgm,
             isPro = isPro,
             onSelect = { id, locked -> if (locked) showProNotice = true else selectedBgm = id },
@@ -216,7 +219,7 @@ fun VlogGenerationScreen(
         didGenerate = true
         val uid = AuthService.currentUser.value?.uid
         try {
-            if (uid == null) throw VlogServerService.ServerVlogException("로그인이 필요해요.")
+            if (uid == null) throw VlogServerService.ServerVlogException(LocaleManager.string(context, R.string.vlog_loginRequired))
             val result = VlogServerService.generate(
                 context = context,
                 course = course,
@@ -269,9 +272,9 @@ private fun ChooseFormatView(
             modifier = Modifier.fillMaxSize().navigationBarsPadding(),
         ) {
             Spacer(Modifier.weight(1f))
-            Text("어떤 포맷으로 만들까요?", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color.White)
+            Text(stringResource(R.string.vlog_formatSheet_title), fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color.White)
             Text(
-                "촬영 방향에 딱 맞는 포맷은 기본으로 포함돼요",
+                stringResource(R.string.vlog_formatSheet_subtitle),
                 fontSize = 13.sp,
                 color = Color.White.copy(alpha = 0.65f),
                 modifier = Modifier.padding(top = 6.dp),
@@ -282,24 +285,24 @@ private fun ChooseFormatView(
                 modifier = Modifier.padding(horizontal = 24.dp).padding(top = 28.dp),
             ) {
                 FormatRow(
-                    icon = Icons.Filled.Smartphone, title = "릴스 · 세로", ratio = "9:16",
-                    subtitle = if (baseFormat == "reels") "기본 포함 · 촬영 방향 그대로" else "블러 배경으로 변환",
-                    badge = if (baseFormat == "reels") "세로 촬영 특화" else null,
+                    icon = Icons.Filled.Smartphone, title = stringResource(R.string.vlog_format_reels), ratio = "9:16",
+                    subtitle = if (baseFormat == "reels") stringResource(R.string.vlog_format_included) else stringResource(R.string.vlog_format_blurConvert),
+                    badge = if (baseFormat == "reels") stringResource(R.string.vlog_format_portraitBadge) else null,
                     fixed = baseFormat == "reels",
                     locked = baseFormat != "reels" && !isPro,
                     isOn = baseFormat == "reels" || "reels" in selectedFormats,
                 ) { locked -> onToggle("reels", locked) }
                 FormatRow(
-                    icon = Icons.Filled.SmartDisplay, title = "유튜브 · 가로", ratio = "16:9",
-                    subtitle = if (baseFormat == "youtube") "기본 포함 · 촬영 방향 그대로" else "블러 배경으로 변환",
-                    badge = if (baseFormat == "youtube") "가로 촬영 특화" else null,
+                    icon = Icons.Filled.SmartDisplay, title = stringResource(R.string.vlog_format_youtube), ratio = "16:9",
+                    subtitle = if (baseFormat == "youtube") stringResource(R.string.vlog_format_included) else stringResource(R.string.vlog_format_blurConvert),
+                    badge = if (baseFormat == "youtube") stringResource(R.string.vlog_format_landscapeBadge) else null,
                     fixed = baseFormat == "youtube",
                     locked = baseFormat != "youtube" && !isPro,
                     isOn = baseFormat == "youtube" || "youtube" in selectedFormats,
                 ) { locked -> onToggle("youtube", locked) }
                 FormatRow(
-                    icon = Icons.Filled.CropSquare, title = "인스타 · 정방형", ratio = "1:1",
-                    subtitle = "여백 없이 꽉 차게 잘라서 변환",
+                    icon = Icons.Filled.CropSquare, title = stringResource(R.string.vlog_format_insta), ratio = "1:1",
+                    subtitle = stringResource(R.string.vlog_format_squareCrop),
                     badge = null, fixed = false, locked = !isPro,
                     isOn = "insta" in selectedFormats,
                 ) { locked -> onToggle("insta", locked) }
@@ -318,12 +321,12 @@ private fun ChooseFormatView(
                     .clickable(onClick = onNext),
             ) {
                 Text(
-                    if (selectedFormats.isEmpty()) "Vlog 만들기" else "${selectedFormats.size + 1}가지 버전으로 만들기",
+                    if (selectedFormats.isEmpty()) stringResource(R.string.session_makeVlog) else stringResource(R.string.vlog_makeVersions, selectedFormats.size + 1),
                     fontSize = 17.sp, fontWeight = FontWeight.Bold, color = Color.White,
                 )
             }
             Text(
-                "닫기",
+                stringResource(R.string.common_close),
                 fontSize = 14.sp,
                 color = Color.White.copy(alpha = 0.6f),
                 modifier = Modifier
@@ -461,9 +464,9 @@ private fun ChooseBgmView(
             modifier = Modifier.fillMaxSize().navigationBarsPadding(),
         ) {
             Spacer(Modifier.height(60.dp))
-            Text("어떤 음악과 함께할까요?", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color.White)
+            Text(stringResource(R.string.vlog_bgmSheet_title), fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color.White)
             Text(
-                "미리 들어보고 골라도, 그냥 맡겨도 좋아요",
+                stringResource(R.string.vlog_bgmSheet_subtitle),
                 fontSize = 13.sp,
                 color = Color.White.copy(alpha = 0.65f),
                 modifier = Modifier.padding(top = 6.dp),
@@ -478,14 +481,14 @@ private fun ChooseBgmView(
                     .padding(top = 28.dp, bottom = 12.dp),
             ) {
                 BgmRow(
-                    icon = Icons.Filled.AutoAwesome, name = "자동 추천", mood = courseTagLabel,
-                    subtitle = "여행 태그에 어울리는 음악을 골라드려요",
+                    icon = Icons.Filled.AutoAwesome, name = stringResource(R.string.vlog_bgm_auto), mood = courseTagLabel,
+                    subtitle = stringResource(R.string.vlog_bgm_auto_subtitle),
                     isOn = selectedBgm == "auto", locked = false, playing = false, hasPreview = false,
                     onClick = { onSelect("auto", false) }, onPreview = {},
                 )
                 BgmRow(
-                    icon = Icons.Filled.MusicOff, name = "음악 없이", mood = null,
-                    subtitle = "현장의 소리만 그대로 담아요",
+                    icon = Icons.Filled.MusicOff, name = stringResource(R.string.vlog_bgm_none), mood = null,
+                    subtitle = stringResource(R.string.vlog_bgm_none_subtitle),
                     isOn = selectedBgm == "none", locked = false, playing = false, hasPreview = false,
                     onClick = { onSelect("none", false) }, onPreview = {},
                 )
@@ -515,10 +518,10 @@ private fun ChooseBgmView(
                         onNext()
                     },
             ) {
-                Text("Vlog 만들기", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                Text(stringResource(R.string.session_makeVlog), fontSize = 17.sp, fontWeight = FontWeight.Bold, color = Color.White)
             }
             Text(
-                "이전으로",
+                stringResource(R.string.vlog_back),
                 fontSize = 14.sp,
                 color = Color.White.copy(alpha = 0.6f),
                 modifier = Modifier
@@ -587,7 +590,7 @@ private fun BgmRow(
             if (hasPreview) {
                 Icon(
                     if (playing) Icons.Filled.PauseCircle else Icons.Filled.PlayCircle,
-                    contentDescription = "미리듣기",
+                    contentDescription = stringResource(R.string.vlog_preview),
                     tint = Color.White.copy(alpha = 0.85f),
                     modifier = Modifier.size(26.dp).clickable(onClick = onPreview),
                 )
@@ -687,7 +690,7 @@ private fun VlogPreviewView(
             Text("🎉", fontSize = 26.sp, modifier = Modifier.offset(x = 10.dp, y = (-2).dp))
         }
         Spacer(Modifier.height(8.dp))
-        Text("Vlog가 완성됐어요!", fontSize = 23.sp, fontWeight = FontWeight.Bold, color = Color.White)
+        Text(stringResource(R.string.vlog_done_title), fontSize = 23.sp, fontWeight = FontWeight.Bold, color = Color.White)
         Spacer(Modifier.height(10.dp))
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -705,9 +708,9 @@ private fun VlogPreviewView(
             )
             Text(
                 when {
-                    savedFormatsCount > 1 -> "${savedFormatsCount}가지 버전이 앨범에 자동 저장됐어요"
-                    savedFormatsCount == 1 -> "완성된 영상은 앨범에 자동 저장됐어요"
-                    else -> "앨범 저장에 실패했어요 · 공유로 저장할 수 있어요"
+                    savedFormatsCount > 1 -> stringResource(R.string.vlog_done_savedMulti, savedFormatsCount)
+                    savedFormatsCount == 1 -> stringResource(R.string.vlog_done_savedSingle)
+                    else -> stringResource(R.string.vlog_done_saveFailed)
                 },
                 fontSize = 13.sp, fontWeight = FontWeight.Medium, color = Color.White.copy(alpha = 0.9f),
             )
@@ -766,19 +769,19 @@ private fun VlogPreviewView(
                     when (thumbState) {
                         ThumbState.IDLE -> {
                             Icon(Icons.Filled.Photo, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
-                            Text("탐색탭에 보여질 썸네일 고르기", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+                            Text(stringResource(R.string.vlog_thumbnail_pick), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
                         }
                         ThumbState.UPLOADING -> {
                             CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(16.dp))
-                            Text("썸네일 업로드 중...", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+                            Text(stringResource(R.string.vlog_thumbnail_uploading), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
                         }
                         ThumbState.DONE -> {
                             Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = Color(0xFF34C759), modifier = Modifier.size(18.dp))
-                            Text("썸네일 설정 완료 · 변경하기", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+                            Text(stringResource(R.string.vlog_thumbnail_done), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
                         }
                         ThumbState.FAILED -> {
                             Icon(Icons.Filled.Warning, contentDescription = null, tint = Color(0xFFFFCC00), modifier = Modifier.size(18.dp))
-                            Text("업로드 실패 · 다시 시도", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+                            Text(stringResource(R.string.vlog_thumbnail_failed), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
                         }
                     }
                     Spacer(Modifier.weight(1f))
@@ -798,7 +801,7 @@ private fun VlogPreviewView(
             ) {
                 Spacer(Modifier.weight(1f))
                 Icon(Icons.Filled.Share, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
-                Text("공유하기", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                Text(stringResource(R.string.vlog_share), fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White)
                 Spacer(Modifier.weight(1f))
             }
 
@@ -816,7 +819,7 @@ private fun VlogPreviewView(
             ) {
                 Spacer(Modifier.weight(1f))
                 Icon(Icons.Filled.Home, contentDescription = null, tint = Color.White.copy(alpha = 0.85f), modifier = Modifier.size(16.dp))
-                Text("홈으로 돌아가기", fontSize = 15.sp, fontWeight = FontWeight.Medium, color = Color.White.copy(alpha = 0.85f))
+                Text(stringResource(R.string.vlog_goHome), fontSize = 15.sp, fontWeight = FontWeight.Medium, color = Color.White.copy(alpha = 0.85f))
                 Spacer(Modifier.weight(1f))
             }
         }
@@ -841,7 +844,7 @@ private fun ErrorView(message: String?, onDismiss: () -> Unit) {
     ) {
         Spacer(Modifier.weight(1f))
         Icon(Icons.Filled.Error, contentDescription = null, tint = Color.Red, modifier = Modifier.size(48.dp))
-        Text("Vlog 생성에 실패했어요", fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+        Text(stringResource(R.string.vlog_failed), fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
         message?.let {
             Text(
                 it, fontSize = 13.sp, color = Color.White.copy(alpha = 0.7f),
@@ -858,7 +861,7 @@ private fun ErrorView(message: String?, onDismiss: () -> Unit) {
                 .background(TteOrange)
                 .clickable(onClick = onDismiss),
         ) {
-            Text("돌아가기", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+            Text(stringResource(R.string.vlog_goBack), fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
         }
         Spacer(Modifier.weight(1f))
     }
@@ -934,6 +937,6 @@ private fun shareVideo(context: Context, file: File) {
             putExtra(Intent.EXTRA_STREAM, uri)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
-        context.startActivity(Intent.createChooser(intent, "Vlog 공유"))
+        context.startActivity(Intent.createChooser(intent, LocaleManager.string(context, R.string.vlog_shareChooser)))
     }
 }

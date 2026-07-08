@@ -1,5 +1,7 @@
 package com.seoktaedev.tteona.core.services
 
+import com.seoktaedev.tteona.R
+import com.seoktaedev.tteona.core.i18n.LocaleManager
 import com.google.firebase.Firebase
 import com.google.firebase.Timestamp
 import com.google.firebase.firestore.CollectionReference
@@ -47,8 +49,8 @@ object RoomService {
     private var feedListener: ListenerRegistration? = null
     private var memberFeedListener: ListenerRegistration? = null
 
-    class RoomNotFoundException : Exception("해당 초대 코드의 방을 찾을 수 없어요.")
-    class InappropriateContentException : Exception("부적절한 표현이 포함되어 있어 등록할 수 없어요.")
+    class RoomNotFoundException : Exception(LocaleManager.string(R.string.room_error_notFound))
+    class InappropriateContentException : Exception(LocaleManager.string(R.string.room_error_inappropriate))
 
     // MARK: - 방 생성
     suspend fun createRoom(name: String, userId: String, nickname: String): Room {
@@ -75,7 +77,7 @@ object RoomService {
             ).await()
 
         // 기본 피드 생성 (댓글 작성 보장 — iOS와 동일)
-        postFeed(roomId, FeedType.TRIP_START, userId, nickname, "system", "그룹 참여 여행")
+        postFeed(roomId, FeedType.TRIP_START, userId, nickname, "system", LocaleManager.string(R.string.room_groupTrip))
 
         return Room(
             roomId = roomId,
@@ -109,7 +111,7 @@ object RoomService {
                 )
             ).await()
 
-        postFeed(room.roomId, FeedType.TRIP_START, userId, nickname, "system", "그룹 참여 여행")
+        postFeed(room.roomId, FeedType.TRIP_START, userId, nickname, "system", LocaleManager.string(R.string.room_groupTrip))
         return room
     }
 

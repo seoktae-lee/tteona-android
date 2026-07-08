@@ -44,7 +44,10 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.sp
+import com.seoktaedev.tteona.R
+import com.seoktaedev.tteona.core.i18n.LocaleManager
 import com.seoktaedev.tteona.core.network.ApiClient
 import com.seoktaedev.tteona.ui.theme.Pretendard
 import com.seoktaedev.tteona.ui.theme.TteDarkGray
@@ -90,7 +93,7 @@ fun PlacePickerSheet(
     ) {
         Column(Modifier.fillMaxHeight(0.85f)) {
             Text(
-                "어디서 찍으셨나요?",
+                stringResource(R.string.placepicker_title),
                 fontSize = 17.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = TteDarkGray,
@@ -112,7 +115,7 @@ fun PlacePickerSheet(
                     Icon(Icons.Filled.Edit, contentDescription = null, tint = TteOrange, modifier = Modifier.width(28.dp).size(18.dp))
                     Box(Modifier.weight(1f)) {
                         if (customName.isEmpty()) {
-                            Text("장소명 직접 입력", fontSize = 15.sp, color = TteMediumGray)
+                            Text(stringResource(R.string.placepicker_customName), fontSize = 15.sp, color = TteMediumGray)
                         }
                         BasicTextField(
                             value = customName,
@@ -129,7 +132,7 @@ fun PlacePickerSheet(
                     if (customName.isNotEmpty()) {
                         Icon(
                             Icons.Filled.ArrowCircleRight,
-                            contentDescription = "선택",
+                            contentDescription = stringResource(R.string.common_ok),
                             tint = TteOrange,
                             modifier = Modifier
                                 .size(24.dp)
@@ -147,7 +150,7 @@ fun PlacePickerSheet(
                         .padding(horizontal = 20.dp, vertical = 16.dp),
                 ) {
                     Icon(Icons.Filled.Edit, contentDescription = null, tint = TteOrange, modifier = Modifier.width(28.dp).size(18.dp))
-                    Text("직접 입력하기", fontSize = 15.sp, color = TteOrange)
+                    Text(stringResource(R.string.placepicker_enterManually), fontSize = 15.sp, color = TteOrange)
                 }
             }
             HorizontalDivider()
@@ -216,7 +219,7 @@ private suspend fun fetchNearbyPlaces(context: Context, lat: Double, lng: Double
         }.getOrNull()?.let { addr ->
             val name = addr.featureName ?: addr.thoroughfare
             if (!name.isNullOrBlank() && seen.add(name)) {
-                collected.add(NearbyPlace(name, "현재 위치", 0.0))
+                collected.add(NearbyPlace(name, LocaleManager.string(context, R.string.placepicker_currentLocation), 0.0))
             }
         }
 

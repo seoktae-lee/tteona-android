@@ -63,6 +63,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -276,7 +277,7 @@ fun HomeScreen(
                     decorationBox = { inner ->
                         Box {
                             if (searchText.isEmpty()) {
-                                Text("코스명, 지역 검색", fontSize = 14.sp, color = TteMediumGray)
+                                Text(stringResource(R.string.main_searchPlaceholder), fontSize = 14.sp, color = TteMediumGray)
                             }
                             inner()
                         }
@@ -286,7 +287,7 @@ fun HomeScreen(
                 if (searchText.isNotEmpty()) {
                     Icon(
                         Icons.Filled.Cancel,
-                        contentDescription = "지우기",
+                        contentDescription = stringResource(R.string.main_clearSearch),
                         tint = TteMediumGray,
                         modifier = Modifier
                             .size(17.dp)
@@ -302,7 +303,7 @@ fun HomeScreen(
                 )
                 Icon(
                     Icons.Filled.Map,
-                    contentDescription = "지역 검색",
+                    contentDescription = stringResource(R.string.region_title),
                     tint = TteOrange,
                     modifier = Modifier
                         .size(18.dp)
@@ -318,9 +319,9 @@ fun HomeScreen(
                     .background(Color.White.copy(alpha = 0.97f)),
             ) {
                 listOf(
-                    Triple(Icons.Filled.GridView, CourseFilter.ALL, "전체"),
-                    Triple(Icons.Filled.Favorite, CourseFilter.LIKED, "좋아요"),
-                    Triple(Icons.Filled.Person, CourseFilter.MINE, "내 코스"),
+                    Triple(Icons.Filled.GridView, CourseFilter.ALL, stringResource(R.string.main_filter_all)),
+                    Triple(Icons.Filled.Favorite, CourseFilter.LIKED, stringResource(R.string.main_filter_liked)),
+                    Triple(Icons.Filled.Person, CourseFilter.MINE, stringResource(R.string.main_filter_mine)),
                 ).forEach { (icon, f, desc) ->
                     Box(
                         contentAlignment = Alignment.Center,
@@ -354,8 +355,8 @@ fun HomeScreen(
                     .padding(horizontal = 32.dp, vertical = 36.dp),
             ) {
                 Icon(Icons.Filled.Search, contentDescription = null, tint = TteOrange.copy(alpha = 0.6f), modifier = Modifier.size(38.dp))
-                Text("검색 결과가 없어요", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = TteDarkGray)
-                Text("다른 키워드로 검색해보세요!", fontSize = 14.sp, color = TteMediumGray)
+                Text(stringResource(R.string.main_noSearchResults), fontSize = 17.sp, fontWeight = FontWeight.Bold, color = TteDarkGray)
+                Text(stringResource(R.string.main_tryOtherKeyword), fontSize = 14.sp, color = TteMediumGray)
             }
         }
 
@@ -372,7 +373,7 @@ fun HomeScreen(
                     .padding(horizontal = 16.dp, vertical = 10.dp),
             ) {
                 CircularProgressIndicator(color = Color.White, modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
-                Text("코스 불러오는 중...", fontSize = 13.sp, color = Color.White)
+                Text(stringResource(R.string.main_loadingCourses), fontSize = 13.sp, color = Color.White)
             }
         }
 
@@ -397,7 +398,7 @@ fun HomeScreen(
                         .padding(horizontal = 32.dp, vertical = 16.dp),
                 ) {
                     Icon(Icons.AutoMirrored.Filled.DirectionsWalk, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
-                    Text("나의 오늘", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                    Text(stringResource(R.string.main_myToday), fontSize = 17.sp, fontWeight = FontWeight.Bold, color = Color.White)
                 }
 
                 // 좌측 — 이어하기 버튼들 (나의 오늘 / 코스)
@@ -425,7 +426,7 @@ fun HomeScreen(
                                 tint = TteOrange,
                                 modifier = Modifier.size(16.dp),
                             )
-                            Text("이어하기", fontSize = 9.sp, fontWeight = FontWeight.Medium, color = TteOrange)
+                            Text(stringResource(R.string.main_resume), fontSize = 9.sp, fontWeight = FontWeight.Medium, color = TteOrange)
                         }
                     }
 
@@ -448,7 +449,7 @@ fun HomeScreen(
                                 tint = TteOrange,
                                 modifier = Modifier.size(16.dp),
                             )
-                            Text("코스", fontSize = 9.sp, fontWeight = FontWeight.Medium, color = TteOrange)
+                            Text(stringResource(R.string.main_course), fontSize = 9.sp, fontWeight = FontWeight.Medium, color = TteOrange)
                         }
                     }
                 }
@@ -476,7 +477,7 @@ fun HomeScreen(
                             }
                         },
                 ) {
-                    Icon(Icons.Filled.MyLocation, contentDescription = "현재 위치", tint = TteOrange, modifier = Modifier.size(20.dp))
+                    Icon(Icons.Filled.MyLocation, contentDescription = stringResource(R.string.main_moveToCurrentLocation), tint = TteOrange, modifier = Modifier.size(20.dp))
                 }
             }
         }
@@ -607,7 +608,7 @@ private fun CoursePreviewCard(
                     .background(TteFieldBackground)
                     .clickable(onClick = onDismiss),
             ) {
-                Icon(Icons.Filled.Close, contentDescription = "닫기", tint = TteMediumGray, modifier = Modifier.size(13.dp))
+                Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.common_close), tint = TteMediumGray, modifier = Modifier.size(13.dp))
             }
         }
 
@@ -640,7 +641,7 @@ private fun CoursePreviewCard(
                 )
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(
-                        course.tag.label,
+                        stringResource(course.tag.labelRes),
                         fontSize = 11.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = TteOrange,
@@ -649,7 +650,7 @@ private fun CoursePreviewCard(
                             .background(TteOrange.copy(alpha = 0.12f))
                             .padding(horizontal = 8.dp, vertical = 3.dp),
                     )
-                    Text("장소 ${course.displayPlaces.size}개", fontSize = 12.sp, color = TteMediumGray)
+                    Text(stringResource(R.string.main_placeCount, course.displayPlaces.size), fontSize = 12.sp, color = TteMediumGray)
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
                         Icon(Icons.Filled.Favorite, contentDescription = null, tint = TteMediumGray, modifier = Modifier.size(11.dp))
                         Text("${course.likeCount}", fontSize = 12.sp, color = TteMediumGray)

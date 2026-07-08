@@ -64,6 +64,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -71,7 +72,9 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import coil3.compose.SubcomposeAsyncImage
+import com.seoktaedev.tteona.R
 import com.seoktaedev.tteona.core.auth.AuthService
+import com.seoktaedev.tteona.core.i18n.LocaleManager
 import com.seoktaedev.tteona.core.services.ProfileImageService
 import com.seoktaedev.tteona.core.services.UserService
 import com.seoktaedev.tteona.ui.theme.TteDarkGray
@@ -84,7 +87,7 @@ import kotlinx.coroutines.launch
  * 설정 탭 — iOS Features/Settings/SettingsView.swift의 이식본.
  * 하위 화면(여행 통계·차단 관리)은 iOS NavigationStack push처럼 탭 콘텐츠 영역 안에서 전환한다.
  */
-private enum class SettingsSubScreen { MAIN, STATS, BLOCKED }
+private enum class SettingsSubScreen { MAIN, STATS, BLOCKED, LANGUAGE }
 
 @Composable
 fun SettingsScreen(modifier: Modifier = Modifier) {
@@ -95,6 +98,7 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
             modifier = modifier,
             onOpenStats = { subScreen = SettingsSubScreen.STATS },
             onOpenBlocked = { subScreen = SettingsSubScreen.BLOCKED },
+            onOpenLanguage = { subScreen = SettingsSubScreen.LANGUAGE },
         )
         SettingsSubScreen.STATS -> {
             BackHandler { subScreen = SettingsSubScreen.MAIN }
@@ -104,6 +108,10 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
             BackHandler { subScreen = SettingsSubScreen.MAIN }
             BlockedUsersScreen(modifier = modifier, onBack = { subScreen = SettingsSubScreen.MAIN })
         }
+        SettingsSubScreen.LANGUAGE -> {
+            BackHandler { subScreen = SettingsSubScreen.MAIN }
+            LanguageSettingsScreen(modifier = modifier, onBack = { subScreen = SettingsSubScreen.MAIN })
+        }
     }
 }
 
@@ -112,6 +120,7 @@ private fun SettingsMain(
     modifier: Modifier,
     onOpenStats: () -> Unit,
     onOpenBlocked: () -> Unit,
+    onOpenLanguage: () -> Unit,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -163,7 +172,7 @@ private fun SettingsMain(
                 .padding(horizontal = 20.dp),
         ) {
             Text(
-                "설정",
+                stringResource(R.string.settings_title),
                 fontSize = 28.sp,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(top = 24.dp, bottom = 16.dp),
@@ -188,7 +197,7 @@ private fun SettingsMain(
                     )
                     Column {
                         Text(
-                            profileUser?.nickname?.takeIf { it.isNotEmpty() } ?: "닉네임 없음",
+                            profileUser?.nickname?.takeIf { it.isNotEmpty() } ?: stringResource(R.string.settings_noNickname),
                             fontSize = 17.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = TteDarkGray,
@@ -198,7 +207,7 @@ private fun SettingsMain(
                     }
                 }
                 SettingsDivider()
-                SettingsRow(Icons.Filled.BarChart, "내 여행 통계", onClick = onOpenStats) { Chevron() }
+                SettingsRow(Icons.Filled.BarChart, stringResource(R.string.settings_travelStats), onClick = onOpenStats) { Chevron() }
             }
 
             // tteona PRO (iOS proSection)
@@ -220,14 +229,14 @@ private fun SettingsMain(
                     )
                     Column(verticalArrangement = Arrangement.spacedBy(3.dp), modifier = Modifier.weight(1f)) {
                         Text(
-                            if (isPro) "tteona PRO 이용 중" else "tteona PRO",
+                            if (isPro) stringResource(R.string.settings_pro_active) else "tteona PRO",
                             fontSize = 16.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = TteDarkGray,
                         )
                         Text(
-                            if (isPro) "모든 프리미엄 기능이 켜져 있어요"
-                            else "워터마크 제거 · 멀티포맷 · 5분 영상 · 우선 렌더링",
+                            if (isPro) stringResource(R.string.settings_pro_activeDesc)
+                            else stringResource(R.string.settings_pro_features),
                             fontSize = 12.sp,
                             color = TteMediumGray,
                         )
@@ -240,18 +249,18 @@ private fun SettingsMain(
                 }
             }
 
-            SectionHeader("앱 정보")
+            SectionHeader(stringResource(R.string.settings_appInfo))
             SectionCard {
                 val versionName = remember {
                     runCatching {
                         context.packageManager.getPackageInfo(context.packageName, 0).versionName
                     }.getOrNull() ?: "-"
                 }
-                SettingsRow(Icons.Filled.Info, "버전") {
+                SettingsRow(Icons.Filled.Info, stringResource(R.string.settings_version)) {
                     Text(versionName, fontSize = 14.sp, color = TteMediumGray)
                 }
                 SettingsDivider()
-                SettingsRow(Icons.Filled.Notifications, "푸시알림", onClick = {
+                SettingsRow(Icons.Filled.Notifications, stringResource(R.string.settings_push), onClick = {
                     context.startActivity(
                         Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
                             .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
@@ -259,7 +268,7 @@ private fun SettingsMain(
                 }) {
                     notificationGranted?.let { granted ->
                         Text(
-                            if (granted) "켜짐" else "꺼짐",
+                            if (granted) stringResource(R.string.common_on) else stringResource(R.string.common_off),
                             fontSize = 14.sp,
                             color = if (granted) TteMediumGray else Color.Red,
                         )
@@ -267,31 +276,25 @@ private fun SettingsMain(
                     Chevron()
                 }
                 SettingsDivider()
-                SettingsRow(Icons.Filled.Language, "언어", onClick = {
-                    // 앱별 언어 설정 (Android 13+), 미지원 기기는 앱 정보 화면으로
-                    val intent = Intent(
-                        if (android.os.Build.VERSION.SDK_INT >= 33) Settings.ACTION_APP_LOCALE_SETTINGS
-                        else Settings.ACTION_APPLICATION_DETAILS_SETTINGS
-                    ).setData(Uri.parse("package:${context.packageName}"))
-                    runCatching { context.startActivity(intent) }
-                }) {
-                    Text("한국어", fontSize = 14.sp, color = TteMediumGray)
+                val currentLang = remember { LocaleManager.current(context) }
+                SettingsRow(Icons.Filled.Language, stringResource(R.string.settings_language), onClick = onOpenLanguage) {
+                    Text("${currentLang.flag} ${currentLang.nativeName}", fontSize = 14.sp, color = TteMediumGray)
                     Chevron()
                 }
                 SettingsDivider()
-                SettingsRow(Icons.Filled.Shield, "개인정보 처리방침", onClick = {
+                SettingsRow(Icons.Filled.Shield, stringResource(R.string.settings_privacy), onClick = {
                     context.openUrl("https://tteona.kr/privacy.html")
                 }) { Chevron() }
                 SettingsDivider()
-                SettingsRow(Icons.Filled.Description, "이용약관", onClick = {
+                SettingsRow(Icons.Filled.Description, stringResource(R.string.settings_terms), onClick = {
                     context.openUrl("https://tteona.kr/terms.html")
                 }) { Chevron() }
                 SettingsDivider()
-                SettingsRow(Icons.Filled.VerifiedUser, "아동 안전 기준 정책", onClick = {
+                SettingsRow(Icons.Filled.VerifiedUser, stringResource(R.string.settings_childSafety), onClick = {
                     context.openUrl("https://tteona.kr/child-safety.html")
                 }) { Chevron() }
                 SettingsDivider()
-                SettingsRow(Icons.Filled.Mail, "문의하기", onClick = {
+                SettingsRow(Icons.Filled.Mail, stringResource(R.string.settings_contact), onClick = {
                     runCatching {
                         context.startActivity(
                             Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:just.tteona@gmail.com"))
@@ -300,18 +303,18 @@ private fun SettingsMain(
                 }) { Chevron() }
             }
 
-            SectionHeader("계정")
+            SectionHeader(stringResource(R.string.settings_account))
             SectionCard {
-                SettingsRow(Icons.Filled.PersonOff, "차단된 사용자 관리", onClick = onOpenBlocked) { Chevron() }
+                SettingsRow(Icons.Filled.PersonOff, stringResource(R.string.settings_blockedUsers), onClick = onOpenBlocked) { Chevron() }
                 SettingsDivider()
                 SettingsRow(
-                    Icons.AutoMirrored.Filled.Logout, "로그아웃",
+                    Icons.AutoMirrored.Filled.Logout, stringResource(R.string.settings_signOut),
                     tint = Color.Red,
                     onClick = { showSignOutAlert = true },
                 )
                 SettingsDivider()
                 SettingsRow(
-                    Icons.Filled.PersonRemove, "회원 탈퇴",
+                    Icons.Filled.PersonRemove, stringResource(R.string.settings_deleteAccount),
                     tint = Color.Red,
                     onClick = { showDeleteAlert = true },
                 )
@@ -342,7 +345,7 @@ private fun SettingsMain(
                         .padding(28.dp),
                 ) {
                     CircularProgressIndicator(color = Color.White)
-                    Text("탈퇴 처리 중...", fontSize = 14.sp, color = Color.White)
+                    Text(stringResource(R.string.settings_deleting), fontSize = 14.sp, color = Color.White)
                 }
             }
         }
@@ -351,23 +354,23 @@ private fun SettingsMain(
     if (showSignOutAlert) {
         AlertDialog(
             onDismissRequest = { showSignOutAlert = false },
-            title = { Text("로그아웃") },
-            text = { Text("정말 로그아웃 하시겠어요?") },
+            title = { Text(stringResource(R.string.settings_signOut)) },
+            text = { Text(stringResource(R.string.settings_signOut_confirm)) },
             confirmButton = {
                 TextButton(onClick = {
                     showSignOutAlert = false
                     AuthService.signOut()
-                }) { Text("로그아웃", color = Color.Red) }
+                }) { Text(stringResource(R.string.settings_signOut), color = Color.Red) }
             },
-            dismissButton = { TextButton(onClick = { showSignOutAlert = false }) { Text("취소") } },
+            dismissButton = { TextButton(onClick = { showSignOutAlert = false }) { Text(stringResource(R.string.common_cancel)) } },
         )
     }
 
     if (showDeleteAlert) {
         AlertDialog(
             onDismissRequest = { showDeleteAlert = false },
-            title = { Text("회원 탈퇴") },
-            text = { Text("탈퇴 시 코스, 그룹, 계정 정보가 모두 삭제되며 복구할 수 없어요.") },
+            title = { Text(stringResource(R.string.settings_deleteAccount)) },
+            text = { Text(stringResource(R.string.settings_deleteAccount_message)) },
             confirmButton = {
                 TextButton(onClick = {
                     showDeleteAlert = false
@@ -377,19 +380,19 @@ private fun SettingsMain(
                         isDeleting = false
                         if (!ok) deleteFailed = true
                     }
-                }) { Text("탈퇴", color = Color.Red) }
+                }) { Text(stringResource(R.string.settings_deleteAccount_confirmButton), color = Color.Red) }
             },
-            dismissButton = { TextButton(onClick = { showDeleteAlert = false }) { Text("취소") } },
+            dismissButton = { TextButton(onClick = { showDeleteAlert = false }) { Text(stringResource(R.string.common_cancel)) } },
         )
     }
 
     if (deleteFailed) {
         AlertDialog(
             onDismissRequest = { deleteFailed = false },
-            title = { Text("탈퇴 실패") },
-            text = { Text("회원 탈퇴에 실패했어요. 잠시 후 다시 시도해주세요.") },
+            title = { Text(stringResource(R.string.settings_deleteFailed_title)) },
+            text = { Text(stringResource(R.string.settings_deleteFailed_message)) },
             confirmButton = {
-                TextButton(onClick = { deleteFailed = false }) { Text("확인", color = TteOrange) }
+                TextButton(onClick = { deleteFailed = false }) { Text(stringResource(R.string.common_ok), color = TteOrange) }
             },
         )
     }
@@ -414,7 +417,7 @@ private fun AvatarWithPicker(
             if (imageUrl != null) {
                 SubcomposeAsyncImage(
                     model = imageUrl,
-                    contentDescription = "프로필 사진",
+                    contentDescription = stringResource(R.string.settings_profilePhoto),
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize(),
                     error = { AvatarInitial(nickname) },
@@ -445,7 +448,7 @@ private fun AvatarWithPicker(
         ) {
             Icon(
                 Icons.Filled.CameraAlt,
-                contentDescription = "사진 변경",
+                contentDescription = stringResource(R.string.settings_changePhoto),
                 tint = Color.White,
                 modifier = Modifier.size(11.dp),
             )

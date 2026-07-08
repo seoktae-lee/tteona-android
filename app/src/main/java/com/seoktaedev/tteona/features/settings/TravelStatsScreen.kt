@@ -39,6 +39,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -65,7 +66,7 @@ fun TravelStatsScreen(modifier: Modifier = Modifier, onBack: () -> Unit) {
     }
 
     Column(modifier.fillMaxSize()) {
-        SubScreenTopBar(title = "내 여행 통계", onBack = onBack)
+        SubScreenTopBar(title = stringResource(R.string.settings_travelStats), onBack = onBack)
 
         Column(
             modifier = Modifier
@@ -86,9 +87,9 @@ fun TravelStatsScreen(modifier: Modifier = Modifier, onBack: () -> Unit) {
                     modifier = Modifier.size(64.dp),
                 )
                 Column {
-                    Text("지금까지의 여정", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = TteMediumGray)
+                    Text(stringResource(R.string.stats_journeySoFar), fontSize = 13.sp, fontWeight = FontWeight.Medium, color = TteMediumGray)
                     Spacer(Modifier.height(4.dp))
-                    Text("떠난 만큼 쌓여요", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = TteDarkGray)
+                    Text(stringResource(R.string.stats_subtitle), fontSize = 20.sp, fontWeight = FontWeight.Bold, color = TteDarkGray)
                 }
             }
 
@@ -109,20 +110,20 @@ fun TravelStatsScreen(modifier: Modifier = Modifier, onBack: () -> Unit) {
                         modifier = Modifier.padding(horizontal = 20.dp),
                     ) {
                         StatRow(
-                            StatItem(Icons.Filled.Map, "만든 코스", "${s.coursesCreated}개"),
-                            StatItem(Icons.Filled.Place, "기록한 장소", "${s.placesInCourses}곳"),
+                            StatItem(Icons.Filled.Map, stringResource(R.string.stats_coursesCreated), stringResource(R.string.stats_unit_count, s.coursesCreated)),
+                            StatItem(Icons.Filled.Place, stringResource(R.string.stats_placesRecorded), stringResource(R.string.stats_unit_places, s.placesInCourses)),
                         )
                         StatRow(
-                            StatItem(Icons.Filled.Favorite, "받은 좋아요", "${s.likesReceived}개"),
-                            StatItem(Icons.Filled.Group, "함께한 그룹", "${s.groups}개"),
+                            StatItem(Icons.Filled.Favorite, stringResource(R.string.stats_likesReceived), stringResource(R.string.stats_unit_count, s.likesReceived)),
+                            StatItem(Icons.Filled.Group, stringResource(R.string.stats_groups), stringResource(R.string.stats_unit_count, s.groups)),
                         )
                         StatRow(
-                            StatItem(Icons.AutoMirrored.Filled.DirectionsWalk, "방문한 장소", "${s.placesVisited}곳"),
-                            StatItem(Icons.Filled.CalendarMonth, "활동한 날", "${s.activeDays}일"),
+                            StatItem(Icons.AutoMirrored.Filled.DirectionsWalk, stringResource(R.string.stats_placesVisited), stringResource(R.string.stats_unit_places, s.placesVisited)),
+                            StatItem(Icons.Filled.CalendarMonth, stringResource(R.string.stats_activeDays), stringResource(R.string.stats_unit_days, s.activeDays)),
                         )
                     }
                     Text(
-                        "방문한 장소와 활동한 날은 앱 업데이트 이후의 활동부터 집계돼요.",
+                        stringResource(R.string.stats_disclaimer),
                         fontSize = 12.sp,
                         color = TteMediumGray,
                         textAlign = TextAlign.Center,
@@ -139,7 +140,7 @@ fun TravelStatsScreen(modifier: Modifier = Modifier, onBack: () -> Unit) {
                         .padding(top = 60.dp),
                 ) {
                     Icon(Icons.Filled.WifiOff, contentDescription = null, tint = TteMediumGray, modifier = Modifier.size(32.dp))
-                    Text("통계를 불러오지 못했어요", fontSize = 14.sp, color = TteMediumGray)
+                    Text(stringResource(R.string.stats_loadFailed), fontSize = 14.sp, color = TteMediumGray)
                 }
             }
         }
@@ -182,7 +183,7 @@ internal fun SubScreenTopBar(title: String, onBack: () -> Unit) {
     ) {
         Icon(
             Icons.AutoMirrored.Filled.ArrowBack,
-            contentDescription = "뒤로",
+            contentDescription = stringResource(R.string.common_back),
             tint = TteDarkGray,
             modifier = Modifier
                 .align(Alignment.CenterStart)

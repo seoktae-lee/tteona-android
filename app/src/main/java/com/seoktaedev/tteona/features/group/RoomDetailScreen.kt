@@ -42,10 +42,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.seoktaedev.tteona.R
 import com.seoktaedev.tteona.core.auth.AuthService
+import com.seoktaedev.tteona.core.i18n.LocaleManager
 import com.seoktaedev.tteona.core.model.Room
 import com.seoktaedev.tteona.core.services.RoomService
 import com.seoktaedev.tteona.ui.theme.TteDarkGray
@@ -90,7 +93,7 @@ fun RoomDetailScreen(room: Room, onBack: () -> Unit) {
             ) {
                 Icon(
                     Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "뒤로",
+                    contentDescription = stringResource(R.string.common_back),
                     tint = TteDarkGray,
                     modifier = Modifier
                         .align(Alignment.CenterStart)
@@ -102,7 +105,7 @@ fun RoomDetailScreen(room: Room, onBack: () -> Unit) {
                 Box(Modifier.align(Alignment.CenterEnd)) {
                     Icon(
                         Icons.Filled.MoreHoriz,
-                        contentDescription = "메뉴",
+                        contentDescription = stringResource(R.string.common_menu),
                         tint = TteDarkGray,
                         modifier = Modifier
                             .padding(end = 12.dp)
@@ -111,7 +114,7 @@ fun RoomDetailScreen(room: Room, onBack: () -> Unit) {
                     )
                     DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
                         DropdownMenuItem(
-                            text = { Text("그룹 나가기", color = Color.Red) },
+                            text = { Text(stringResource(R.string.room_leave), color = Color.Red) },
                             leadingIcon = {
                                 Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null, tint = Color.Red)
                             },
@@ -133,7 +136,7 @@ fun RoomDetailScreen(room: Room, onBack: () -> Unit) {
                     .padding(12.dp),
             ) {
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                    Text("초대 코드", fontSize = 11.sp, color = TteMediumGray)
+                    Text(stringResource(R.string.room_inviteCode), fontSize = 11.sp, color = TteMediumGray)
                     Text(
                         room.inviteCode,
                         fontSize = 22.sp,
@@ -155,15 +158,15 @@ fun RoomDetailScreen(room: Room, onBack: () -> Unit) {
                                 type = "text/plain"
                                 putExtra(Intent.EXTRA_TEXT, url)
                             }
-                            context.startActivity(Intent.createChooser(intent, "초대 링크 공유"))
+                            context.startActivity(Intent.createChooser(intent, LocaleManager.string(context, R.string.room_shareInvite)))
                         },
                 ) {
-                    Icon(Icons.Filled.Share, contentDescription = "공유", tint = Color.White, modifier = Modifier.size(17.dp))
+                    Icon(Icons.Filled.Share, contentDescription = stringResource(R.string.common_share), tint = Color.White, modifier = Modifier.size(17.dp))
                 }
                 Spacer(Modifier.size(10.dp))
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
                     Icon(Icons.Filled.Person, contentDescription = null, tint = TteMediumGray, modifier = Modifier.size(13.dp))
-                    Text("${room.memberIds.size}명", fontSize = 12.sp, color = TteMediumGray)
+                    Text(stringResource(R.string.room_membersCount, room.memberIds.size), fontSize = 12.sp, color = TteMediumGray)
                 }
             }
 
@@ -182,8 +185,8 @@ fun RoomDetailScreen(room: Room, onBack: () -> Unit) {
     if (showLeaveAlert) {
         AlertDialog(
             onDismissRequest = { showLeaveAlert = false },
-            title = { Text("그룹 나가기") },
-            text = { Text("그룹을 나가면 다시 초대 코드로 참여할 수 있어요.") },
+            title = { Text(stringResource(R.string.room_leave)) },
+            text = { Text(stringResource(R.string.room_leaveMessage)) },
             confirmButton = {
                 TextButton(onClick = {
                     showLeaveAlert = false
@@ -191,9 +194,9 @@ fun RoomDetailScreen(room: Room, onBack: () -> Unit) {
                         runCatching { RoomService.leaveRoom(room.roomId, uid) }
                         onBack()
                     }
-                }) { Text("나가기", color = Color.Red) }
+                }) { Text(stringResource(R.string.room_leaveButton), color = Color.Red) }
             },
-            dismissButton = { TextButton(onClick = { showLeaveAlert = false }) { Text("취소") } },
+            dismissButton = { TextButton(onClick = { showLeaveAlert = false }) { Text(stringResource(R.string.common_cancel)) } },
         )
     }
 }

@@ -32,11 +32,11 @@ class AuthViewModel : ViewModel() {
         viewModelScope.launch { AuthService.signIn(email.trim(), password) }
     }
 
-    fun signUp(email: String, password: String, confirmPassword: String) {
+    fun signUp(email: String, password: String, confirmPassword: String, passwordMismatchMessage: String) {
         if (password != confirmPassword) {
-            // iOS와 동일한 사전 검증
+            // iOS와 동일한 사전 검증 — 현지화 문자열은 컴포저블에서 전달받는다
             viewModelScope.launch { AuthService.clearError() }
-            _validationError.value = "비밀번호가 일치하지 않습니다."
+            _validationError.value = passwordMismatchMessage
             return
         }
         _validationError.value = null

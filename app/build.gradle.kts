@@ -123,6 +123,11 @@ dependencies {
     implementation(libs.camerax.view)
     implementation(libs.guava) // CameraX ListenableFuture 반환 타입 참조용
 
+    // 나루 무드 필터 — 촬영 후 클립에 색보정 굽기 (iOS Metal 필터의 온디바이스 대응)
+    implementation(libs.media3.transformer)
+    implementation(libs.media3.effect)
+    implementation(libs.media3.common)
+
     // PRO 구독 (RevenueCat — iOS와 동일한 entitlement "pro" 공유)
     implementation(libs.revenuecat)
 }

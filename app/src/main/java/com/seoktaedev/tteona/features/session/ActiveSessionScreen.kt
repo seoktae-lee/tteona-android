@@ -45,6 +45,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.res.stringResource
+import com.seoktaedev.tteona.R
+import com.seoktaedev.tteona.core.i18n.LocaleManager
 import com.seoktaedev.tteona.core.util.Haptics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
@@ -103,7 +106,7 @@ fun ActiveSessionScreen(
     val view = LocalView.current
     val scope = rememberCoroutineScope()
     val uid = AuthService.currentUser.value?.uid ?: ""
-    val nickname = UserService.currentUser.value?.nickname?.takeIf { it.isNotEmpty() } ?: "멤버"
+    val nickname = UserService.currentUser.value?.nickname?.takeIf { it.isNotEmpty() } ?: LocaleManager.string(context, R.string.session_member)
 
     // 위치 권한 없이 isMyLocationEnabled=true를 주면 지도가 SecurityException으로 크래시하므로 게이팅
     val hasLocationPermission = remember {
@@ -135,6 +138,12 @@ fun ActiveSessionScreen(
     var showPaywall by remember { mutableStateOf(false) }
     var ratingPlace by remember { mutableStateOf<Place?>(null) }
     var didStart by remember { mutableStateOf(false) }
+
+    // 세션 누적 촬영 길이(초) — 진행률 바용. 촬영·카메라 복귀 시 클립 파일 기준 재집계 (iOS recordedSeconds)
+    var recordedSeconds by remember { mutableStateOf(0.0) }
+    LaunchedEffect(visitedPlaces, showCamera) {
+        recordedSeconds = com.seoktaedev.tteona.core.services.VlogClips.totalSeconds(context, course.courseId)
+    }
 
     val currentPlace = orderedPlaces.getOrNull(currentPlaceIndex)
     val allVisited = orderedPlaces.all { it.order in visitedPlaces || it.order in skippedPlaces }
@@ -222,10 +231,10 @@ fun ActiveSessionScreen(
         if (!didStart) return@LaunchedEffect
         val done = orderedPlaces.count { it.order in visitedPlaces || it.order in skippedPlaces }
         val body = if (allVisited) {
-            "모든 장소 방문 완료! 🎉"
+            LocaleManager.string(context, R.string.session_allVisited)
         } else {
-            "방문 $done/${orderedPlaces.size}" +
-                (currentPlace?.let { " · 다음: ${it.placeName}" } ?: "")
+            LocaleManager.string(context, R.string.session_visitProgress, done, orderedPlaces.size) +
+                (currentPlace?.let { LocaleManager.string(context, R.string.session_nextPlaceSuffix, it.placeName) } ?: "")
         }
         SessionForegroundService.start(context, course.courseName, body)
     }
@@ -365,7 +374,7 @@ fun ActiveSessionScreen(
                         onClose()
                     },
             ) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "나가기", tint = Color.White, modifier = Modifier.size(20.dp))
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.session_exit), tint = Color.White, modifier = Modifier.size(20.dp))
             }
             Spacer(Modifier.weight(1f))
             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -383,7 +392,7 @@ fun ActiveSessionScreen(
                             .clip(CircleShape)
                             .background(Color.Red)
                     )
-                    Text("코스 진행 중", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+                    Text(stringResource(R.string.session_courseInProgress), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
                 }
                 if (roomIds.isNotEmpty()) {
                     Row(
@@ -395,7 +404,7 @@ fun ActiveSessionScreen(
                             .padding(horizontal = 10.dp, vertical = 4.dp),
                     ) {
                         Icon(Icons.Filled.LocationOn, contentDescription = null, tint = Color.White, modifier = Modifier.size(11.dp))
-                        Text("그룹 위치 공유 중", fontSize = 11.sp, fontWeight = FontWeight.Medium, color = Color.White.copy(alpha = 0.9f))
+                        Text(stringResource(R.string.session_sharingLocation), fontSize = 11.sp, fontWeight = FontWeight.Medium, color = Color.White.copy(alpha = 0.9f))
                     }
                 }
             }
@@ -410,7 +419,7 @@ fun ActiveSessionScreen(
                     .clickable { showPlaceEditor = true },
             ) {
                 Text("${visitedPlaces.size}/${orderedPlaces.size}", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
-                Text("편집", fontSize = 10.sp, color = Color.White.copy(alpha = 0.8f))
+                Text(stringResource(R.string.common_edit), fontSize = 10.sp, color = Color.White.copy(alpha = 0.8f))
             }
         }
 
@@ -431,8 +440,8 @@ fun ActiveSessionScreen(
                 ) {
                     Text("📍", fontSize = 20.sp)
                     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        Text("${place.placeName}에 도착했어요!", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
-                        Text("탭하여 촬영하기", fontSize = 12.sp, color = Color.White.copy(alpha = 0.8f))
+                        Text(stringResource(R.string.session_arrivedAt, place.placeName), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+                        Text(stringResource(R.string.session_tapToCapture), fontSize = 12.sp, color = Color.White.copy(alpha = 0.8f))
                     }
                 }
             }
@@ -479,13 +488,55 @@ fun ActiveSessionScreen(
                 }
             }
 
+            // 촬영 예산 진행률 바 (iOS budgetBar) — 촬영한 장소가 있을 때만
+            if (visitedList.isNotEmpty()) {
+                val budgetSeconds = com.seoktaedev.tteona.core.services.ProManager.vlogBudgetSeconds
+                val budgetFull = recordedSeconds >= budgetSeconds
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(horizontal = 4.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            stringResource(R.string.impromptu_videoBudget),
+                            fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = TteMediumGray,
+                        )
+                        Spacer(Modifier.weight(1f))
+                        Text(
+                            if (com.seoktaedev.tteona.core.services.ProManager.isPro.value) {
+                                "${formatMmss(recordedSeconds)} / ${formatMmss(budgetSeconds)}"
+                            } else {
+                                LocaleManager.string(
+                                    context, R.string.impromptu_videoBudgetValue,
+                                    recordedSeconds.toInt(), budgetSeconds.toInt(),
+                                )
+                            },
+                            fontSize = 12.sp, fontWeight = FontWeight.Bold,
+                            color = if (budgetFull) Color.Red else TteOrange,
+                        )
+                    }
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .height(6.dp)
+                            .clip(RoundedCornerShape(3.dp))
+                            .background(TteMediumGray.copy(alpha = 0.2f)),
+                    ) {
+                        Box(
+                            Modifier
+                                .fillMaxWidth(((recordedSeconds / budgetSeconds).coerceIn(0.0, 1.0)).toFloat())
+                                .height(6.dp)
+                                .clip(RoundedCornerShape(3.dp))
+                                .background(if (budgetFull) Color.Red else TteOrange),
+                        )
+                    }
+                }
+            }
+
             if (!allVisited && currentPlace != null) {
                 val distance = locationService.distanceTo(currentPlace)
                 if (distance != null) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         Icon(Icons.Filled.LocationOn, contentDescription = null, tint = TteOrange, modifier = Modifier.size(15.dp))
                         Text(
-                            "${currentPlace.placeName}까지 ${formatDistance(distance)}",
+                            stringResource(R.string.session_distanceRemaining, currentPlace.placeName, formatDistance(distance)),
                             fontSize = 14.sp, color = TteDarkGray,
                         )
                     }
@@ -508,8 +559,8 @@ fun ActiveSessionScreen(
                         },
                 ) {
                     Text(
-                        if (isNearby) "📸 ${currentPlace.placeName} 도착! 촬영하기"
-                        else "📍 ${currentPlace.placeName}으로 이동 중...",
+                        if (isNearby) stringResource(R.string.session_arrivedCapture, currentPlace.placeName)
+                        else stringResource(R.string.session_movingTo, currentPlace.placeName),
                         fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Color.White,
                     )
                 }
@@ -529,7 +580,7 @@ fun ActiveSessionScreen(
                             showVlog = true
                         },
                 ) {
-                    Text("🎬 Vlog 만들기", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+                    Text("🎬 " + stringResource(R.string.session_makeVlog), fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
                 }
             }
         }
@@ -539,21 +590,21 @@ fun ActiveSessionScreen(
     if (showFarCaptureConfirm) {
         AlertDialog(
             onDismissRequest = { showFarCaptureConfirm = false },
-            title = { Text("아직 도착 전이에요") },
+            title = { Text(stringResource(R.string.session_notArrivedYet)) },
             text = {
                 Text(
                     farCaptureDistance?.let { d ->
-                        "${currentPlace?.placeName}까지 ${formatDistance(d)} 남았어요.\nGPS가 부정확하거나 실내라면 지금 촬영해도 괜찮아요."
-                    } ?: "현재 위치를 확인할 수 없어요. 지금 촬영해도 괜찮아요."
+                        stringResource(R.string.session_farCapture_message, currentPlace?.placeName ?: "", formatDistance(d))
+                    } ?: stringResource(R.string.session_farCapture_noLocation)
                 )
             },
             confirmButton = {
                 TextButton(onClick = {
                     showFarCaptureConfirm = false
                     showCamera = true
-                }) { Text("그래도 촬영하기", color = TteOrange, fontWeight = FontWeight.SemiBold) }
+                }) { Text(stringResource(R.string.session_captureAnyway), color = TteOrange, fontWeight = FontWeight.SemiBold) }
             },
-            dismissButton = { TextButton(onClick = { showFarCaptureConfirm = false }) { Text("취소") } },
+            dismissButton = { TextButton(onClick = { showFarCaptureConfirm = false }) { Text(stringResource(R.string.common_cancel)) } },
         )
     }
 
@@ -635,10 +686,10 @@ fun ActiveSessionScreen(
                     Icon(Icons.Filled.History, contentDescription = null, tint = TteOrange, modifier = Modifier.size(30.dp))
                 }
                 Spacer(Modifier.height(16.dp))
-                Text("오늘 코스가 남아있어요", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = TteDarkGray)
+                Text(stringResource(R.string.session_courseRemaining_title), fontSize = 20.sp, fontWeight = FontWeight.Bold, color = TteDarkGray)
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    "${course.courseName} · ${visitedPlaces.size}/${orderedPlaces.size}곳 완료",
+                    stringResource(R.string.session_courseRemaining_progress, course.courseName, visitedPlaces.size, orderedPlaces.size),
                     fontSize = 14.sp, color = TteMediumGray,
                 )
                 Spacer(Modifier.height(32.dp))
@@ -658,7 +709,7 @@ fun ActiveSessionScreen(
                             }
                         },
                 ) {
-                    Text("이어서 하기", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+                    Text(stringResource(R.string.session_resume), fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
                 }
                 Spacer(Modifier.height(12.dp))
                 Box(
@@ -674,7 +725,7 @@ fun ActiveSessionScreen(
                             startNewSession()
                         },
                 ) {
-                    Text("새로 시작하기", fontSize = 16.sp, fontWeight = FontWeight.Medium, color = TteDarkGray)
+                    Text(stringResource(R.string.main_startFresh), fontSize = 16.sp, fontWeight = FontWeight.Medium, color = TteDarkGray)
                 }
             }
         }
@@ -688,7 +739,7 @@ fun ActiveSessionScreen(
         }) {
             Column(Modifier.padding(bottom = 32.dp)) {
                 Text(
-                    "코스 편집",
+                    stringResource(R.string.session_editCourse),
                     fontSize = 17.sp,
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier
@@ -737,12 +788,12 @@ fun ActiveSessionScreen(
                                 color = if (isVisited || isSkipped) TteMediumGray else TteDarkGray,
                                 textDecoration = if (isVisited || isSkipped) TextDecoration.LineThrough else null,
                             )
-                            if (isCurrent) Text("현재 목적지", fontSize = 11.sp, color = TteOrange)
-                            else if (isSkipped) Text("건너뜀", fontSize = 11.sp, color = TteMediumGray)
+                            if (isCurrent) Text(stringResource(R.string.session_currentDestination), fontSize = 11.sp, color = TteOrange)
+                            else if (isSkipped) Text(stringResource(R.string.session_skipped), fontSize = 11.sp, color = TteMediumGray)
                         }
                         if (!isVisited) {
                             Text(
-                                if (isSkipped) "취소" else "건너뛰기",
+                                if (isSkipped) stringResource(R.string.common_cancel) else stringResource(R.string.common_skip),
                                 fontSize = 12.sp,
                                 color = if (isSkipped) TteOrange else TteMediumGray,
                                 modifier = Modifier

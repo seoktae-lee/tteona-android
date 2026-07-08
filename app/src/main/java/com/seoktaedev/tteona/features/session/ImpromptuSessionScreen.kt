@@ -56,6 +56,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -73,7 +74,9 @@ import com.google.maps.android.compose.MarkerComposable
 import com.google.maps.android.compose.Polyline
 import com.google.maps.android.compose.rememberCameraPositionState
 import com.google.maps.android.compose.rememberUpdatedMarkerState
+import com.seoktaedev.tteona.R
 import com.seoktaedev.tteona.core.auth.AuthService
+import com.seoktaedev.tteona.core.i18n.LocaleManager
 import com.seoktaedev.tteona.core.model.Course
 import com.seoktaedev.tteona.core.model.CourseTag
 import com.seoktaedev.tteona.core.model.FeedType
@@ -115,7 +118,7 @@ fun ImpromptuSessionScreen(
     val view = LocalView.current
     val scope = rememberCoroutineScope()
     val uid = AuthService.currentUser.value?.uid ?: ""
-    val nickname = UserService.currentUser.value?.nickname?.takeIf { it.isNotEmpty() } ?: "멤버"
+    val nickname = UserService.currentUser.value?.nickname?.takeIf { it.isNotEmpty() } ?: LocaleManager.string(context, R.string.session_member)
     val sessionId = "free_$uid"
 
     // 위치 권한 없이 isMyLocationEnabled=true를 주면 지도가 SecurityException으로 크래시하므로 게이팅
@@ -151,6 +154,11 @@ fun ImpromptuSessionScreen(
     var showPaywall by remember { mutableStateOf(false) }
     var didStart by remember { mutableStateOf(false) }
 
+    // 세션 누적 촬영 길이(초) — 진행률 바용. 장소 변경·카메라 복귀 시 클립 파일 기준 재집계 (iOS recordedSeconds)
+    var recordedSeconds by remember { mutableStateOf(0.0) }
+    val budgetSeconds = com.seoktaedev.tteona.core.services.ProManager.vlogBudgetSeconds
+    val budgetFull = recordedSeconds >= budgetSeconds
+
     val cameraPositionState = rememberCameraPositionState {
         position = CameraPosition.fromLatLngZoom(LatLng(36.5, 127.8), 6f)
     }
@@ -163,10 +171,10 @@ fun ImpromptuSessionScreen(
         if (roomIds.isEmpty() || uid.isEmpty()) return
         PushService.requestGroupNotification(
             PushService.GroupNotificationType.FREE_TRIP_END,
-            uid, nickname, roomIds, courseName = "${count}곳 방문",
+            uid, nickname, roomIds, courseName = LocaleManager.string(context, R.string.impromptu_placesVisited, count),
         )
         roomIds.forEach { rid ->
-            RoomService.postFeed(rid, FeedType.FREE_TRIP_END, uid, nickname, "free", "${count}곳 방문")
+            RoomService.postFeed(rid, FeedType.FREE_TRIP_END, uid, nickname, "free", LocaleManager.string(context, R.string.impromptu_placesVisited, count))
         }
     }
 
@@ -177,7 +185,7 @@ fun ImpromptuSessionScreen(
         activeRoomIds = selectedRoomIds
         if (uid.isEmpty()) return
         activeRoomIds.forEach { rid ->
-            RoomService.postFeed(rid, FeedType.FREE_TRIP_START, uid, nickname, "free", "나의 오늘")
+            RoomService.postFeed(rid, FeedType.FREE_TRIP_START, uid, nickname, "free", LocaleManager.string(context, R.string.impromptu_myToday_name))
         }
     }
 
@@ -192,9 +200,11 @@ fun ImpromptuSessionScreen(
 
     fun buildCourseAndEnd(saveToFirestore: Boolean, courseName: String, tag: CourseTag) {
         val name = courseName.trim().ifEmpty {
-            "나의 오늘 " + SimpleDateFormat("M월 d일", Locale.KOREA).format(Date())
+            val locale = Locale(LocaleManager.current(context).code)
+            val dateStr = SimpleDateFormat(LocaleManager.string(context, R.string.impromptu_dateFormat), locale).format(Date())
+            LocaleManager.string(context, R.string.impromptu_myTodayDated, dateStr)
         }
-        val region = capturedPlaces.firstOrNull()?.let { String.format(Locale.US, "%.1f°N", it.latitude) } ?: "기타"
+        val region = capturedPlaces.firstOrNull()?.let { String.format(Locale.US, "%.1f°N", it.latitude) } ?: LocaleManager.string(context, R.string.region_other)
         val course = Course(
             courseId = UUID.randomUUID().toString(),
             authorId = uid,
@@ -234,11 +244,15 @@ fun ImpromptuSessionScreen(
     }
 
     // 상시 알림 (iOS Live Activity — TodaySessionActivityManager)
+    LaunchedEffect(capturedPlaces, showCamera) {
+        recordedSeconds = VlogClips.totalSeconds(context, sessionId)
+    }
+
     LaunchedEffect(capturedPlaces) {
         SessionForegroundService.start(
-            context, "나의 오늘 기록 중",
-            if (capturedPlaces.isEmpty()) "첫 장소에서 촬영을 시작해보세요"
-            else "${capturedPlaces.size}곳 기록 · 마지막: ${capturedPlaces.last().placeName}",
+            context, LocaleManager.string(context, R.string.impromptu_recording),
+            if (capturedPlaces.isEmpty()) LocaleManager.string(context, R.string.impromptu_startAtFirst)
+            else LocaleManager.string(context, R.string.impromptu_recordProgress, capturedPlaces.size, capturedPlaces.last().placeName),
         )
     }
     DisposableEffect(Unit) {
@@ -293,7 +307,7 @@ fun ImpromptuSessionScreen(
         if (uid.isNotEmpty()) {
             activeRoomIds.forEach { rid ->
                 RoomService.postFeed(
-                    rid, FeedType.FREE_CAPTURE, uid, nickname, "free", "나의 오늘",
+                    rid, FeedType.FREE_CAPTURE, uid, nickname, "free", LocaleManager.string(context, R.string.impromptu_myToday_name),
                     placeName = place.placeName, latitude = place.latitude, longitude = place.longitude,
                 )
             }
@@ -394,7 +408,7 @@ fun ImpromptuSessionScreen(
                     .background(Color.Black.copy(alpha = 0.5f))
                     .clickable(onClick = onClose),
             ) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "닫기", tint = Color.White, modifier = Modifier.size(18.dp))
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.common_close), tint = Color.White, modifier = Modifier.size(18.dp))
             }
             Spacer(Modifier.weight(1f))
             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -407,7 +421,7 @@ fun ImpromptuSessionScreen(
                         .padding(horizontal = 14.dp, vertical = 8.dp),
                 ) {
                     Box(Modifier.size(8.dp).clip(CircleShape).background(Color.Red))
-                    Text("나의 오늘 기록 중", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+                    Text(stringResource(R.string.impromptu_recording), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
                 }
                 if (activeRoomIds.isNotEmpty()) {
                     Row(
@@ -419,7 +433,7 @@ fun ImpromptuSessionScreen(
                             .padding(horizontal = 10.dp, vertical = 4.dp),
                     ) {
                         Icon(Icons.Filled.LocationOn, contentDescription = null, tint = Color.White, modifier = Modifier.size(10.dp))
-                        Text("그룹 위치 공유 중", fontSize = 11.sp, fontWeight = FontWeight.Medium, color = Color.White.copy(alpha = 0.9f))
+                        Text(stringResource(R.string.session_sharingLocation), fontSize = 11.sp, fontWeight = FontWeight.Medium, color = Color.White.copy(alpha = 0.9f))
                     }
                 }
             }
@@ -431,7 +445,7 @@ fun ImpromptuSessionScreen(
                     .clip(CircleShape)
                     .background(TteOrange),
             ) {
-                Text("${capturedPlaces.size}곳", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                Text(stringResource(R.string.main_placeCount, capturedPlaces.size), fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color.White)
             }
         }
 
@@ -469,12 +483,49 @@ fun ImpromptuSessionScreen(
                             Text(place.placeName, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = TteDarkGray, maxLines = 1)
                             Icon(
                                 Icons.Filled.Close,
-                                contentDescription = "삭제",
+                                contentDescription = stringResource(R.string.common_delete),
                                 tint = TteMediumGray,
                                 modifier = Modifier.size(12.dp).clickable { removePlace(place) },
                             )
                         }
                     }
+                }
+            }
+            // 촬영 예산 진행률 바 (iOS budgetBar) — 총 30초(PRO 5분) 중 사용량
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(horizontal = 4.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        stringResource(R.string.impromptu_videoBudget),
+                        fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = TteMediumGray,
+                    )
+                    Spacer(Modifier.weight(1f))
+                    Text(
+                        if (com.seoktaedev.tteona.core.services.ProManager.isPro.value) {
+                            "${formatMmss(recordedSeconds)} / ${formatMmss(budgetSeconds)}"
+                        } else {
+                            LocaleManager.string(
+                                context, R.string.impromptu_videoBudgetValue,
+                                recordedSeconds.toInt(), budgetSeconds.toInt(),
+                            )
+                        },
+                        fontSize = 12.sp, fontWeight = FontWeight.Bold,
+                        color = if (budgetFull) Color.Red else TteOrange,
+                    )
+                }
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(6.dp)
+                        .clip(RoundedCornerShape(3.dp))
+                        .background(TteMediumGray.copy(alpha = 0.2f)),
+                ) {
+                    Box(
+                        Modifier
+                            .fillMaxWidth(((recordedSeconds / budgetSeconds).coerceIn(0.0, 1.0)).toFloat())
+                            .height(6.dp)
+                            .clip(RoundedCornerShape(3.dp))
+                            .background(if (budgetFull) Color.Red else TteOrange),
+                    )
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -485,8 +536,8 @@ fun ImpromptuSessionScreen(
                         .weight(1f)
                         .height(54.dp)
                         .clip(RoundedCornerShape(14.dp))
-                        .background(TteOrange)
-                        .clickable(enabled = !isResolvingLocation) { startCapture() },
+                        .background(if (budgetFull) TteMediumGray else TteOrange)
+                        .clickable(enabled = !isResolvingLocation && !budgetFull) { startCapture() },
                 ) {
                     Spacer(Modifier.weight(1f))
                     if (isResolvingLocation) {
@@ -494,7 +545,11 @@ fun ImpromptuSessionScreen(
                     } else {
                         Icon(Icons.Filled.CameraAlt, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
                     }
-                    Text("여기서 촬영", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+                    Text(
+                        if (budgetFull) stringResource(R.string.impromptu_budgetFull)
+                        else stringResource(R.string.impromptu_captureHere),
+                        fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Color.White,
+                    )
                     Spacer(Modifier.weight(1f))
                 }
                 if (capturedPlaces.isNotEmpty()) {
@@ -507,7 +562,7 @@ fun ImpromptuSessionScreen(
                             .clickable { showEndSheet = true }
                             .padding(horizontal = 20.dp),
                     ) {
-                        Text("오늘 종료", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = TteOrange)
+                        Text(stringResource(R.string.impromptu_endToday), fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = TteOrange)
                     }
                 }
             }
@@ -604,10 +659,10 @@ fun ImpromptuSessionScreen(
                     Icon(Icons.Filled.History, contentDescription = null, tint = TteOrange, modifier = Modifier.size(30.dp))
                 }
                 Spacer(Modifier.height(16.dp))
-                Text("오늘 기록이 남아있어요", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = TteDarkGray)
+                Text(stringResource(R.string.impromptu_savedSession_title), fontSize = 20.sp, fontWeight = FontWeight.Bold, color = TteDarkGray)
                 saved?.let {
                     Text(
-                        "장소 ${it.places.size}곳 · ${SimpleDateFormat("a h:mm", Locale.KOREA).format(Date(it.date))}",
+                        stringResource(R.string.impromptu_savedSession_detail, it.places.size, SimpleDateFormat("a h:mm", Locale(LocaleManager.current(context).code)).format(Date(it.date))),
                         fontSize = 14.sp, color = TteMediumGray,
                         modifier = Modifier.padding(top = 6.dp),
                     )
@@ -628,7 +683,7 @@ fun ImpromptuSessionScreen(
                 ) {
                     Spacer(Modifier.weight(1f))
                     Icon(Icons.Filled.PlayArrow, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
-                    Text("이어서 기록하기", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+                    Text(stringResource(R.string.main_continueRecording), fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
                     Spacer(Modifier.weight(1f))
                 }
                 Spacer(Modifier.height(12.dp))
@@ -649,7 +704,7 @@ fun ImpromptuSessionScreen(
                 ) {
                     Spacer(Modifier.weight(1f))
                     Icon(Icons.Filled.Refresh, contentDescription = null, tint = TteDarkGray, modifier = Modifier.size(18.dp))
-                    Text("새로 시작하기", fontSize = 16.sp, fontWeight = FontWeight.Medium, color = TteDarkGray)
+                    Text(stringResource(R.string.main_startFresh), fontSize = 16.sp, fontWeight = FontWeight.Medium, color = TteDarkGray)
                     Spacer(Modifier.weight(1f))
                 }
             }
@@ -670,9 +725,9 @@ fun ImpromptuSessionScreen(
                     .padding(horizontal = 20.dp)
                     .padding(bottom = 36.dp),
             ) {
-                Text("오늘을 마칠까요?", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = TteDarkGray)
+                Text(stringResource(R.string.impromptu_endSheet_title), fontSize = 20.sp, fontWeight = FontWeight.Bold, color = TteDarkGray)
                 Text(
-                    "방문한 장소 ${capturedPlaces.size}곳이 기록됐어요",
+                    stringResource(R.string.impromptu_endSheet_subtitle, capturedPlaces.size),
                     fontSize = 14.sp, color = TteMediumGray,
                     modifier = Modifier.padding(top = 6.dp, bottom = 28.dp),
                 )
@@ -681,8 +736,8 @@ fun ImpromptuSessionScreen(
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     EndChoiceCard(
                         icon = Icons.Filled.Movie,
-                        title = "Vlog만 만들기",
-                        subtitle = "영상을 이어 붙여\n추억으로 남겨요",
+                        title = stringResource(R.string.impromptu_vlogOnly_title),
+                        subtitle = stringResource(R.string.impromptu_vlogOnly_subtitle),
                         isPrimary = true,
                         modifier = Modifier.weight(1f),
                     ) {
@@ -692,8 +747,8 @@ fun ImpromptuSessionScreen(
                     }
                     EndChoiceCard(
                         icon = Icons.Filled.LocationOn,
-                        title = "코스 저장 후\nVlog 만들기",
-                        subtitle = "경로를 나중에\n다시 쓸 수 있어요",
+                        title = stringResource(R.string.impromptu_saveCourse_title),
+                        subtitle = stringResource(R.string.impromptu_saveCourse_subtitle),
                         isPrimary = false,
                         modifier = Modifier.weight(1f),
                     ) {
@@ -705,7 +760,7 @@ fun ImpromptuSessionScreen(
 
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     HorizontalDivider(Modifier.weight(1f))
-                    Text("또는", fontSize = 12.sp, color = TteMediumGray)
+                    Text(stringResource(R.string.common_or), fontSize = 12.sp, color = TteMediumGray)
                     HorizontalDivider(Modifier.weight(1f))
                 }
                 Spacer(Modifier.height(14.dp))
@@ -719,7 +774,7 @@ fun ImpromptuSessionScreen(
                         .border(1.dp, TteOrange.copy(alpha = 0.4f), RoundedCornerShape(14.dp))
                         .clickable { showEndSheet = false },
                 ) {
-                    Text("계속 기록할게요", fontSize = 15.sp, fontWeight = FontWeight.Medium, color = TteOrange)
+                    Text(stringResource(R.string.impromptu_keepRecording), fontSize = 15.sp, fontWeight = FontWeight.Medium, color = TteOrange)
                 }
             }
         }
@@ -742,12 +797,12 @@ fun ImpromptuSessionScreen(
                     .padding(bottom = 36.dp),
             ) {
                 Text(
-                    "코스로 저장",
+                    stringResource(R.string.impromptu_saveAsCourse),
                     fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = TteDarkGray,
                     modifier = Modifier.align(Alignment.CenterHorizontally),
                 )
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("코스 이름", fontSize = 14.sp, fontWeight = FontWeight.Medium, color = TteMediumGray)
+                    Text(stringResource(R.string.impromptu_courseName), fontSize = 14.sp, fontWeight = FontWeight.Medium, color = TteMediumGray)
                     Box(
                         Modifier
                             .fillMaxWidth()
@@ -756,7 +811,7 @@ fun ImpromptuSessionScreen(
                             .padding(14.dp),
                     ) {
                         if (courseName.isEmpty()) {
-                            Text("이번 여행의 이름을 지어주세요", fontSize = 17.sp, color = TteMediumGray)
+                            Text(stringResource(R.string.impromptu_courseName_placeholder), fontSize = 17.sp, color = TteMediumGray)
                         }
                         BasicTextField(
                             value = courseName,
@@ -768,12 +823,12 @@ fun ImpromptuSessionScreen(
                     }
                 }
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("태그", fontSize = 14.sp, fontWeight = FontWeight.Medium, color = TteMediumGray)
+                    Text(stringResource(R.string.impromptu_tag), fontSize = 14.sp, fontWeight = FontWeight.Medium, color = TteMediumGray)
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         CourseTag.entries.forEach { tag ->
                             val selected = selectedTag == tag
                             Text(
-                                tag.label,
+                                stringResource(tag.labelRes),
                                 fontSize = 14.sp, fontWeight = FontWeight.Medium,
                                 color = if (selected) Color.White else TteDarkGray,
                                 modifier = Modifier
@@ -799,7 +854,7 @@ fun ImpromptuSessionScreen(
                             showVlog = true
                         },
                 ) {
-                    Text("저장하고 Vlog 만들기", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+                    Text(stringResource(R.string.impromptu_saveAndVlog), fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
                 }
             }
         }
@@ -809,10 +864,10 @@ fun ImpromptuSessionScreen(
     if (showIntegrityAlert) {
         AlertDialog(
             onDismissRequest = { showIntegrityAlert = false },
-            title = { Text("일부 영상 확인 불가") },
-            text = { Text("일부 장소의 영상 파일이 확인되지 않아 촬영 리스트가 자동으로 정리되었습니다. 해당 장소는 다시 촬영하실 수 있습니다.") },
+            title = { Text(stringResource(R.string.session_integrity_title)) },
+            text = { Text(stringResource(R.string.session_integrity_message)) },
             confirmButton = {
-                TextButton(onClick = { showIntegrityAlert = false }) { Text("확인", color = TteOrange) }
+                TextButton(onClick = { showIntegrityAlert = false }) { Text(stringResource(R.string.common_ok), color = TteOrange) }
             },
         )
     }
@@ -875,4 +930,10 @@ private fun EndChoiceCard(
             modifier = Modifier.padding(top = 4.dp),
         )
     }
+}
+
+/** 초 → m:ss (PRO 예산 표시용, iOS mmss) */
+internal fun formatMmss(seconds: Double): String {
+    val v = seconds.toInt().coerceAtLeast(0)
+    return String.format(java.util.Locale.US, "%d:%02d", v / 60, v % 60)
 }

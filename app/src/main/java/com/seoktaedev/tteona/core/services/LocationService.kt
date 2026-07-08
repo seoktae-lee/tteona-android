@@ -2,6 +2,8 @@ package com.seoktaedev.tteona.core.services
 
 import android.annotation.SuppressLint
 import android.content.Context
+import com.seoktaedev.tteona.R
+import com.seoktaedev.tteona.core.i18n.LocaleManager
 import android.location.Location
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationCallback
@@ -105,8 +107,8 @@ class LocationService(context: Context) {
         )
         val notification = androidx.core.app.NotificationCompat.Builder(appContext, "tteona_default")
             .setSmallIcon(com.seoktaedev.tteona.R.drawable.ic_stat_tteona)
-            .setContentTitle("📍 ${placeName}에 도착했어요!")
-            .setContentText("지금 촬영하세요")
+            .setContentTitle(LocaleManager.string(R.string.notif_arrived_title, placeName))
+            .setContentText(LocaleManager.string(R.string.notif_arrived_body))
             .setAutoCancel(true)
             .setPriority(androidx.core.app.NotificationCompat.PRIORITY_HIGH)
             .setContentIntent(pending)

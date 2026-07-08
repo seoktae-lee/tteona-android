@@ -49,11 +49,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.seoktaedev.tteona.R
 import com.seoktaedev.tteona.core.auth.AuthService
+import com.seoktaedev.tteona.core.i18n.LocaleManager
 import com.seoktaedev.tteona.core.model.FeedItem
 import com.seoktaedev.tteona.core.model.FeedType
 import com.seoktaedev.tteona.core.model.Room
@@ -90,8 +93,8 @@ private sealed class TimelineEntry(val key: String, val date: Long) {
 @Composable
 fun GroupChatSection(room: Room, modifier: Modifier = Modifier) {
     val uid = AuthService.currentUser.value?.uid ?: ""
-    val myNickname = UserService.currentUser.value?.nickname?.takeIf { it.isNotEmpty() } ?: "멤버"
     val context = LocalContext.current
+    val myNickname = UserService.currentUser.value?.nickname?.takeIf { it.isNotEmpty() } ?: LocaleManager.string(context, R.string.session_member)
 
     val chat = remember(room.roomId) { ChatSocketService() }
     val messages by chat.messages.collectAsState()
@@ -162,7 +165,7 @@ fun GroupChatSection(room: Room, modifier: Modifier = Modifier) {
                         },
                     )
 
-                    is TimelineEntry.System -> SystemMessageRow(systemText(entry.feed))
+                    is TimelineEntry.System -> SystemMessageRow(systemText(context, entry.feed))
                 }
             }
         }
@@ -203,12 +206,12 @@ fun GroupChatSection(room: Room, modifier: Modifier = Modifier) {
                             .background(TteOrange)
                     )
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        Text("${reply.nickname}님에게 답장", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = TteOrange)
+                        Text(stringResource(R.string.chat_replyTo, reply.nickname), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = TteOrange)
                         Text(reply.text, fontSize = 12.sp, color = TteMediumGray, maxLines = 1)
                     }
                     Icon(
                         Icons.Filled.Cancel,
-                        contentDescription = "답장 취소",
+                        contentDescription = stringResource(R.string.group_cancelReply),
                         tint = TteMediumGray.copy(alpha = 0.6f),
                         modifier = Modifier
                             .size(18.dp)
@@ -235,7 +238,7 @@ fun GroupChatSection(room: Room, modifier: Modifier = Modifier) {
                                 .background(TteFieldBackground)
                                 .padding(horizontal = 14.dp, vertical = 10.dp),
                         ) {
-                            if (draft.isEmpty()) Text("메시지 입력...", fontSize = 15.sp, color = TteMediumGray)
+                            if (draft.isEmpty()) Text(stringResource(R.string.chat_placeholder), fontSize = 15.sp, color = TteMediumGray)
                             inner()
                         }
                     },
@@ -254,7 +257,7 @@ fun GroupChatSection(room: Room, modifier: Modifier = Modifier) {
                             replyingTo = null
                         },
                 ) {
-                    Icon(Icons.Filled.ArrowUpward, contentDescription = "전송", tint = Color.White, modifier = Modifier.size(18.dp))
+                    Icon(Icons.Filled.ArrowUpward, contentDescription = stringResource(R.string.group_send), tint = Color.White, modifier = Modifier.size(18.dp))
                 }
             }
         }
@@ -362,12 +365,12 @@ private fun ChatBubbleRow(
                             }
                         }
                         DropdownMenuItem(
-                            text = { Text("답장") },
+                            text = { Text(stringResource(R.string.chat_reply)) },
                             leadingIcon = { Icon(Icons.AutoMirrored.Filled.Reply, contentDescription = null) },
                             onClick = { showMenu = false; onReply() },
                         )
                         DropdownMenuItem(
-                            text = { Text("복사") },
+                            text = { Text(stringResource(R.string.chat_copy)) },
                             leadingIcon = { Icon(Icons.Filled.ContentCopy, contentDescription = null) },
                             onClick = { showMenu = false; onCopy() },
                         )
@@ -436,14 +439,14 @@ private fun SystemMessageRow(text: String) {
 
 // MARK: - Helpers
 
-private fun systemText(item: FeedItem): String = when (item.type) {
-    FeedType.TRIP_START -> "🚀 ${item.nickname}님이 ${item.courseName} 여행을 시작했어요"
-    FeedType.TRIP_END -> "✅ ${item.nickname}님이 ${item.courseName} 여행을 종료했어요"
-    FeedType.ARRIVAL -> "📍 ${item.nickname}님이 ${item.placeName ?: ""}에 도착했어요"
-    FeedType.PHOTO -> "📸 ${item.nickname}님이 사진을 공유했어요"
-    FeedType.FREE_TRIP_START -> "🗺️ ${item.nickname}님이 나의 오늘을 시작했어요"
-    FeedType.FREE_CAPTURE -> "📸 ${item.nickname}님이 ${item.placeName ?: "이곳"}에서 영상을 남겼어요"
-    FeedType.FREE_TRIP_END -> "✅ ${item.nickname}님의 오늘이 끝났어요 · ${item.courseName}"
+private fun systemText(context: android.content.Context, item: FeedItem): String = when (item.type) {
+    FeedType.TRIP_START -> LocaleManager.string(context, R.string.feed_tripStart, item.nickname, item.courseName)
+    FeedType.TRIP_END -> LocaleManager.string(context, R.string.feed_tripEnd, item.nickname, item.courseName)
+    FeedType.ARRIVAL -> LocaleManager.string(context, R.string.feed_arrival, item.nickname, item.placeName ?: "")
+    FeedType.PHOTO -> LocaleManager.string(context, R.string.feed_photo, item.nickname)
+    FeedType.FREE_TRIP_START -> LocaleManager.string(context, R.string.feed_freeTripStart, item.nickname)
+    FeedType.FREE_CAPTURE -> LocaleManager.string(context, R.string.feed_freeCapture, item.nickname, item.placeName ?: LocaleManager.string(context, R.string.feed_here))
+    FeedType.FREE_TRIP_END -> LocaleManager.string(context, R.string.feed_freeTripEnd, item.nickname, item.courseName)
 }
 
 private fun timeText(millis: Long): String =

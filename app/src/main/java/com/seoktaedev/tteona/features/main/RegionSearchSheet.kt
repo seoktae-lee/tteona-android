@@ -43,8 +43,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.seoktaedev.tteona.R
 import com.seoktaedev.tteona.core.services.PlaceSearchService
 import com.seoktaedev.tteona.ui.theme.Pretendard
 import com.seoktaedev.tteona.ui.theme.TteDarkGray
@@ -88,7 +90,7 @@ fun RegionSearchSheet(
     ) {
         Column(Modifier.fillMaxHeight(0.9f)) {
             Text(
-                "지역 검색",
+                stringResource(R.string.region_title),
                 fontSize = 17.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = TteDarkGray,
@@ -111,7 +113,7 @@ fun RegionSearchSheet(
                 Icon(Icons.Filled.Search, contentDescription = null, tint = TteMediumGray, modifier = Modifier.size(20.dp))
                 Box(Modifier.weight(1f)) {
                     if (query.isEmpty()) {
-                        Text("지역, 동네 검색 (예: 잠실, 홍대, 해운대)", fontSize = 15.sp, color = TteMediumGray)
+                        Text(stringResource(R.string.region_placeholder), fontSize = 15.sp, color = TteMediumGray)
                     }
                     BasicTextField(
                         value = query,
@@ -126,7 +128,7 @@ fun RegionSearchSheet(
                 if (query.isNotEmpty()) {
                     Icon(
                         Icons.Filled.Cancel,
-                        contentDescription = "검색어 지우기",
+                        contentDescription = stringResource(R.string.main_clearSearch),
                         tint = TteMediumGray,
                         modifier = Modifier
                             .size(18.dp)
@@ -141,11 +143,11 @@ fun RegionSearchSheet(
                 }
                 results.isEmpty() && query.isNotEmpty() -> EmptyState(
                     icon = { Icon(Icons.Filled.Search, contentDescription = null, tint = TteMediumGray.copy(alpha = 0.4f), modifier = Modifier.size(36.dp)) },
-                    message = "검색 결과가 없어요",
+                    message = stringResource(R.string.region_noResults),
                 )
                 results.isEmpty() -> EmptyState(
                     icon = { Icon(Icons.Filled.Map, contentDescription = null, tint = TteOrange.copy(alpha = 0.4f), modifier = Modifier.size(36.dp)) },
-                    message = "동네나 지역을 검색해보세요",
+                    message = stringResource(R.string.region_hint),
                 )
                 else -> LazyColumn {
                     items(results) { item ->

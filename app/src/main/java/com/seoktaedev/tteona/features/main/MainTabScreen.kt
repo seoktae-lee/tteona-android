@@ -35,7 +35,9 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.core.content.ContextCompat
+import com.seoktaedev.tteona.R
 import com.seoktaedev.tteona.core.model.Course
 import com.seoktaedev.tteona.core.model.CourseSessionInfo
 import com.seoktaedev.tteona.core.services.ActiveSessionStore
@@ -53,13 +55,13 @@ import com.seoktaedev.tteona.features.session.ActiveSessionScreen
 import com.seoktaedev.tteona.features.settings.SettingsScreen
 
 // iOS MainTabView와 동일한 4탭 구성: 홈(지도) / 탐색 / 채팅(그룹) / 설정
-private data class TabItem(val label: String, val icon: ImageVector)
+private data class TabItem(val labelRes: Int, val icon: ImageVector)
 
 private val tabs = listOf(
-    TabItem("홈", Icons.Filled.Map),
-    TabItem("탐색", Icons.Filled.GridView),
-    TabItem("채팅", Icons.AutoMirrored.Filled.Chat),
-    TabItem("설정", Icons.Filled.Settings),
+    TabItem(R.string.tab_home, Icons.Filled.Map),
+    TabItem(R.string.tab_explore, Icons.Filled.GridView),
+    TabItem(R.string.tab_chat, Icons.AutoMirrored.Filled.Chat),
+    TabItem(R.string.tab_settings, Icons.Filled.Settings),
 )
 
 // 코스 상세 표시용 선택 상태 (iOS의 sheet(item:) 대응)
@@ -135,15 +137,16 @@ fun MainTabScreen() {
                             selected = selectedTab == index,
                             onClick = { selectedTab = index },
                             icon = {
+                                val label = stringResource(tab.labelRes)
                                 if (index == 2 && unreadRoomIds.isNotEmpty()) {
                                     BadgedBox(badge = { Badge { Text("${unreadRoomIds.size}") } }) {
-                                        Icon(tab.icon, contentDescription = tab.label)
+                                        Icon(tab.icon, contentDescription = label)
                                     }
                                 } else {
-                                    Icon(tab.icon, contentDescription = tab.label)
+                                    Icon(tab.icon, contentDescription = label)
                                 }
                             },
-                            label = { Text(tab.label) },
+                            label = { Text(stringResource(tab.labelRes)) },
                         )
                     }
                 }

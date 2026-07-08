@@ -42,10 +42,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil3.compose.SubcomposeAsyncImage
+import com.seoktaedev.tteona.R
 import com.seoktaedev.tteona.core.model.Course
 import com.seoktaedev.tteona.core.model.CreatorRank
 import com.seoktaedev.tteona.ui.theme.TteFieldBackground
@@ -94,10 +96,10 @@ fun ExploreScreen(
                 .padding(vertical = 12.dp),
             contentAlignment = Alignment.Center,
         ) {
-            Text("탐색", fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+            Text(stringResource(R.string.tab_explore), fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
             Icon(
                 Icons.Filled.Groups,
-                contentDescription = "그룹",
+                contentDescription = stringResource(R.string.common_group),
                 tint = TteOrange,
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
@@ -159,7 +161,7 @@ private fun SortChips(
         ExploreViewModel.SortMode.entries.forEach { mode ->
             val selected = current == mode
             Text(
-                text = mode.label,
+                text = stringResource(mode.labelRes),
                 fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = if (selected) Color.White else TteMediumGray,
@@ -178,7 +180,7 @@ private fun SortChips(
 private fun CreatorRankingStrip(ranking: List<CreatorRank>) {
     Column(modifier = Modifier.padding(vertical = 12.dp)) {
         Text(
-            "이번 주 인기 크리에이터",
+            stringResource(R.string.explore_weeklyCreators),
             fontSize = 14.sp,
             fontWeight = FontWeight.Bold,
             modifier = Modifier.padding(horizontal = 4.dp),
@@ -244,7 +246,7 @@ private fun CreatorRankingStrip(ranking: List<CreatorRank>) {
                             Spacer(Modifier.width(2.dp))
                             Icon(
                                 Icons.Filled.Verified,
-                                contentDescription = "인증됨",
+                                contentDescription = stringResource(R.string.common_verified),
                                 tint = TteOrange,
                                 modifier = Modifier.size(11.dp),
                             )
@@ -325,7 +327,7 @@ private fun GridCell(course: Course, thumbnailUrl: String?, onClick: () -> Unit)
             )
             Spacer(Modifier.height(3.dp))
             Text(
-                "${course.region} · ${course.tag.label}",
+                "${course.region} · ${stringResource(course.tag.labelRes)}",
                 fontSize = 11.sp,
                 color = Color.White.copy(alpha = 0.9f),
                 maxLines = 1,
@@ -349,6 +351,6 @@ private fun EmptyState() {
             modifier = Modifier.size(44.dp),
         )
         Spacer(Modifier.height(12.dp))
-        Text("아직 등록된 코스가 없어요", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+        Text(stringResource(R.string.explore_empty), fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
     }
 }

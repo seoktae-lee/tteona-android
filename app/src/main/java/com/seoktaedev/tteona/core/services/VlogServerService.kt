@@ -1,6 +1,8 @@
 package com.seoktaedev.tteona.core.services
 
 import android.content.Context
+import com.seoktaedev.tteona.R
+import com.seoktaedev.tteona.core.i18n.LocaleManager
 import com.seoktaedev.tteona.core.model.Course
 import com.seoktaedev.tteona.core.network.ApiClient
 import kotlinx.coroutines.Dispatchers
@@ -94,9 +96,9 @@ object VlogServerService {
             val file = VlogClips.clipFile(context, place, sessionId)
             if (file.exists()) place to file else null
         }
-        if (clips.isEmpty()) throw ServerVlogException("업로드할 클립이 없어요.")
+        if (clips.isEmpty()) throw ServerVlogException(LocaleManager.string(R.string.vlogserver_error_noClips))
 
-        onProgress(0.02, "서버에 편집을 준비하고 있어요")
+        onProgress(0.02, LocaleManager.string(R.string.vlogserver_prep))
 
         // 1) 잡 생성 (태그 → BGM 무드, shotAt → 클립별 촬영시각 자막)
         val df = SimpleDateFormat("yyyy.MM.dd  HH:mm", Locale.KOREA)
@@ -115,10 +117,10 @@ object VlogServerService {
 
         // 2) 클립 업로드 (0.05 → 0.45)
         clips.forEachIndexed { i, (place, file) ->
-            onProgress(0.05 + 0.40 * i / clips.size, "클립 업로드 중 (${i + 1}/${clips.size})")
+            onProgress(0.05 + 0.40 * i / clips.size, LocaleManager.string(R.string.vlogserver_uploading, i + 1, clips.size))
             uploadClip(jobId, place.order, file)
         }
-        onProgress(0.45, "서버에서 편집 중이에요")
+        onProgress(0.45, LocaleManager.string(R.string.vlogserver_editing))
 
         // 3) 합성 시작
         startJob(jobId)
@@ -137,22 +139,22 @@ object VlogServerService {
                     outputUrl = st.outputUrl
                     outputs = st.outputs ?: emptyList()
                 }
-                "failed" -> throw ServerVlogException("서버 편집 실패: ${st.errorMsg ?: "unknown"}")
-                else -> onProgress(0.45 + 0.43 * st.progress / 100.0, "서버에서 편집 중이에요")
+                "failed" -> throw ServerVlogException(LocaleManager.string(R.string.vlogserver_error_processingFailed, st.errorMsg ?: "unknown"))
+                else -> onProgress(0.45 + 0.43 * st.progress / 100.0, LocaleManager.string(R.string.vlogserver_editing))
             }
         }
-        val mainUrl = outputUrl ?: throw ServerVlogException("서버 편집 시간 초과")
+        val mainUrl = outputUrl ?: throw ServerVlogException(LocaleManager.string(R.string.vlogserver_error_timeout))
 
         // 5) 완성본 다운로드 (0.88 → 0.98) — 기본본 + 추가 포맷들
-        onProgress(0.90, "완성본을 받아오고 있어요")
+        onProgress(0.90, LocaleManager.string(R.string.vlogserver_receiving))
         val mainLocal = download(context, mainUrl)
         val extras = mutableListOf<Pair<String, File>>()
         val extraItems = outputs.filter { it.url != mainUrl }
         extraItems.forEachIndexed { i, item ->
-            onProgress(0.92 + 0.05 * i / maxOf(extraItems.size, 1), "선택한 포맷 버전을 받아오고 있어요")
+            onProgress(0.92 + 0.05 * i / maxOf(extraItems.size, 1), LocaleManager.string(R.string.vlogserver_receivingFormats))
             runCatching { download(context, item.url) }.getOrNull()?.let { extras.add(item.format to it) }
         }
-        onProgress(0.98, "거의 다 됐어요")
+        onProgress(0.98, LocaleManager.string(R.string.vlogserver_almostDone))
         GeneratedVlog(mainLocal, extras)
     }
 
@@ -184,9 +186,9 @@ object VlogServerService {
         val req = Request.Builder().url("$BASE_URL/jobs").post(body).build()
         ApiClient.httpClient.newCall(req).execute().use { res ->
             val text = res.body?.string() ?: ""
-            if (!res.isSuccessful) throw ServerVlogException("잡 생성 실패: ${text.take(120)}")
+            if (!res.isSuccessful) throw ServerVlogException(LocaleManager.string(R.string.vlogserver_error_jobCreateFailed, text.take(120)))
             return json.parseToJsonElement(text).jsonObject["jobId"]?.jsonPrimitive?.content?.toIntOrNull()
-                ?: throw ServerVlogException("잡 생성 응답 오류")
+                ?: throw ServerVlogException(LocaleManager.string(R.string.vlogserver_error_jobCreateResponse))
         }
     }
 
@@ -204,7 +206,7 @@ object VlogServerService {
         client.newCall(req).execute().use { res ->
             if (!res.isSuccessful) {
                 val msg = res.body?.string() ?: "upload failed"
-                throw ServerVlogException("클립 $order 업로드 실패: ${msg.take(120)}")
+                throw ServerVlogException(LocaleManager.string(R.string.vlogserver_error_clipUploadFailed, order, msg.take(120)))
             }
         }
     }
@@ -215,14 +217,14 @@ object VlogServerService {
             .post(ByteArray(0).toRequestBody(null))
             .build()
         ApiClient.httpClient.newCall(req).execute().use { res ->
-            if (!res.isSuccessful) throw ServerVlogException("합성 시작 실패")
+            if (!res.isSuccessful) throw ServerVlogException(LocaleManager.string(R.string.vlogserver_error_compositeStartFailed))
         }
     }
 
     private fun status(jobId: Int): JobStatus {
         val req = Request.Builder().url("$BASE_URL/jobs/$jobId").build()
         ApiClient.httpClient.newCall(req).execute().use { res ->
-            if (!res.isSuccessful) throw ServerVlogException("상태 조회 실패")
+            if (!res.isSuccessful) throw ServerVlogException(LocaleManager.string(R.string.vlogserver_error_statusFailed))
             return json.decodeFromString(res.body?.string() ?: "{}")
         }
     }
@@ -230,11 +232,11 @@ object VlogServerService {
     private fun download(context: Context, urlString: String): File {
         val req = Request.Builder().url(urlString).build()
         ApiClient.httpClient.newCall(req).execute().use { res ->
-            if (!res.isSuccessful) throw ServerVlogException("완성본 다운로드 실패")
+            if (!res.isSuccessful) throw ServerVlogException(LocaleManager.string(R.string.vlogserver_error_downloadFailed))
             val dest = File(context.cacheDir, "vlog_${UUID.randomUUID()}.mp4")
             res.body?.byteStream()?.use { input ->
                 dest.outputStream().use { output -> input.copyTo(output) }
-            } ?: throw ServerVlogException("완성본 다운로드 실패")
+            } ?: throw ServerVlogException(LocaleManager.string(R.string.vlogserver_error_downloadFailed))
             return dest
         }
     }

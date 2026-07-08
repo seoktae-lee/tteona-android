@@ -18,6 +18,7 @@ import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import com.seoktaedev.tteona.MainActivity
 import com.seoktaedev.tteona.R
+import com.seoktaedev.tteona.core.i18n.LocaleManager
 import com.seoktaedev.tteona.core.network.ApiClient
 import com.seoktaedev.tteona.core.network.PushRegisterRequest
 import kotlinx.coroutines.CoroutineScope
@@ -42,7 +43,7 @@ class TteonaMessagingService : FirebaseMessagingService() {
         // 현재 보고 있는 채팅방의 알림은 억제 (iOS activeChatRoom 처리와 동일)
         if (roomId != null && roomId == AppNotificationManager.activeChatRoomId) return
 
-        val title = message.notification?.title ?: data["title"] ?: "떠나"
+        val title = message.notification?.title ?: data["title"] ?: LocaleManager.string(R.string.onboarding_logoDesc)
         val body = message.notification?.body ?: data["body"] ?: return
 
         showNotification(title, body, data)
@@ -85,8 +86,8 @@ class TteonaMessagingService : FirebaseMessagingService() {
             val manager = context.getSystemService(NOTIFICATION_SERVICE) as NotificationManager
             if (manager.getNotificationChannel(CHANNEL_ID) == null) {
                 manager.createNotificationChannel(
-                    NotificationChannel(CHANNEL_ID, "떠나 알림", NotificationManager.IMPORTANCE_HIGH).apply {
-                        description = "그룹 활동·댓글·코스 알림"
+                    NotificationChannel(CHANNEL_ID, LocaleManager.string(R.string.notif_channelName), NotificationManager.IMPORTANCE_HIGH).apply {
+                        description = LocaleManager.string(R.string.notif_channelDesc)
                     }
                 )
             }

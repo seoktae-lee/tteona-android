@@ -44,6 +44,15 @@ object ProManager {
     /** 한 장소(클립)당 최대 촬영 길이 (초) — 무료 5초, PRO는 제한 없음(총 예산 내) */
     val vlogClipMaxSeconds: Double? get() = if (_isPro.value) null else 5.0
 
+    /**
+     * 세션 예산을 클립 단위로 나눈 칸 수 — 무료는 6칸(30÷5) 분절 링,
+     * PRO는 클립 제한이 없어 분절이 의미 없으므로 null(연속 링)을 반환한다. (iOS vlogSegmentCount)
+     */
+    val vlogSegmentCount: Int?
+        get() = vlogClipMaxSeconds?.takeIf { it > 0 }?.let {
+            Math.round(vlogBudgetSeconds / it).toInt()
+        }
+
     private val isConfigured get() = Purchases.isConfigured
 
     fun configure(context: Context, userId: String?) {

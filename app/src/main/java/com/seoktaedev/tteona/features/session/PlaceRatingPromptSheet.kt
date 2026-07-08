@@ -39,8 +39,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.seoktaedev.tteona.R
 import com.seoktaedev.tteona.core.model.Place
 import com.seoktaedev.tteona.core.services.PlaceDetailService
 import com.seoktaedev.tteona.core.services.PlaceReviewService
@@ -101,7 +103,7 @@ fun PlaceRatingPromptSheet(
                 .padding(bottom = 32.dp),
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("방금 방문한 장소 어떠셨나요?", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = TteDarkGray)
+                Text(stringResource(R.string.rating_title), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = TteDarkGray)
                 Text(place.placeName, fontSize = 13.sp, color = TteMediumGray)
             }
 
@@ -109,7 +111,7 @@ fun PlaceRatingPromptSheet(
                 (1..5).forEach { i ->
                     Icon(
                         if (i <= selectedRating) Icons.Filled.Star else Icons.Filled.StarBorder,
-                        contentDescription = "${i}점",
+                        contentDescription = stringResource(R.string.rating_stars, i),
                         tint = if (i <= selectedRating) TteOrange else TteMediumGray.copy(alpha = 0.3f),
                         modifier = Modifier
                             .size(34.dp)
@@ -127,7 +129,7 @@ fun PlaceRatingPromptSheet(
                         .padding(12.dp),
                 ) {
                     if (comment.isEmpty()) {
-                        Text("한 줄 후기 (선택)", fontSize = 14.sp, color = TteMediumGray)
+                        Text(stringResource(R.string.rating_commentPlaceholder), fontSize = 14.sp, color = TteMediumGray)
                     }
                     BasicTextField(
                         value = comment,
@@ -151,7 +153,7 @@ fun PlaceRatingPromptSheet(
                         .background(TteFieldBackground)
                         .clickable(onClick = onDismiss),
                 ) {
-                    Text("나중에", fontSize = 15.sp, color = TteMediumGray)
+                    Text(stringResource(R.string.rating_later), fontSize = 15.sp, color = TteMediumGray)
                 }
                 Box(
                     contentAlignment = Alignment.Center,
@@ -166,7 +168,7 @@ fun PlaceRatingPromptSheet(
                         CircularProgressIndicator(color = Color.White, modifier = Modifier.size(22.dp))
                     } else {
                         Text(
-                            if (selectedRating > 0) "등록" else "건너뛰기",
+                            if (selectedRating > 0) stringResource(R.string.rating_submit) else stringResource(R.string.common_skip),
                             fontSize = 15.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = Color.White,

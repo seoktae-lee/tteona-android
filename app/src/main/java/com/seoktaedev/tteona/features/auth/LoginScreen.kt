@@ -49,6 +49,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -73,6 +74,7 @@ fun LoginScreen(viewModel: AuthViewModel = viewModel()) {
     val isLoading by viewModel.isLoading.collectAsState()
     val errorMessage by viewModel.errorMessage.collectAsState()
     val validationError by viewModel.validationError.collectAsState()
+    val passwordMismatchMessage = stringResource(R.string.auth_passwordMismatch)
     val verificationEmailSent by viewModel.verificationEmailSent.collectAsState()
     val isSignUp by viewModel.isSignUp.collectAsState()
     val resetEmailSent by viewModel.resetEmailSent.collectAsState()
@@ -113,12 +115,12 @@ fun LoginScreen(viewModel: AuthViewModel = viewModel()) {
                 modifier = Modifier.width(190.dp),
             )
             Spacer(Modifier.height(16.dp))
-            Text("특별한 순간을 영상으로 기록하세요", fontSize = 15.sp, color = TteMediumGray)
+            Text(stringResource(R.string.auth_tagline), fontSize = 15.sp, color = TteMediumGray)
 
             Spacer(Modifier.height(48.dp))
 
             // 소셜 로그인 섹션
-            Text("소셜 계정으로 로그인", fontSize = 13.sp, color = TteMediumGray)
+            Text(stringResource(R.string.auth_socialLogin), fontSize = 13.sp, color = TteMediumGray)
             Spacer(Modifier.height(16.dp))
             val context = LocalContext.current
             Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
@@ -154,7 +156,7 @@ fun LoginScreen(viewModel: AuthViewModel = viewModel()) {
                 ) {
                     Icon(
                         Icons.Filled.ChatBubble,
-                        contentDescription = "카카오 로그인",
+                        contentDescription = stringResource(R.string.auth_kakaoLogin),
                         tint = Color(0xFF3A1D1D),
                         modifier = Modifier.size(22.dp),
                     )
@@ -164,12 +166,12 @@ fun LoginScreen(viewModel: AuthViewModel = viewModel()) {
             Spacer(Modifier.height(28.dp))
 
             // 이메일 입력 섹션
-            TteTextField(email, { email = it }, "이메일", KeyboardType.Email)
+            TteTextField(email, { email = it }, stringResource(R.string.auth_email), KeyboardType.Email)
             Spacer(Modifier.height(14.dp))
-            TteTextField(password, { password = it }, "비밀번호", isSecure = true)
+            TteTextField(password, { password = it }, stringResource(R.string.auth_password), isSecure = true)
             Spacer(Modifier.height(6.dp))
             Text(
-                "6자 이상 입력해주세요",
+                stringResource(R.string.auth_passwordHint),
                 fontSize = 12.sp,
                 color = TteMediumGray,
                 modifier = Modifier
@@ -179,7 +181,7 @@ fun LoginScreen(viewModel: AuthViewModel = viewModel()) {
 
             if (isSignUp) {
                 Spacer(Modifier.height(14.dp))
-                TteTextField(confirmPassword, { confirmPassword = it }, "비밀번호 확인", isSecure = true)
+                TteTextField(confirmPassword, { confirmPassword = it }, stringResource(R.string.auth_confirmPassword), isSecure = true)
             }
 
             (validationError ?: errorMessage)?.let { error ->
@@ -199,7 +201,7 @@ fun LoginScreen(viewModel: AuthViewModel = viewModel()) {
             // 액션 버튼
             Button(
                 onClick = {
-                    if (isSignUp) viewModel.signUp(email, password, confirmPassword)
+                    if (isSignUp) viewModel.signUp(email, password, confirmPassword, passwordMismatchMessage)
                     else viewModel.signIn(email, password)
                 },
                 enabled = !isLoading,
@@ -217,7 +219,7 @@ fun LoginScreen(viewModel: AuthViewModel = viewModel()) {
                     )
                 } else {
                     Text(
-                        if (isSignUp) "회원가입" else "로그인",
+                        if (isSignUp) stringResource(R.string.auth_signUp) else stringResource(R.string.auth_signIn),
                         fontSize = 17.sp,
                         fontWeight = FontWeight.SemiBold,
                     )
@@ -227,7 +229,7 @@ fun LoginScreen(viewModel: AuthViewModel = viewModel()) {
             if (!isSignUp) {
                 Spacer(Modifier.height(12.dp))
                 Text(
-                    "비밀번호를 잊으셨나요?",
+                    stringResource(R.string.auth_forgotPassword),
                     fontSize = 13.sp,
                     color = TteMediumGray,
                     textDecoration = TextDecoration.Underline,
@@ -246,12 +248,12 @@ fun LoginScreen(viewModel: AuthViewModel = viewModel()) {
                 },
             ) {
                 Text(
-                    if (isSignUp) "이미 계정이 있으신가요?" else "계정이 없으신가요?",
+                    if (isSignUp) stringResource(R.string.auth_alreadyHaveAccount) else stringResource(R.string.auth_noAccount),
                     fontSize = 14.sp,
                     color = TteMediumGray,
                 )
                 Text(
-                    if (isSignUp) "로그인" else "회원가입",
+                    if (isSignUp) stringResource(R.string.auth_signIn) else stringResource(R.string.auth_signUp),
                     fontSize = 14.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = TteOrange,
@@ -267,22 +269,22 @@ fun LoginScreen(viewModel: AuthViewModel = viewModel()) {
         var resetEmail by rememberSaveable { mutableStateOf(email) }
         AlertDialog(
             onDismissRequest = { showResetDialog = false },
-            title = { Text("비밀번호 재설정") },
+            title = { Text(stringResource(R.string.auth_resetPassword)) },
             text = {
                 Column {
-                    Text("가입한 이메일 주소를 입력하면 비밀번호 재설정 링크를 보내드려요.")
+                    Text(stringResource(R.string.auth_resetPassword_message))
                     Spacer(Modifier.height(12.dp))
-                    TteTextField(resetEmail, { resetEmail = it }, "이메일 주소", KeyboardType.Email)
+                    TteTextField(resetEmail, { resetEmail = it }, stringResource(R.string.auth_emailAddress), KeyboardType.Email)
                 }
             },
             confirmButton = {
                 TextButton(onClick = {
                     viewModel.sendPasswordReset(resetEmail)
                     showResetDialog = false
-                }) { Text("전송", color = TteOrange) }
+                }) { Text(stringResource(R.string.auth_send), color = TteOrange) }
             },
             dismissButton = {
-                TextButton(onClick = { showResetDialog = false }) { Text("취소") }
+                TextButton(onClick = { showResetDialog = false }) { Text(stringResource(R.string.common_cancel)) }
             },
         )
     }
@@ -290,10 +292,10 @@ fun LoginScreen(viewModel: AuthViewModel = viewModel()) {
     if (resetEmailSent) {
         AlertDialog(
             onDismissRequest = { viewModel.dismissResetAlert() },
-            title = { Text("이메일을 보냈어요") },
-            text = { Text("입력하신 이메일로 비밀번호 재설정 링크를 전송했어요. 메일함을 확인해주세요.") },
+            title = { Text(stringResource(R.string.auth_emailSent_title)) },
+            text = { Text(stringResource(R.string.auth_emailSent_message)) },
             confirmButton = {
-                TextButton(onClick = { viewModel.dismissResetAlert() }) { Text("확인", color = TteOrange) }
+                TextButton(onClick = { viewModel.dismissResetAlert() }) { Text(stringResource(R.string.common_ok), color = TteOrange) }
             },
         )
     }
@@ -350,10 +352,10 @@ private fun VerificationSentView(
             }
             Spacer(Modifier.height(40.dp))
 
-            Text("이메일을 확인해주세요", fontSize = 24.sp, fontWeight = FontWeight.Bold)
+            Text(stringResource(R.string.auth_checkEmail_title), fontSize = 24.sp, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(12.dp))
             Text(
-                "가입하신 이메일로 인증 링크를 보냈어요.\n링크를 클릭한 후 아래 버튼을 눌러주세요.",
+                stringResource(R.string.auth_checkEmail_message),
                 fontSize = 15.sp,
                 color = TteMediumGray,
                 textAlign = TextAlign.Center,
@@ -361,7 +363,7 @@ private fun VerificationSentView(
             )
             Spacer(Modifier.height(8.dp))
             Text(
-                "메일이 보이지 않으면 스팸함도 확인해주세요.",
+                stringResource(R.string.auth_checkSpam),
                 fontSize = 12.sp,
                 color = TteMediumGray.copy(alpha = 0.7f),
             )
@@ -395,7 +397,7 @@ private fun VerificationSentView(
                     modifier = Modifier.size(16.dp),
                 )
                 Text(
-                    if (resendCooldown > 0) "재전송 ${resendCooldown}초 후 가능" else "인증 메일 재전송",
+                    if (resendCooldown > 0) stringResource(R.string.auth_resendIn, resendCooldown) else stringResource(R.string.auth_resendVerification),
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Medium,
                     color = if (resendCooldown > 0) TteMediumGray.copy(alpha = 0.5f) else TteOrange,
@@ -420,7 +422,7 @@ private fun VerificationSentView(
                         strokeWidth = 2.dp,
                     )
                 } else {
-                    Text("인증 완료 후 시작하기", fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+                    Text(stringResource(R.string.auth_startAfterVerify), fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
 
@@ -431,10 +433,10 @@ private fun VerificationSentView(
     if (showResendAlert) {
         AlertDialog(
             onDismissRequest = { showResendAlert = false },
-            title = { Text("인증 메일") },
-            text = { Text("인증 메일을 다시 보냈어요. 메일함(스팸함 포함)을 확인해주세요.") },
+            title = { Text(stringResource(R.string.auth_verificationMail)) },
+            text = { Text(stringResource(R.string.auth_resendDone)) },
             confirmButton = {
-                TextButton(onClick = { showResendAlert = false }) { Text("확인", color = TteOrange) }
+                TextButton(onClick = { showResendAlert = false }) { Text(stringResource(R.string.common_ok), color = TteOrange) }
             },
         )
     }

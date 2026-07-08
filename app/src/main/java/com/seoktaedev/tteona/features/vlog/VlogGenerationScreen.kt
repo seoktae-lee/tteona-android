@@ -679,16 +679,13 @@ private fun VlogPreviewView(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier.fillMaxSize(),
         ) {
-        // 완성 헤더 — 축하하는 나루 + 폭죽 + 문구 + 자동 저장 안내
+        // 완성 헤더 — 축하하는 나루 + 문구 + 자동 저장 안내
         Spacer(Modifier.height(40.dp))
-        Box(contentAlignment = Alignment.TopEnd) {
-            Image(
-                painter = painterResource(R.drawable.tteoni_jump),
-                contentDescription = null,
-                modifier = Modifier.height(96.dp),
-            )
-            Text("🎉", fontSize = 26.sp, modifier = Modifier.offset(x = 10.dp, y = (-2).dp))
-        }
+        Image(
+            painter = painterResource(R.drawable.tteoni_jump),
+            contentDescription = null,
+            modifier = Modifier.height(96.dp),
+        )
         Spacer(Modifier.height(8.dp))
         Text(stringResource(R.string.vlog_done_title), fontSize = 23.sp, fontWeight = FontWeight.Bold, color = Color.White)
         Spacer(Modifier.height(10.dp))

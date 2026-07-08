@@ -19,7 +19,6 @@ socketio = "2.1.2"
 credentials = "1.5.0"
 googleid = "1.1.1"
 camerax = "1.4.2"
-media3 = "1.5.1"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -61,9 +60,6 @@ camerax-camera2 = { group = "androidx.camera", name = "camera-camera2", version.
 camerax-lifecycle = { group = "androidx.camera", name = "camera-lifecycle", version.ref = "camerax" }
 camerax-video = { group = "androidx.camera", name = "camera-video", version.ref = "camerax" }
 camerax-view = { group = "androidx.camera", name = "camera-view", version.ref = "camerax" }
-media3-transformer = { group = "androidx.media3", name = "media3-transformer", version.ref = "media3" }
-media3-effect = { group = "androidx.media3", name = "media3-effect", version.ref = "media3" }
-media3-common = { group = "androidx.media3", name = "media3-common", version.ref = "media3" }
 guava = { group = "com.google.guava", name = "guava", version = "33.4.0-android" }
 revenuecat = { group = "com.revenuecat.purchases", name = "purchases", version = "8.19.2" }
 

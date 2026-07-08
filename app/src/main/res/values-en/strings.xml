@@ -266,11 +266,6 @@
     <string name="camera_tip">💡 Tap to start/stop · film portrait or landscape</string>
     <string name="camera_recordingHint">Recording · tap to stop</string>
     <string name="camera_saveSuccess">Video saved!</string>
-    <string name="camera_filter_none">Original</string>
-    <string name="camera_filter_cozy">Cozy</string>
-    <string name="camera_filter_film">Film</string>
-    <string name="camera_filter_fresh">Fresh</string>
-    <string name="camera_applyingFilter">Applying filter...</string>
     <string name="camera_hintAuto">Tap to auto-record 5s</string>
     <string name="camera_recordingHintAuto">Auto-recording · saves when done</string>
     <string name="camera_tipAuto">💡 One tap = 5s auto clip · portrait or landscape</string>

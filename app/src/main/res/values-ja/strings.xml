@@ -266,11 +266,6 @@
     <string name="camera_tip">💡 ボタンで開始・終了、縦横自由に</string>
     <string name="camera_recordingHint">撮影中 · ボタンで終了</string>
     <string name="camera_saveSuccess">動画を保存しました！</string>
-    <string name="camera_filter_none">標準</string>
-    <string name="camera_filter_cozy">ぽかぽか</string>
-    <string name="camera_filter_film">フィルム</string>
-    <string name="camera_filter_fresh">さわやか</string>
-    <string name="camera_applyingFilter">フィルター適用中...</string>
     <string name="camera_hintAuto">ボタンで5秒自動撮影</string>
     <string name="camera_recordingHintAuto">自動撮影中・完了後に自動保存</string>
     <string name="camera_tipAuto">💡 1タップで5秒自動撮影・縦横自由に</string>

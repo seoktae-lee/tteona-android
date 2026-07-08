@@ -57,7 +57,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableDoubleStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -83,12 +82,9 @@ import com.seoktaedev.tteona.R
 import com.seoktaedev.tteona.core.i18n.LocaleManager
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.seoktaedev.tteona.core.model.Place
-import com.seoktaedev.tteona.core.services.NaruFilter
-import com.seoktaedev.tteona.core.services.NaruVideoFilter
 import com.seoktaedev.tteona.core.services.ProManager
 import com.seoktaedev.tteona.core.services.VlogClips
 import com.seoktaedev.tteona.core.util.Haptics
-import kotlinx.coroutines.launch
 import com.seoktaedev.tteona.ui.theme.TteOrange
 import kotlinx.coroutines.delay
 import java.util.concurrent.Executor
@@ -142,10 +138,6 @@ fun CameraScreen(
     var showTip by remember { mutableStateOf(true) }
     // 탭 초점 인디케이터 위치 (px) — 잠시 표시 후 사라짐
     var focusIndicator by remember { mutableStateOf<Offset?>(null) }
-    // 나루 무드 필터 — 저장된 선택 복원, 촬영 직후 클립에 굽는다
-    val scope = rememberCoroutineScope()
-    var selectedFilter by remember { mutableStateOf(NaruFilter.saved(context)) }
-    var isApplyingFilter by remember { mutableStateOf(false) }
 
     // 촬영 예산 (iOS refreshUsedSeconds) — 세션 폴더 클립 합계, 재촬영이면 이 장소 클립만큼 돌려받음
     var usedSeconds by remember { mutableDoubleStateOf(0.0) }
@@ -253,11 +245,15 @@ fun CameraScreen(
 
         usedSeconds = effectiveUsed
         currentPlaceClipSeconds = 0.0
-        recordStartMs = System.currentTimeMillis()
 
         activeRecording = pending.start(mainExecutor) { event ->
             when (event) {
-                is VideoRecordEvent.Start -> isRecording = true
+                is VideoRecordEvent.Start -> {
+                    // 벽시계 기준시각을 '실제 녹화 시작' 시점으로 잡는다 — prepareRecording~실제 시작
+                    // 사이 지연 동안 타이머가 앞서 달려 첫 촬영이 짧게 잘리는 문제 방지.
+                    recordStartMs = System.currentTimeMillis()
+                    isRecording = true
+                }
                 is VideoRecordEvent.Status -> {
                     // 클립 한도 도달 시 자동 종료 (iOS maxDuration)
                     if (event.recordingStats.recordedDurationNanos / 1e9 >= clipLimit && isRecording) {
@@ -269,25 +265,11 @@ fun CameraScreen(
                 is VideoRecordEvent.Finalize -> {
                     isRecording = false
                     activeRecording = null
+                    refreshUsedSeconds()
                     if (!event.hasError() && file.exists()) {
-                        val filter = selectedFilter
-                        if (filter != NaruFilter.NONE) {
-                            // 촬영 직후 클립에 나루 필터를 굽고(교체) 저장 완료 처리
-                            isApplyingFilter = true
-                            scope.launch {
-                                NaruVideoFilter.apply(context, file, filter)
-                                isApplyingFilter = false
-                                refreshUsedSeconds()
-                                Haptics.success(view)
-                                saveDone = true
-                            }
-                        } else {
-                            refreshUsedSeconds()
-                            Haptics.success(view)
-                            saveDone = true
-                        }
+                        Haptics.success(view)
+                        saveDone = true
                     } else {
-                        refreshUsedSeconds()
                         file.delete()
                         isSaving = false
                     }
@@ -441,38 +423,6 @@ fun CameraScreen(
             // 총 촬영 예산 UI(분절 링·캡션)는 카메라에서 제거 — 지도 장소칩에 이미 있고,
             // 예산 안내는 상단 토스트(showTip)로 잠깐만 노출한다. (사용자 피드백 반영)
 
-            // 나루 무드 필터 칩 (iOS filterBar) — 녹화/필터적용 중에는 잠금
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                val filters = listOf(
-                    NaruFilter.NONE to R.string.camera_filter_none,
-                    NaruFilter.COZY to R.string.camera_filter_cozy,
-                    NaruFilter.FILM to R.string.camera_filter_film,
-                    NaruFilter.FRESH to R.string.camera_filter_fresh,
-                )
-                filters.forEach { (filter, labelRes) ->
-                    val selected = selectedFilter == filter
-                    Box(
-                        contentAlignment = Alignment.Center,
-                        modifier = Modifier
-                            .height(32.dp)
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(if (selected) Color.White else Color.Black.copy(alpha = 0.45f))
-                            .clickable(enabled = !isRecording && !isSaving) {
-                                selectedFilter = filter
-                                NaruFilter.save(context, filter)
-                            }
-                            .padding(horizontal = 14.dp),
-                    ) {
-                        Text(
-                            stringResource(labelRes),
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = if (selected) Color.Black else Color.White,
-                        )
-                    }
-                }
-            }
-
             // 녹화 버튼 — 바깥 링이 이번 클립(장소당 한도) 게이지 (iOS clipProgress)
             Box(
                 contentAlignment = Alignment.Center,
@@ -593,10 +543,7 @@ fun CameraScreen(
                         Text(stringResource(R.string.camera_saveSuccess), fontSize = 16.sp, fontWeight = FontWeight.Medium, color = Color.White)
                     } else {
                         CircularProgressIndicator(color = Color.White)
-                        Text(
-                            stringResource(if (isApplyingFilter) R.string.camera_applyingFilter else R.string.camera_saving),
-                            fontSize = 16.sp, fontWeight = FontWeight.Medium, color = Color.White,
-                        )
+                        Text(stringResource(R.string.camera_saving), fontSize = 16.sp, fontWeight = FontWeight.Medium, color = Color.White)
                     }
                 }
             }

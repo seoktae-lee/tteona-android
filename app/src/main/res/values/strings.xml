@@ -266,11 +266,6 @@
     <string name="camera_tip">💡 버튼으로 촬영 시작·종료, 가로·세로 자유롭게</string>
     <string name="camera_recordingHint">촬영 중 · 버튼을 누르면 종료</string>
     <string name="camera_saveSuccess">영상 저장 성공!</string>
-    <string name="camera_filter_none">기본</string>
-    <string name="camera_filter_cozy">포근</string>
-    <string name="camera_filter_film">필름</string>
-    <string name="camera_filter_fresh">청량</string>
-    <string name="camera_applyingFilter">필터 적용 중...</string>
     <string name="camera_hintAuto">버튼을 누르면 5초 자동 촬영</string>
     <string name="camera_recordingHintAuto">자동 촬영 중 · 끝나면 자동 저장</string>
     <string name="camera_tipAuto">💡 한 번 누르면 5초 자동 촬영 · 가로·세로 자유롭게</string>

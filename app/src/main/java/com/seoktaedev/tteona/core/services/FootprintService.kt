@@ -52,47 +52,63 @@ object FootprintService {
     // MARK: 기록 (브이로그 생성 성공 시)
 
     /** 코스의 장소들을 지역으로 판정해 발자취를 적재한다. 실패해도 앱 흐름을 막지 않는다. */
-    suspend fun record(context: Context, course: Course, sessionId: String, userId: String) {
-        // 지역 판정은 CPU 작업 — 백그라운드에서 수행
+    /** 코스의 장소별 지역 집계 결과 — "가장 많이 머문 지역"이 앞에 오도록 체류순 정렬 */
+    private data class Aggregated(
+        val sigCodes: List<String>,
+        val provinceCodes: List<String>,
+        val countryCodes: List<String>,
+        val regionNames: List<String>,
+        val points: List<Map<String, Double>>,
+    )
+
+    /**
+     * 코스의 장소들을 지역으로 판정·집계한다. 지역이 하나도 안 잡히면 null.
+     * 첫 장소가 아니라 체류 빈도가 기준이라 잠깐 스친 환승지가 대표로 뽑히지 않는다.
+     * 한국은 시군구, 해외는 주/도(admin-1) 단위.
+     */
+    private suspend fun aggregate(context: Context, course: Course): Aggregated? {
         val resolved = withContext(Dispatchers.Default) {
             FootprintAtlas.ensureLoaded(context)
-            course.places.map { it to FootprintAtlas.resolve(context, it.latitude, it.longitude) }
+            course.places.map { FootprintAtlas.resolve(context, it.latitude, it.longitude) }
         }
 
-        // 장소(=촬영 클립) 하나하나를 지역으로 집계 — "가장 많이 머문 지역"이 대표가 되도록.
-        // 첫 장소가 아니라 체류 빈도가 기준이므로, 잠깐 스친 환승지가 대표로 뽑히지 않는다.
-        // 한국은 시군구, 해외는 주/도(admin-1) 단위로 색칠한다.
         val sigCount = mutableMapOf<String, Int>()
         val sigName = mutableMapOf<String, String>()
         val provCount = mutableMapOf<String, Int>()
         val provName = mutableMapOf<String, String>()
         val countryCount = mutableMapOf<String, Int>()
-        for ((_, region) in resolved) {
+        for (region in resolved) {
             if (region.sig != null) {
                 sigCount[region.sig.code] = (sigCount[region.sig.code] ?: 0) + 1
                 sigName[region.sig.code] = region.sig.name
             } else if (region.province != null) {
-                // 한국이 아닌 곳만 주/도로 색칠 (한국은 시군구가 대표)
                 provCount[region.province.code] = (provCount[region.province.code] ?: 0) + 1
                 provName[region.province.code] = region.province.name
             }
             region.countryCode?.let { c -> countryCount[c] = (countryCount[c] ?: 0) + 1 }
         }
-        // 머문 횟수 내림차순 → 동률이면 코드순(결정적). 첫 원소가 최다 체류지.
         val byStay = compareByDescending<Map.Entry<String, Int>> { it.value }.thenBy { it.key }
         val sigCodes = sigCount.entries.sortedWith(byStay).map { it.key }
         val provinceCodes = provCount.entries.sortedWith(byStay).map { it.key }
         val countryCodes = countryCount.entries.sortedWith(byStay).map { it.key }
-        // 표시용 이름: 최다 체류 시군구 → …, 이어서 해외 주/도 (체류순)
-        val regionNames = sigCodes.mapNotNull { sigName[it] } + provinceCodes.mapNotNull { provName[it] }
+        if (sigCodes.isEmpty() && provinceCodes.isEmpty()) return null
 
-        if (sigCodes.isEmpty() && provinceCodes.isEmpty()) {
+        val regionNames = sigCodes.mapNotNull { sigName[it] } + provinceCodes.mapNotNull { provName[it] }
+        val points = course.places.sortedBy { it.order }
+            .map { mapOf("lat" to it.latitude, "lng" to it.longitude) }
+        return Aggregated(sigCodes, provinceCodes, countryCodes, regionNames, points)
+    }
+
+    suspend fun record(context: Context, course: Course, sessionId: String, userId: String) {
+        val agg = aggregate(context, course) ?: run {
             android.util.Log.d("Footprint", "no region resolved — skip")
             return
         }
-
-        val points = course.places.sortedBy { it.order }
-            .map { mapOf("lat" to it.latitude, "lng" to it.longitude) }
+        val sigCodes = agg.sigCodes
+        val provinceCodes = agg.provinceCodes
+        val countryCodes = agg.countryCodes
+        val regionNames = agg.regionNames
+        val points = agg.points
 
         runCatching {
             // 새로 칠해지는 지역 계산 (하이라이트 연출용) — 기존 요약과 비교
@@ -137,6 +153,81 @@ object FootprintService {
         }.onFailure {
             android.util.Log.e("Footprint", "record failed: ${it.message}")
         }
+    }
+
+    // MARK: 백필 (과거 코스 소급 — Phase 1, 유저당 1회)
+
+    /**
+     * 발자취 기록 훅이 생기기 전에 만든 코스들을 발자취로 소급 반영한다.
+     * 내가 만든 코스는 실제 촬영 세션에서 저장된 것이므로 "실제 방문"으로 간주.
+     * 문서 ID course_{courseId}로 멱등 — 부분 실패 시 다음 진입에서 재시도해도 중복 없음.
+     */
+    suspend fun backfillFromMyCourses(context: Context, userId: String) {
+        val userRef = db.collection("users").document(userId)
+        val doc = runCatching { userRef.get().await() }.getOrNull()
+        if (doc?.getBoolean("footprintBackfillV1") == true) return
+
+        val courses = fetchCourses(userId)
+        if (courses.isEmpty()) {
+            // 코스가 없어도 플래그를 세팅해 재실행을 막는다
+            runCatching { userRef.update("footprintBackfillV1", true).await() }
+            return
+        }
+
+        val allSig = mutableSetOf<String>()
+        val allProv = mutableSetOf<String>()
+        val allCountry = mutableSetOf<String>()
+        var wroteAny = false
+        var allSucceeded = true
+
+        for (course in courses) {
+            val agg = aggregate(context, course) ?: continue
+            val ok = runCatching {
+                userRef.collection("footprints").document("course_${course.courseId}")
+                    .set(
+                        mapOf(
+                            "courseId" to course.courseId,
+                            "courseName" to course.courseName,
+                            "date" to Timestamp(Date(course.createdAt)), // 여행 시점 보존 → 타임라인 순서 정확
+                            "placeCount" to course.places.size,
+                            "sigCodes" to agg.sigCodes,
+                            "provinceCodes" to agg.provinceCodes,
+                            "countryCodes" to agg.countryCodes,
+                            "regionNames" to agg.regionNames,
+                            "points" to agg.points,
+                        )
+                    ).await()
+            }.isSuccess
+            if (ok) {
+                allSig += agg.sigCodes
+                allProv += agg.provinceCodes
+                allCountry += agg.countryCodes
+                wroteAny = true
+            } else {
+                allSucceeded = false
+            }
+        }
+
+        // 방문 지역 합산 반영 (하이라이트 연출은 발동하지 않음 — 수십 곳 펄스 방지)
+        val fields = mutableMapOf<String, Any>()
+        if (wroteAny) {
+            fields["visitedSigCodes"] = FieldValue.arrayUnion(*allSig.toTypedArray())
+            fields["visitedProvinceCodes"] = FieldValue.arrayUnion(*allProv.toTypedArray())
+            fields["visitedCountryCodes"] = FieldValue.arrayUnion(*allCountry.toTypedArray())
+        }
+        // 모든 쓰기가 성공했을 때만 플래그 세팅 → 부분 실패는 다음 진입에 재시도(멱등)
+        if (allSucceeded) fields["footprintBackfillV1"] = true
+        if (fields.isNotEmpty()) runCatching { userRef.update(fields).await() }
+
+        if (wroteAny) {
+            val cur = _mySummary.value
+            _mySummary.value = FootprintSummary(
+                sigCodes = cur.sigCodes + allSig,
+                provinceCodes = cur.provinceCodes + allProv,
+                countryCodes = cur.countryCodes + allCountry,
+            )
+        }
+        android.util.Log.d("Footprint", "backfilled courses=${courses.size} wrote=$wroteAny complete=$allSucceeded")
     }
 
     // MARK: 조회

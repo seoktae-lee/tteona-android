@@ -31,7 +31,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AddAPhoto
 import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.OpenInFull
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
@@ -80,6 +82,7 @@ import com.seoktaedev.tteona.core.services.PlacesPhotoService
 import com.seoktaedev.tteona.core.services.ProfileImageService
 import com.seoktaedev.tteona.core.services.StatsService
 import com.seoktaedev.tteona.core.services.UserService
+import com.seoktaedev.tteona.features.explore.CourseDetailScreen
 import com.seoktaedev.tteona.features.settings.NicknameEditSheet
 import com.seoktaedev.tteona.features.settings.SettingsScreen
 import com.seoktaedev.tteona.features.settings.TravelStatsScreen
@@ -168,11 +171,13 @@ private fun ProfileMain(
     var stats by remember { mutableStateOf<TravelStats?>(null) }
     var isLoaded by remember { mutableStateOf(false) }
 
-    // 내 코스 + 썸네일 (프로필에서 직접 썸네일 꾸미기)
+    // 내 코스 + 썸네일 (프로필에서 직접 썸네일 꾸미기 + 탭하면 상세)
     var myCourses by remember { mutableStateOf<List<Course>>(emptyList()) }
     var thumbnails by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     var editingCourseId by remember { mutableStateOf<String?>(null) }
     var uploadingCourseId by remember { mutableStateOf<String?>(null) }
+    var selectedCourse by remember { mutableStateOf<Course?>(null) }
+    var showFullMap by remember { mutableStateOf(false) }
 
     // 발자취 지도 연출
     var focusCommand by remember { mutableStateOf<FootprintMapFocus?>(null) }
@@ -292,8 +297,10 @@ private fun ProfileMain(
         }
         val uid = authUser?.uid ?: return@LaunchedEffect
         if (profileUser == null) UserService.fetchUser(uid)
+        // 1) 요약 로드 → 2) 과거 코스 백필(1회, mySummary 즉시 갱신) → 3) 나머지 조회
         FootprintService.fetchSummary(uid, isMe = true)
-        footprints = FootprintService.fetchFootprints(uid)
+        FootprintService.backfillFromMyCourses(context, uid)
+        footprints = FootprintService.fetchFootprints(uid)   // 백필 후 재조회 → 과거 코스 포함
         stats = StatsService.fetchMyStats(uid)
         myCourses = FootprintService.fetchCourses(uid)
         thumbnails = runCatching { CourseThumbnailService.fetchAllThumbnails() }.getOrDefault(emptyMap())
@@ -316,10 +323,8 @@ private fun ProfileMain(
                 uploadingCourseId = courseId
                 val url = CourseThumbnailService.upload(context, courseId, uri)
                 if (url != null) {
-                    // 파일명이 고정이라 URL이 같음 → 캐시버스트 쿼리로 즉시 갱신
-                    val busted = if (url.contains("?")) "$url&t=${System.currentTimeMillis()}"
-                                 else "$url?t=${System.currentTimeMillis()}"
-                    thumbnails = thumbnails + (courseId to busted)
+                    // 서버가 ?v=timestamp 캐시버스트를 붙여 반환 → 그대로 사용하면 탐색탭·DB와 완전히 동일
+                    thumbnails = thumbnails + (courseId to url)
                 }
                 uploadingCourseId = null
             }
@@ -510,6 +515,24 @@ private fun ProfileMain(
                         .height(400.dp)
                         .clip(RoundedCornerShape(24.dp)),
                 )
+                // 전체화면 확대 버튼 (우상단) — 여기서만 팬/핀치로 세계지도를 자유 탐색
+                Box(
+                    Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(12.dp)
+                        .size(34.dp)
+                        .clip(CircleShape)
+                        .background(Color.Black.copy(alpha = 0.45f))
+                        .clickable { showFullMap = true },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        Icons.Filled.OpenInFull,
+                        contentDescription = stringResource(R.string.footprint_title),
+                        tint = Color.White,
+                        modifier = Modifier.size(16.dp),
+                    )
+                }
                 // "지금 여기 있네요" / "새 지역!" 배너
                 greetingText?.let { text ->
                     Row(
@@ -628,6 +651,7 @@ private fun ProfileMain(
                                         course = course,
                                         thumbnailUrl = thumbnails[course.courseId],
                                         isUploading = uploadingCourseId == course.courseId,
+                                        onCardClick = { selectedCourse = course },
                                         onEditThumbnail = {
                                             editingCourseId = course.courseId
                                             thumbnailPicker.launch(
@@ -668,6 +692,82 @@ private fun ProfileMain(
 
         if (showNicknameEdit) {
             NicknameEditSheet(onDismiss = { showNicknameEdit = false })
+        }
+
+        // 코스 상세 풀스크린 (탐색탭과 동일 경험)
+        selectedCourse?.let { course ->
+            CourseDetailScreen(
+                course = course,
+                thumbnailUrl = thumbnails[course.courseId],
+                onClose = { selectedCourse = null },
+                onStartCourse = { selectedCourse = null },
+            )
+        }
+
+        // 발자취 지도 전체화면 — 여기서만 팬/핀치 활성
+        if (showFullMap) {
+            BackHandler { showFullMap = false }
+            FootprintFullMap(
+                summary = summary,
+                routes = footprints.map { it.points },
+                initialFocus = initialFocus,
+                subtitle = stringResource(
+                    R.string.footprint_subtitle, summary.sigCodes.size, summary.countryCodes.size
+                ),
+                onClose = { showFullMap = false },
+            )
+        }
+    }
+}
+
+// MARK: - 발자취 지도 전체화면
+/// 임베드 지도는 페이지 스크롤과 충돌해 팬/핀치를 껐다.
+/// 이 전체화면에서만 팬·핀치·탭이 모두 살아나 세계지도를 자유롭게 탐색한다.
+@Composable
+private fun FootprintFullMap(
+    summary: com.seoktaedev.tteona.core.model.FootprintSummary,
+    routes: List<List<FootprintPoint>>,
+    initialFocus: FootprintMapFocus,
+    subtitle: String,
+    onClose: () -> Unit,
+) {
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(Color(0xFFFBF8F3)),
+    ) {
+        FootprintMapView(
+            summary = summary,
+            routes = routes,
+            interactive = true,
+            panZoom = true,   // 전체화면에서는 팬/핀치 활성 — 이 뷰의 존재 이유
+            initialFocus = initialFocus,
+            modifier = Modifier.fillMaxSize(),
+        )
+        // 상단 바 — 제목 + 진행 텍스트 + 닫기
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    stringResource(R.string.footprint_title),
+                    fontSize = 18.sp, fontWeight = FontWeight.Bold, color = TteDarkGray,
+                )
+                Text(subtitle, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = TteOrange)
+            }
+            Box(
+                Modifier
+                    .size(36.dp)
+                    .clip(CircleShape)
+                    .background(Color.White)
+                    .clickable(onClick = onClose),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(Icons.Filled.Close, contentDescription = null, tint = TteDarkGray, modifier = Modifier.size(18.dp))
+            }
         }
     }
 }
@@ -800,6 +900,7 @@ private fun EditableCourseCard(
     course: Course,
     thumbnailUrl: String?,
     isUploading: Boolean,
+    onCardClick: () -> Unit,
     onEditThumbnail: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -818,7 +919,9 @@ private fun EditableCourseCard(
             .fillMaxWidth()
             .aspectRatio(3f / 4f)
             .clip(RoundedCornerShape(14.dp))
-            .background(TteFieldBackground),
+            .background(TteFieldBackground)
+            // 카드 본문 탭 → 코스 상세 (카메라 Box는 자체 clickable이라 자식 우선)
+            .clickable(onClick = onCardClick),
     ) {
         val url = thumbnailUrl ?: placePhotoUrl
         if (url != null) {

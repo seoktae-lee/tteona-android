@@ -608,4 +608,6 @@
     <string name="profile_block">ブロック</string>
     <string name="profile_block_confirm">%1$sさんをブロックしますか？コースやチャットに表示されなくなります。</string>
     <string name="profile_blocked">ブロック済み</string>
+    <string name="profile_myCourses">マイコース</string>
+    <string name="profile_myCourses_hint">カメラを押してコースのサムネイルを飾りましょう</string>
 </resources>

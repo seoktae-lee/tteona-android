@@ -26,6 +26,13 @@ object CourseThumbnailService {
             )
             ApiClient.api.uploadCourseThumbnail(courseId, part).url
         }.onFailure { Log.w("ThumbnailService", "upload 실패", it) }.getOrNull()
+
+    /** 갤러리 URI에서 축소 JPEG로 썸네일 업로드 (프로필 탭 썸네일 꾸미기) */
+    suspend fun upload(context: android.content.Context, courseId: String, uri: android.net.Uri): String? =
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            val jpeg = ProfileImageService.downscaledJpeg(context, uri) ?: return@withContext null
+            upload(courseId, jpeg)
+        }
 }
 
 /**

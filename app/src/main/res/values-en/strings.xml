@@ -608,4 +608,6 @@
     <string name="profile_block">Block</string>
     <string name="profile_block_confirm">Block %1$s? You won\'t see their courses or chats anymore.</string>
     <string name="profile_blocked">Blocked</string>
+    <string name="profile_myCourses">My Courses</string>
+    <string name="profile_myCourses_hint">Tap the camera to set a pretty course thumbnail</string>
 </resources>

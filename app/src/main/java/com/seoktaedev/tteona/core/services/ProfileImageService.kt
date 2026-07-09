@@ -34,8 +34,8 @@ object ProfileImageService {
         }
 
     // iOS ImageUploadHelper.downscaledJPEG 대응 — 원본 대신 축소본 전송
-    // (서버가 어차피 리샘플하고, 업로드 용량 한도도 안전)
-    private fun downscaledJpeg(context: Context, uri: Uri, maxDim: Int = 1024): ByteArray? {
+    // (서버가 어차피 리샘플하고, 업로드 용량 한도도 안전). 코스 썸네일 업로드와 공유.
+    internal fun downscaledJpeg(context: Context, uri: Uri, maxDim: Int = 1024): ByteArray? {
         return try {
             // 1차: 경계만 읽어 샘플링 비율 결정 (대용량 원본의 OOM 방지)
             val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }

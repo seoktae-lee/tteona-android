@@ -10,6 +10,7 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -28,7 +29,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AddAPhoto
 import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
@@ -66,11 +69,14 @@ import com.seoktaedev.tteona.R
 import com.seoktaedev.tteona.core.auth.AuthService
 import com.seoktaedev.tteona.core.i18n.LocaleManager
 import com.seoktaedev.tteona.core.model.AppUser
+import com.seoktaedev.tteona.core.model.Course
 import com.seoktaedev.tteona.core.model.FootprintPoint
 import com.seoktaedev.tteona.core.model.FootprintRecord
 import com.seoktaedev.tteona.core.model.TravelStats
+import com.seoktaedev.tteona.core.services.CourseThumbnailService
 import com.seoktaedev.tteona.core.services.FootprintAtlas
 import com.seoktaedev.tteona.core.services.FootprintService
+import com.seoktaedev.tteona.core.services.PlacesPhotoService
 import com.seoktaedev.tteona.core.services.ProfileImageService
 import com.seoktaedev.tteona.core.services.StatsService
 import com.seoktaedev.tteona.core.services.UserService
@@ -161,6 +167,12 @@ private fun ProfileMain(
     var footprints by remember { mutableStateOf<List<FootprintRecord>>(emptyList()) }
     var stats by remember { mutableStateOf<TravelStats?>(null) }
     var isLoaded by remember { mutableStateOf(false) }
+
+    // 내 코스 + 썸네일 (프로필에서 직접 썸네일 꾸미기)
+    var myCourses by remember { mutableStateOf<List<Course>>(emptyList()) }
+    var thumbnails by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
+    var editingCourseId by remember { mutableStateOf<String?>(null) }
+    var uploadingCourseId by remember { mutableStateOf<String?>(null) }
 
     // 발자취 지도 연출
     var focusCommand by remember { mutableStateOf<FootprintMapFocus?>(null) }
@@ -264,6 +276,16 @@ private fun ProfileMain(
                     regionNames = listOf("Ōsaka"),
                     points = listOf(FootprintPoint(34.6687, 135.5010), FootprintPoint(34.6525, 135.5060))),
             )
+            myCourses = listOf(
+                Course(courseId = "c1", authorId = "me", courseName = "성수동 감성 카페 투어",
+                    tag = com.seoktaedev.tteona.core.model.CourseTag.FRIENDS, region = "서울",
+                    likeCount = 12, createdAt = System.currentTimeMillis(),
+                    places = listOf(com.seoktaedev.tteona.core.model.Place(1, "대림창고", 37.5446, 127.0559))),
+                Course(courseId = "c2", authorId = "me", courseName = "강릉 바다 브이로그",
+                    tag = com.seoktaedev.tteona.core.model.CourseTag.COUPLE, region = "강릉",
+                    likeCount = 34, createdAt = System.currentTimeMillis(),
+                    places = listOf(com.seoktaedev.tteona.core.model.Place(1, "안목해변", 37.7710, 128.9473))),
+            )
             initialFocus = FootprintMapFocus.Korea
             isLoaded = true
             return@LaunchedEffect
@@ -273,6 +295,8 @@ private fun ProfileMain(
         FootprintService.fetchSummary(uid, isMe = true)
         footprints = FootprintService.fetchFootprints(uid)
         stats = StatsService.fetchMyStats(uid)
+        myCourses = FootprintService.fetchCourses(uid)
+        thumbnails = runCatching { CourseThumbnailService.fetchAllThumbnails() }.getOrDefault(emptyMap())
         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
             FootprintAtlas.ensureLoaded(context)
         }
@@ -281,6 +305,25 @@ private fun ProfileMain(
         isLoaded = true
         playNewRegionRevealIfNeeded()
         if (highlightCodes.isEmpty()) greetIfTravelling(home)
+    }
+
+    // 코스 썸네일 교체 — 카드의 카메라 버튼이 editingCourseId를 세팅하고 피커를 연다
+    val thumbnailPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        val courseId = editingCourseId
+        editingCourseId = null
+        if (uri != null && courseId != null) {
+            scope.launch {
+                uploadingCourseId = courseId
+                val url = CourseThumbnailService.upload(context, courseId, uri)
+                if (url != null) {
+                    // 파일명이 고정이라 URL이 같음 → 캐시버스트 쿼리로 즉시 갱신
+                    val busted = if (url.contains("?")) "$url&t=${System.currentTimeMillis()}"
+                                 else "$url?t=${System.currentTimeMillis()}"
+                    thumbnails = thumbnails + (courseId to busted)
+                }
+                uploadingCourseId = null
+            }
+        }
     }
 
     // 브이로그 생성 직후 탭 전환 시 새 지역 연출
@@ -549,6 +592,57 @@ private fun ProfileMain(
                 }
             }
 
+            // 내 코스 (썸네일 꾸미기) — iOS coursesSection
+            if (myCourses.isNotEmpty()) {
+                Spacer(Modifier.height(24.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.padding(horizontal = 20.dp),
+                ) {
+                    Text(
+                        stringResource(R.string.profile_myCourses),
+                        fontSize = 18.sp, fontWeight = FontWeight.Bold, color = TteDarkGray,
+                    )
+                    Icon(
+                        Icons.Filled.AddAPhoto, contentDescription = null,
+                        tint = TteMediumGray, modifier = Modifier.size(15.dp),
+                    )
+                }
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    stringResource(R.string.profile_myCourses_hint),
+                    fontSize = 12.sp, color = TteMediumGray,
+                    modifier = Modifier.padding(horizontal = 20.dp),
+                )
+                Spacer(Modifier.height(12.dp))
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier.padding(horizontal = 20.dp),
+                ) {
+                    myCourses.chunked(2).forEach { rowCourses ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            rowCourses.forEach { course ->
+                                Box(Modifier.weight(1f)) {
+                                    EditableCourseCard(
+                                        course = course,
+                                        thumbnailUrl = thumbnails[course.courseId],
+                                        isUploading = uploadingCourseId == course.courseId,
+                                        onEditThumbnail = {
+                                            editingCourseId = course.courseId
+                                            thumbnailPicker.launch(
+                                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                            )
+                                        },
+                                    )
+                                }
+                            }
+                            if (rowCourses.size == 1) Spacer(Modifier.weight(1f))
+                        }
+                    }
+                }
+            }
+
             // 여행 기록 타임라인 (iOS timelineSection)
             if (footprints.isNotEmpty()) {
                 Spacer(Modifier.height(24.dp))
@@ -695,6 +789,102 @@ private fun TimelineRow(record: FootprintRecord, isLast: Boolean, dateFormatter:
                         )
                     }
                 }
+            }
+        }
+    }
+}
+
+// MARK: - 편집 가능한 코스 카드 (내 프로필 전용 — 썸네일 직접 교체)
+@Composable
+private fun EditableCourseCard(
+    course: Course,
+    thumbnailUrl: String?,
+    isUploading: Boolean,
+    onEditThumbnail: () -> Unit,
+) {
+    val context = LocalContext.current
+    var placePhotoUrl by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(course.courseId) {
+        if (thumbnailUrl == null && placePhotoUrl == null) {
+            course.mainPlace?.let { main ->
+                placePhotoUrl = PlacesPhotoService.photoUrl(main.placeName, main.latitude, main.longitude)
+            }
+        }
+    }
+
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .aspectRatio(3f / 4f)
+            .clip(RoundedCornerShape(14.dp))
+            .background(TteFieldBackground),
+    ) {
+        val url = thumbnailUrl ?: placePhotoUrl
+        if (url != null) {
+            SubcomposeAsyncImage(
+                model = url,
+                contentDescription = course.courseName,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+        // 하단 그라디언트 + 코스 정보
+        Box(
+            Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .height(80.dp)
+                .background(
+                    Brush.verticalGradient(
+                        listOf(Color.Transparent, Color.Black.copy(alpha = 0.15f), Color.Black.copy(alpha = 0.8f))
+                    )
+                ),
+        )
+        Column(
+            Modifier
+                .align(Alignment.BottomStart)
+                .fillMaxWidth()
+                .padding(9.dp),
+            verticalArrangement = Arrangement.spacedBy(3.dp),
+        ) {
+            Text(
+                course.courseName,
+                fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color.White,
+                maxLines = 2, overflow = TextOverflow.Ellipsis,
+            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "${course.region} · ${stringResource(course.tag.labelRes)}",
+                    fontSize = 10.sp, color = Color.White.copy(alpha = 0.9f),
+                    maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
+                )
+                Icon(
+                    Icons.Filled.Favorite, contentDescription = null,
+                    tint = Color.White.copy(alpha = 0.95f), modifier = Modifier.size(9.dp),
+                )
+                Spacer(Modifier.size(2.dp))
+                Text("${course.likeCount}", fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+            }
+        }
+        // 썸네일 교체 버튼 (우상단 카메라)
+        Box(
+            Modifier
+                .align(Alignment.TopEnd)
+                .padding(8.dp)
+                .size(30.dp)
+                .clip(CircleShape)
+                .background(Color.Black.copy(alpha = 0.45f))
+                .clickable(enabled = !isUploading, onClick = onEditThumbnail),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (isUploading) {
+                CircularProgressIndicator(color = Color.White, modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+            } else {
+                Icon(
+                    Icons.Filled.CameraAlt, contentDescription = stringResource(R.string.profile_myCourses),
+                    tint = Color.White, modifier = Modifier.size(15.dp),
+                )
             }
         }
     }

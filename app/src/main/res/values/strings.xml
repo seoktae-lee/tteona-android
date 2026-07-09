@@ -608,4 +608,6 @@
     <string name="profile_block">차단하기</string>
     <string name="profile_block_confirm">%1$s님을 차단할까요? 코스와 채팅에서 더 이상 보이지 않아요.</string>
     <string name="profile_blocked">차단됨</string>
+    <string name="profile_myCourses">내 코스</string>
+    <string name="profile_myCourses_hint">카메라를 눌러 코스 카드 썸네일을 꾸며보세요</string>
 </resources>

@@ -182,8 +182,8 @@ private fun ProfileMain(
         counts.maxByOrNull { it.value }?.let { return it.key }
         val alpha2 = java.util.Locale.getDefault().country.ifEmpty { "KR" }
         if (alpha2 == "KR") return "KOR"
-        // 대부분의 ISO3는 ISO2로 시작 (US→USA, JP→JPN, FR→FRA …)
-        return FootprintAtlas.worldRegions.firstOrNull { it.code.startsWith(alpha2) }?.code ?: "KOR"
+        // ISO2 → ISO3 매핑: 해당 국가의 주/도 코드(ISO 3166-2, "US-CA")가 alpha2로 시작
+        return FootprintAtlas.worldProvinces.firstOrNull { it.code.startsWith("$alpha2-") }?.country ?: "KOR"
     }
 
     var initialFocus by remember { mutableStateOf<FootprintMapFocus>(FootprintMapFocus.Korea) }
@@ -225,10 +225,10 @@ private fun ProfileMain(
                 .addOnFailureListener { cont.resume(null) }
         } ?: return
         val resolved = FootprintAtlas.resolve(context, location.latitude, location.longitude)
-        val region = resolved.sig ?: resolved.country ?: return
-        val travelling = resolved.country != null && resolved.country.code != home
+        val region = resolved.sig ?: resolved.province ?: return
+        val travelling = resolved.countryCode != null && resolved.countryCode != home
         val unpainted = resolved.sig?.let { it.code !in summary.sigCodes }
-            ?: resolved.country?.let { it.code !in summary.countryCodes } ?: false
+            ?: resolved.province?.let { it.code !in summary.provinceCodes } ?: false
         if (!travelling && !unpainted) return
 
         delay(1200)
@@ -249,7 +249,8 @@ private fun ProfileMain(
             val demoNames = setOf("종로구", "중구", "용산구", "성동구", "마포구", "강남구",
                 "강릉시", "전주시", "경주시", "제주시", "서귀포시", "속초시", "여수시")
             val sigs = FootprintAtlas.koreaRegions.filter { it.name in demoNames }.map { it.code }
-            FootprintService.setDemoSummary(sigs.toSet(), setOf("KOR", "JPN", "THA"))
+            // 해외는 주/도만 색칠 — 오사카부(JP-27) · 방콕(TH-10)
+            FootprintService.setDemoSummary(sigs.toSet(), setOf("JP-27", "TH-10"), setOf("KOR", "JPN", "THA"))
             footprints = listOf(
                 FootprintRecord(id = "d1", courseName = "성수동 감성 카페 투어", date = System.currentTimeMillis(),
                     regionNames = listOf("서울 성동구"),
@@ -260,7 +261,7 @@ private fun ProfileMain(
                     points = listOf(FootprintPoint(37.7710, 128.9473), FootprintPoint(37.8054, 128.8961))),
                 FootprintRecord(id = "d3", courseName = "오사카 먹방 여행",
                     date = System.currentTimeMillis() - 86400000L * 40,
-                    regionNames = listOf("Japan"),
+                    regionNames = listOf("Ōsaka"),
                     points = listOf(FootprintPoint(34.6687, 135.5010), FootprintPoint(34.6525, 135.5060))),
             )
             initialFocus = FootprintMapFocus.Korea

@@ -19,9 +19,10 @@ import kotlin.math.tan
  * 링 좌표는 웹 메르카토르 단위공간(0~1)으로 투영해 보관 — 렌더링·판정 모두 이 공간에서 수행.
  */
 class GeoRegion(
-    val code: String,        // 시군구 행정코드("11010") 또는 ISO3 국가코드("JPN")
+    val code: String,        // 시군구 행정코드("11010") 또는 ISO 3166-2 주/도코드("JP-27")
     val name: String,        // 한글/원어 이름
-    val nameEng: String?,    // 영문 이름 (국가는 name이 영문)
+    val nameEng: String?,    // 영문 이름 (주/도는 name이 이미 영문)
+    val country: String?,    // 소속 국가 ISO3 (주/도만; 한국 시군구는 null = 암묵적 KOR)
     val rings: List<FloatArray>, // [x0,y0,x1,y1,...] 외곽 + 구멍 링 (even-odd 채움)
     val bbox: Rect,          // 단위공간 바운딩박스 (빠른 후보 선별용)
     val path: Path,          // 단위공간에 미리 구운 패스 (Canvas 렌더링 캐시)
@@ -35,9 +36,12 @@ class GeoRegion(
  */
 object FootprintAtlas {
 
-    var koreaRegions: List<GeoRegion> = emptyList()
+    var koreaRegions: List<GeoRegion> = emptyList()      // 시군구 (250)
         private set
-    var worldRegions: List<GeoRegion> = emptyList()
+    var worldProvinces: List<GeoRegion> = emptyList()    // 세계 주/도 (admin-1)
+        private set
+    /** 국가 ISO3 → 소속 주/도들의 합집합 바운딩박스 (카메라 포커스용) */
+    var countryBBox: Map<String, Rect> = emptyMap()
         private set
 
     private val lock = Any()
@@ -48,19 +52,33 @@ object FootprintAtlas {
     private val koreaLatRange = 32.0..39.5
     private val koreaLngRange = 124.0..132.5
 
-    /** 최초 1회 GeoJSON 파싱 (약 0.2~0.5초, 백그라운드 스레드에서 호출할 것) */
+    /** 최초 1회 GeoJSON 파싱 (약 0.3~0.6초, 백그라운드 스레드에서 호출할 것) */
     fun ensureLoaded(context: Context) {
         if (loaded) return
         synchronized(lock) {
             if (loaded) return
-            koreaRegions = load(context, "korea-sig.geojson", "code", "name", "name_eng")
-            worldRegions = load(context, "world-countries.geojson", "iso", "name", null)
+            koreaRegions = load(context, "korea-sig.geojson", "code", "name", "name_eng", null)
+            worldProvinces = load(context, "world-admin1.geojson", "code", "nm", null, "country")
+
+            // 국가별 바운딩박스 = 소속 주/도 bbox 합집합
+            val boxes = mutableMapOf<String, Rect>()
+            for (p in worldProvinces) {
+                val iso3 = p.country ?: continue
+                boxes[iso3] = boxes[iso3]?.let { union(it, p.bbox) } ?: p.bbox
+            }
+            countryBBox = boxes
+
             loaded = true
-            android.util.Log.d("FootprintAtlas", "loaded korea=${koreaRegions.size} world=${worldRegions.size}")
+            android.util.Log.d("FootprintAtlas", "loaded korea=${koreaRegions.size} provinces=${worldProvinces.size} countries=${countryBBox.size}")
         }
     }
 
     val isLoaded: Boolean get() = loaded
+
+    private fun union(a: Rect, b: Rect): Rect = Rect(
+        minOf(a.left, b.left), minOf(a.top, b.top),
+        maxOf(a.right, b.right), maxOf(a.bottom, b.bottom),
+    )
 
     private fun load(
         context: Context,
@@ -68,6 +86,7 @@ object FootprintAtlas {
         codeKey: String,
         nameKey: String,
         nameEngKey: String?,
+        countryKey: String?,
     ): List<GeoRegion> {
         val json = runCatching {
             context.assets.open(assetName).bufferedReader().use { it.readText() }
@@ -130,6 +149,7 @@ object FootprintAtlas {
                     code = code,
                     name = name,
                     nameEng = nameEngKey?.let { props.optString(it).takeIf { s -> s.isNotEmpty() } },
+                    country = countryKey?.let { props.optString(it).takeIf { s -> s.isNotEmpty() } },
                     rings = rings,
                     bbox = Rect(minX, minY, maxX, maxY),
                     path = path,
@@ -167,11 +187,12 @@ object FootprintAtlas {
     }
 
     data class ResolvedRegion(
-        val sig: GeoRegion?,      // 한국 시군구 (한국 밖이면 null)
-        val country: GeoRegion?,  // 국가
+        val sig: GeoRegion?,        // 한국 시군구 (한국 밖이면 null)
+        val province: GeoRegion?,   // 세계 주/도
+        val countryCode: String?,   // 소속 국가 ISO3
     )
 
-    /** 좌표가 속한 시군구·국가 판정. 단순화된 경계라 해안가 등에서 빗나가면 근접 폴리곤으로 보정. */
+    /** 좌표가 속한 시군구·주도·국가 판정. 단순화된 경계라 해안가 등에서 빗나가면 근접 폴리곤으로 보정. */
     fun resolve(context: Context, lat: Double, lng: Double): ResolvedRegion {
         ensureLoaded(context)
         val pt = project(lat, lng)
@@ -182,13 +203,11 @@ object FootprintAtlas {
                 ?: nearest(pt, koreaRegions, 0.0006f) // ≈ 20km
         }
 
-        var country = hit(pt, worldRegions)
-            ?: nearest(pt, worldRegions, 0.009f)      // ≈ 3°
-        // 시군구가 잡혔는데 국가 판정이 빗나갔으면 한국으로 보정
-        if (sig != null && country?.code != "KOR") {
-            country = worldRegions.firstOrNull { it.code == "KOR" } ?: country
-        }
-        return ResolvedRegion(sig, country)
+        val province = hit(pt, worldProvinces)
+            ?: nearest(pt, worldProvinces, 0.009f)    // ≈ 3°
+        // 시군구가 잡혔으면 국가는 무조건 한국 (경계 오차로 주/도가 빗나가도 보정)
+        val countryCode = if (sig != null) "KOR" else province?.country
+        return ResolvedRegion(sig, province, countryCode)
     }
 
     private fun hit(point: Offset, regions: List<GeoRegion>): GeoRegion? {
@@ -247,5 +266,5 @@ object FootprintAtlas {
     }
 
     fun koreaRegion(code: String): GeoRegion? = koreaRegions.firstOrNull { it.code == code }
-    fun worldRegion(code: String): GeoRegion? = worldRegions.firstOrNull { it.code == code }
+    fun province(code: String): GeoRegion? = worldProvinces.firstOrNull { it.code == code }
 }

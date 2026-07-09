@@ -61,32 +61,32 @@ object FootprintService {
 
         // 장소(=촬영 클립) 하나하나를 지역으로 집계 — "가장 많이 머문 지역"이 대표가 되도록.
         // 첫 장소가 아니라 체류 빈도가 기준이므로, 잠깐 스친 환승지가 대표로 뽑히지 않는다.
+        // 한국은 시군구, 해외는 주/도(admin-1) 단위로 색칠한다.
         val sigCount = mutableMapOf<String, Int>()
         val sigName = mutableMapOf<String, String>()
+        val provCount = mutableMapOf<String, Int>()
+        val provName = mutableMapOf<String, String>()
         val countryCount = mutableMapOf<String, Int>()
-        val countryName = mutableMapOf<String, String>()
         for ((_, region) in resolved) {
-            region.sig?.let { sig ->
-                sigCount[sig.code] = (sigCount[sig.code] ?: 0) + 1
-                sigName[sig.code] = sig.name
+            if (region.sig != null) {
+                sigCount[region.sig.code] = (sigCount[region.sig.code] ?: 0) + 1
+                sigName[region.sig.code] = region.sig.name
+            } else if (region.province != null) {
+                // 한국이 아닌 곳만 주/도로 색칠 (한국은 시군구가 대표)
+                provCount[region.province.code] = (provCount[region.province.code] ?: 0) + 1
+                provName[region.province.code] = region.province.name
             }
-            region.country?.let { country ->
-                countryCount[country.code] = (countryCount[country.code] ?: 0) + 1
-                countryName[country.code] = country.name
-            }
+            region.countryCode?.let { c -> countryCount[c] = (countryCount[c] ?: 0) + 1 }
         }
         // 머문 횟수 내림차순 → 동률이면 코드순(결정적). 첫 원소가 최다 체류지.
-        val sigCodes = sigCount.entries.sortedWith(
-            compareByDescending<Map.Entry<String, Int>> { it.value }.thenBy { it.key }
-        ).map { it.key }
-        val countryCodes = countryCount.entries.sortedWith(
-            compareByDescending<Map.Entry<String, Int>> { it.value }.thenBy { it.key }
-        ).map { it.key }
-        // 표시용 이름: 최다 체류 시군구 → …, 이어서 해외 국가(한국은 시군구로 대표)
-        val regionNames = sigCodes.mapNotNull { sigName[it] } +
-            countryCodes.filter { it != "KOR" }.mapNotNull { countryName[it] }
+        val byStay = compareByDescending<Map.Entry<String, Int>> { it.value }.thenBy { it.key }
+        val sigCodes = sigCount.entries.sortedWith(byStay).map { it.key }
+        val provinceCodes = provCount.entries.sortedWith(byStay).map { it.key }
+        val countryCodes = countryCount.entries.sortedWith(byStay).map { it.key }
+        // 표시용 이름: 최다 체류 시군구 → …, 이어서 해외 주/도 (체류순)
+        val regionNames = sigCodes.mapNotNull { sigName[it] } + provinceCodes.mapNotNull { provName[it] }
 
-        if (sigCodes.isEmpty() && countryCodes.isEmpty()) {
+        if (sigCodes.isEmpty() && provinceCodes.isEmpty()) {
             android.util.Log.d("Footprint", "no region resolved — skip")
             return
         }
@@ -97,7 +97,7 @@ object FootprintService {
         runCatching {
             // 새로 칠해지는 지역 계산 (하이라이트 연출용) — 기존 요약과 비교
             val current = _mySummary.value
-            val newCodes = (sigCodes.toSet() - current.sigCodes) + (countryCodes.toSet() - current.countryCodes)
+            val newCodes = (sigCodes.toSet() - current.sigCodes) + (provinceCodes.toSet() - current.provinceCodes)
 
             // 세션ID를 문서ID로 → 같은 세션 재생성 시 덮어쓰기(중복 방지)
             db.collection("users").document(userId)
@@ -109,6 +109,7 @@ object FootprintService {
                         "date" to Timestamp(Date()),
                         "placeCount" to course.places.size,
                         "sigCodes" to sigCodes,
+                        "provinceCodes" to provinceCodes,
                         "countryCodes" to countryCodes,
                         "regionNames" to regionNames,
                         "points" to points,
@@ -117,20 +118,22 @@ object FootprintService {
             db.collection("users").document(userId).update(
                 mapOf(
                     "visitedSigCodes" to FieldValue.arrayUnion(*sigCodes.toTypedArray()),
+                    "visitedProvinceCodes" to FieldValue.arrayUnion(*provinceCodes.toTypedArray()),
                     "visitedCountryCodes" to FieldValue.arrayUnion(*countryCodes.toTypedArray()),
                 )
             ).await()
 
             _mySummary.value = FootprintSummary(
                 sigCodes = current.sigCodes + sigCodes,
+                provinceCodes = current.provinceCodes + provinceCodes,
                 countryCodes = current.countryCodes + countryCodes,
             )
             if (newCodes.isNotEmpty()) {
                 _lastNewCodes.value = newCodes
                 // 대표 신규 지역 = 체류순 정렬(시군구 우선)에서 처음으로 등장하는 새 지역
-                lastPrimaryNewCode = (sigCodes + countryCodes).firstOrNull { it in newCodes }
+                lastPrimaryNewCode = (sigCodes + provinceCodes).firstOrNull { it in newCodes }
             }
-            android.util.Log.d("Footprint", "recorded sig=$sigCodes country=$countryCodes")
+            android.util.Log.d("Footprint", "recorded sig=$sigCodes prov=$provinceCodes country=$countryCodes")
         }.onFailure {
             android.util.Log.e("Footprint", "record failed: ${it.message}")
         }
@@ -144,6 +147,7 @@ object FootprintService {
         val data = doc?.data
         val summary = FootprintSummary(
             sigCodes = (data?.get("visitedSigCodes") as? List<*>)?.filterIsInstance<String>()?.toSet() ?: emptySet(),
+            provinceCodes = (data?.get("visitedProvinceCodes") as? List<*>)?.filterIsInstance<String>()?.toSet() ?: emptySet(),
             countryCodes = (data?.get("visitedCountryCodes") as? List<*>)?.filterIsInstance<String>()?.toSet() ?: emptySet(),
         )
         if (isMe) _mySummary.value = summary
@@ -209,8 +213,8 @@ object FootprintService {
     }
 
     /** 시각 검증용 — 가짜 요약 주입 (DEBUG 프리뷰 전용) */
-    fun setDemoSummary(sigCodes: Set<String>, countryCodes: Set<String>) {
-        _mySummary.value = FootprintSummary(sigCodes = sigCodes, countryCodes = countryCodes)
+    fun setDemoSummary(sigCodes: Set<String>, provinceCodes: Set<String>, countryCodes: Set<String>) {
+        _mySummary.value = FootprintSummary(sigCodes = sigCodes, provinceCodes = provinceCodes, countryCodes = countryCodes)
     }
 }
 
@@ -230,6 +234,7 @@ private fun DocumentSnapshot.toFootprintRecord(): FootprintRecord? {
         date = (d["date"] as? Timestamp)?.toDate()?.time ?: 0L,
         placeCount = (d["placeCount"] as? Number)?.toInt() ?: 0,
         sigCodes = (d["sigCodes"] as? List<*>)?.filterIsInstance<String>() ?: emptyList(),
+        provinceCodes = (d["provinceCodes"] as? List<*>)?.filterIsInstance<String>() ?: emptyList(),
         countryCodes = (d["countryCodes"] as? List<*>)?.filterIsInstance<String>() ?: emptyList(),
         regionNames = (d["regionNames"] as? List<*>)?.filterIsInstance<String>() ?: emptyList(),
         points = points,

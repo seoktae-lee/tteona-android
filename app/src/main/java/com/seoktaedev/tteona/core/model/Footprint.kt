@@ -15,10 +15,11 @@ data class FootprintRecord(
     val courseName: String = "",
     val date: Long = 0L,               // epoch millis — Firestore Timestamp는 서비스 레이어에서 변환
     val placeCount: Int = 0,
-    val sigCodes: List<String> = emptyList(),      // 색칠된 한국 시군구 코드
-    val countryCodes: List<String> = emptyList(),  // 색칠된 국가 ISO3 코드
-    val regionNames: List<String> = emptyList(),   // 표시용 지역 이름 ("서울 종로구", "Japan" 등)
-    val points: List<FootprintPoint> = emptyList(), // 경로 보조 표시용 장소 좌표 (순서대로)
+    val sigCodes: List<String> = emptyList(),        // 색칠된 한국 시군구 코드
+    val provinceCodes: List<String> = emptyList(),   // 색칠된 세계 주/도 코드 (ISO 3166-2)
+    val countryCodes: List<String> = emptyList(),    // 방문 국가 ISO3 (국가 카운트용)
+    val regionNames: List<String> = emptyList(),     // 표시용 지역 이름 ("서울 종로구", "Ōsaka" 등)
+    val points: List<FootprintPoint> = emptyList(),  // 경로 보조 표시용 장소 좌표 (순서대로)
 )
 
 /** 경로 표시용 좌표 한 점 */
@@ -34,7 +35,8 @@ data class FootprintPoint(
  */
 data class FootprintSummary(
     val sigCodes: Set<String> = emptySet(),
+    val provinceCodes: Set<String> = emptySet(),
     val countryCodes: Set<String> = emptySet(),
 ) {
-    val isEmpty: Boolean get() = sigCodes.isEmpty() && countryCodes.isEmpty()
+    val isEmpty: Boolean get() = sigCodes.isEmpty() && provinceCodes.isEmpty() && countryCodes.isEmpty()
 }

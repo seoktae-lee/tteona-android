@@ -82,9 +82,9 @@ private fun cameraFor(focus: FootprintMapFocus): Pair<Offset, Float> = when (foc
     FootprintMapFocus.Korea -> Offset(0.8549f, 0.3929f) to 40f
     is FootprintMapFocus.Country -> {
         if (focus.iso3 == "KOR") cameraFor(FootprintMapFocus.Korea)
-        else FootprintAtlas.worldRegion(focus.iso3)?.let { region ->
-            val span = maxOf(region.bbox.width, region.bbox.height * 1.4f)
-            region.center to (0.75f / maxOf(span, 0.001f)).coerceIn(1.2f, 60f)
+        else FootprintAtlas.countryBBox[focus.iso3]?.let { bbox ->
+            val span = maxOf(bbox.width, bbox.height * 1.4f)
+            bbox.center to (0.75f / maxOf(span, 0.001f)).coerceIn(1.2f, 60f)
         } ?: cameraFor(FootprintMapFocus.World)
     }
     is FootprintMapFocus.Point -> FootprintAtlas.project(focus.lat, focus.lng) to 90f
@@ -193,10 +193,10 @@ fun FootprintMapView(
                                     )
                                     val (lat, lng) = FootprintAtlas.unproject(unit)
                                     val resolved = FootprintAtlas.resolve(context, lat, lng)
-                                    val region = resolved.sig ?: resolved.country
+                                    val region = resolved.sig ?: resolved.province
                                     if (region != null) {
                                         tappedVisited = region.code in summary.sigCodes ||
-                                            region.code in summary.countryCodes
+                                            region.code in summary.provinceCodes
                                         tappedRegion = region
                                         scope.launch {
                                             delay(3000)
@@ -231,18 +231,19 @@ fun FootprintMapView(
                     scale(scaleX = scale, scaleY = scale, pivot = Offset.Zero) {
                         val strokeWidth = hairline / scale
 
-                        // 1) 세계 국가 (한국 본토는 시군구 레이어가 덮는다)
-                        for (region in FootprintAtlas.worldRegions) {
+                        // 1) 세계 주/도 (admin-1) — 해외는 주/도 단위 색칠. 한국 주/도는 시군구 레이어가 덮는다.
+                        for (region in FootprintAtlas.worldProvinces) {
                             if (!region.bbox.overlaps(visible)) continue
-                            val visited = region.code in summary.countryCodes
+                            val isKorea = region.country == "KOR"
+                            val visited = region.code in summary.provinceCodes
                             val highlighted = region.code in highlightCodes
                             val fill = when {
-                                region.code == "KOR" -> LandColor
+                                isKorea -> LandColor
                                 highlighted -> VisitedSoft.copy(alpha = pulse)
                                 visited -> TteOrange.copy(alpha = 0.88f)
                                 else -> LandColor
                             }
-                            val border = if (region.code != "KOR" && (visited || highlighted)) TteOrange else BorderColor
+                            val border = if (!isKorea && (visited || highlighted)) TteOrange else BorderColor
                             drawPath(region.path, fill)
                             drawPath(region.path, border, style = Stroke(width = strokeWidth))
                         }

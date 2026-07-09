@@ -26,6 +26,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.CameraAlt
@@ -93,17 +94,19 @@ import kotlinx.coroutines.launch
 private enum class SettingsSubScreen { MAIN, STATS, BLOCKED, LANGUAGE }
 
 @Composable
-fun SettingsScreen(modifier: Modifier = Modifier) {
+fun SettingsScreen(modifier: Modifier = Modifier, onBack: (() -> Unit)? = null) {
     var subScreen by rememberSaveable { mutableStateOf(SettingsSubScreen.MAIN) }
 
     when (subScreen) {
         SettingsSubScreen.MAIN -> SettingsMain(
             modifier = modifier,
+            onBack = onBack,
             onOpenStats = { subScreen = SettingsSubScreen.STATS },
             onOpenBlocked = { subScreen = SettingsSubScreen.BLOCKED },
             onOpenLanguage = { subScreen = SettingsSubScreen.LANGUAGE },
         )
         SettingsSubScreen.STATS -> {
+            // 여행 통계는 프로필 탭으로 이동 — 잔존 상태 방어용으로만 유지
             BackHandler { subScreen = SettingsSubScreen.MAIN }
             TravelStatsScreen(modifier = modifier, onBack = { subScreen = SettingsSubScreen.MAIN })
         }
@@ -121,6 +124,7 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
 @Composable
 private fun SettingsMain(
     modifier: Modifier,
+    onBack: (() -> Unit)?,
     onOpenStats: () -> Unit,
     onOpenBlocked: () -> Unit,
     onOpenLanguage: () -> Unit,
@@ -133,10 +137,8 @@ private fun SettingsMain(
     var showSignOutAlert by rememberSaveable { mutableStateOf(false) }
     var showPaywall by rememberSaveable { mutableStateOf(false) }
     var showDeleteAlert by rememberSaveable { mutableStateOf(false) }
-    var showNicknameEdit by rememberSaveable { mutableStateOf(false) }
     var isDeleting by remember { mutableStateOf(false) }
     var deleteFailed by remember { mutableStateOf(false) }
-    var isUploadingAvatar by remember { mutableStateOf(false) }
     var notificationGranted by remember { mutableStateOf<Boolean?>(null) }
 
     // Firestore 프로필 로드
@@ -156,18 +158,6 @@ private fun SettingsMain(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    // 갤러리 사진 선택 → WAS 업로드
-    val photoPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-        val uid = authUser?.uid
-        if (uri != null && uid != null) {
-            scope.launch {
-                isUploadingAvatar = true
-                ProfileImageService.upload(context, uid, uri)?.let { UserService.setProfileImageUrl(it) }
-                isUploadingAvatar = false
-            }
-        }
-    }
-
     Box(modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
@@ -175,56 +165,31 @@ private fun SettingsMain(
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp),
         ) {
-            Text(
-                stringResource(R.string.settings_title),
-                fontSize = 28.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(top = 24.dp, bottom = 16.dp),
-            )
-
-            // 프로필 섹션
-            SectionCard {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(14.dp),
-                    modifier = Modifier.padding(14.dp),
-                ) {
-                    AvatarWithPicker(
-                        nickname = profileUser?.nickname,
-                        imageUrl = profileUser?.profileImageUrl,
-                        isUploading = isUploadingAvatar,
-                        onClick = {
-                            photoPicker.launch(
-                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                            )
-                        },
+            // 타이틀 — 프로필 탭에서 push되면 뒤로가기 표시 (iOS: 자체 NavigationStack 제거)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(top = 16.dp, bottom = 16.dp),
+            ) {
+                if (onBack != null) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = null,
+                        tint = TteDarkGray,
+                        modifier = Modifier
+                            .size(28.dp)
+                            .clickable(onClick = onBack),
                     )
-                    // 닉네임 영역 탭 → 변경 시트 (updateNickname 서비스는 있었지만 진입점이 없던 문제 해결)
-                    Column(Modifier.clickable { showNicknameEdit = true }) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        ) {
-                            Text(
-                                profileUser?.nickname?.takeIf { it.isNotEmpty() } ?: stringResource(R.string.settings_noNickname),
-                                fontSize = 17.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = TteDarkGray,
-                            )
-                            Icon(
-                                Icons.Filled.Edit,
-                                contentDescription = stringResource(R.string.settings_editNickname),
-                                tint = TteMediumGray,
-                                modifier = Modifier.size(13.dp),
-                            )
-                        }
-                        Spacer(Modifier.height(4.dp))
-                        Text(authUser?.email ?: "", fontSize = 13.sp, color = TteMediumGray)
-                    }
+                    Spacer(Modifier.width(12.dp))
                 }
-                SettingsDivider()
-                SettingsRow(Icons.Filled.BarChart, stringResource(R.string.settings_travelStats), onClick = onOpenStats) { Chevron() }
-                SettingsDivider()
+                Text(
+                    stringResource(R.string.settings_title),
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
+
+            // 프로필(아바타·닉네임·통계)은 프로필 탭으로 이동 — 여기는 취향 설정만 남긴다
+            SectionCard {
                 TravelStyleRow(
                     currentTag = profileUser?.preferredTag,
                     onSelect = { tag ->
@@ -348,11 +313,6 @@ private fun SettingsMain(
             }
 
             Spacer(Modifier.height(24.dp))
-        }
-
-        // 닉네임 변경 시트 (iOS sheet showNicknameEdit)
-        if (showNicknameEdit) {
-            NicknameEditSheet(onDismiss = { showNicknameEdit = false })
         }
 
         // PRO 페이월 (iOS sheet showPaywall)
@@ -481,76 +441,6 @@ private fun TravelStyleRow(
                 },
             )
         }
-    }
-}
-
-// MARK: - 프로필 아바타 (카메라 뱃지 + 업로드 상태)
-@Composable
-private fun AvatarWithPicker(
-    nickname: String?,
-    imageUrl: String?,
-    isUploading: Boolean,
-    onClick: () -> Unit,
-) {
-    Box(modifier = Modifier.clickable(enabled = !isUploading, onClick = onClick)) {
-        Box(
-            contentAlignment = Alignment.Center,
-            modifier = Modifier
-                .size(56.dp)
-                .clip(CircleShape)
-                .background(TteOrange.copy(alpha = 0.15f)),
-        ) {
-            if (imageUrl != null) {
-                SubcomposeAsyncImage(
-                    model = imageUrl,
-                    contentDescription = stringResource(R.string.settings_profilePhoto),
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize(),
-                    error = { AvatarInitial(nickname) },
-                )
-            } else {
-                AvatarInitial(nickname)
-            }
-            if (isUploading) {
-                Box(
-                    Modifier
-                        .fillMaxSize()
-                        .background(Color.Black.copy(alpha = 0.4f)),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    CircularProgressIndicator(color = Color.White, modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                }
-            }
-        }
-        // 카메라 뱃지
-        Box(
-            contentAlignment = Alignment.Center,
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .offset(x = 2.dp, y = 2.dp)
-                .size(20.dp)
-                .clip(CircleShape)
-                .background(TteOrange),
-        ) {
-            Icon(
-                Icons.Filled.CameraAlt,
-                contentDescription = stringResource(R.string.settings_changePhoto),
-                tint = Color.White,
-                modifier = Modifier.size(11.dp),
-            )
-        }
-    }
-}
-
-@Composable
-private fun AvatarInitial(nickname: String?) {
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Text(
-            (nickname?.takeIf { it.isNotEmpty() } ?: "?").take(1),
-            fontSize = 22.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = TteOrange,
-        )
     }
 }
 

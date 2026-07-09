@@ -97,6 +97,7 @@ import com.seoktaedev.tteona.core.util.Haptics
 import com.seoktaedev.tteona.ui.theme.TteOrange
 import com.seoktaedev.tteona.ui.theme.glowCircle
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 
@@ -244,6 +245,12 @@ fun VlogGenerationScreen(
             savedFormatsCount = saved
             vlogFile = result.main
             Haptics.success(view)
+            // 발자취 적재 — 브이로그가 완성된 여행만 지도에 칠해진다 (실패해도 흐름 방해 없음, iOS와 동일)
+            kotlinx.coroutines.CoroutineScope(Dispatchers.IO).launch {
+                com.seoktaedev.tteona.core.services.FootprintService.record(
+                    context.applicationContext, course, sessionId, uid,
+                )
+            }
             phase = Phase.PREVIEW
         } catch (e: Exception) {
             errorMessage = e.message

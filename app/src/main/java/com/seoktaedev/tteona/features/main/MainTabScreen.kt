@@ -10,9 +10,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
+import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Map
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Icon
@@ -52,24 +52,23 @@ import com.seoktaedev.tteona.features.explore.ExploreScreen
 import com.seoktaedev.tteona.features.group.GroupListScreen
 import com.seoktaedev.tteona.features.home.HomeScreen
 import com.seoktaedev.tteona.features.session.ActiveSessionScreen
-import com.seoktaedev.tteona.features.settings.SettingsScreen
 
-// iOS MainTabView와 동일한 4탭 구성: 홈(지도) / 탐색 / 채팅(그룹) / 설정
+// iOS MainTabView와 동일한 4탭 구성: 홈(지도) / 탐색 / 채팅(그룹) / 프로필
 private data class TabItem(val labelRes: Int, val icon: ImageVector)
 
 private val tabs = listOf(
     TabItem(R.string.tab_home, Icons.Filled.Map),
     TabItem(R.string.tab_explore, Icons.Filled.GridView),
     TabItem(R.string.tab_chat, Icons.AutoMirrored.Filled.Chat),
-    TabItem(R.string.tab_settings, Icons.Filled.Settings),
+    TabItem(R.string.tab_profile, Icons.Filled.AccountCircle),
 )
 
 // 코스 상세 표시용 선택 상태 (iOS의 sheet(item:) 대응)
 private data class CourseSelection(val course: Course, val thumbnailUrl: String?)
 
 @Composable
-fun MainTabScreen() {
-    var selectedTab by rememberSaveable { mutableIntStateOf(0) }
+fun MainTabScreen(initialTab: Int = 0, previewFootprintDemo: Boolean = false) {
+    var selectedTab by rememberSaveable { mutableIntStateOf(initialTab) }
     var courseSelection by remember { mutableStateOf<CourseSelection?>(null) }
     var sessionInfo by remember { mutableStateOf<CourseSessionInfo?>(null) }
     var impromptuRoomIds by remember { mutableStateOf<Set<String>?>(null) }
@@ -185,7 +184,7 @@ fun MainTabScreen() {
                     onOpenGroups = { selectedTab = 2 },
                 )
                 2 -> Box(modifier) { GroupListScreen() }
-                3 -> SettingsScreen(modifier)
+                3 -> com.seoktaedev.tteona.features.profile.ProfileTabScreen(modifier, previewFootprintDemo = previewFootprintDemo)
             }
         }
 

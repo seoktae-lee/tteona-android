@@ -27,6 +27,8 @@ import com.seoktaedev.tteona.ui.theme.TteOrange
 fun AppRoot(
     previewOnboarding: Boolean = false,
     previewOnboardingStep: Int = 0,
+    previewProfileTab: Boolean = false,
+    previewFootprintDemo: Boolean = false,
 ) {
     val isInitializing by AuthService.isInitializing.collectAsState()
     val currentUser by AuthService.currentUser.collectAsState()
@@ -36,6 +38,12 @@ fun AppRoot(
     // 시각 검증용 — 인증 없이 온보딩을 바로 표시 (DEBUG 빌드에서만 MainActivity가 활성화)
     if (previewOnboarding) {
         OnboardingScreen(initialStep = previewOnboardingStep)
+        return
+    }
+
+    // 시각 검증용 — 인증 없이 메인 탭 + 프로필 탭 진입
+    if (previewProfileTab) {
+        MainTabScreen(initialTab = 3, previewFootprintDemo = previewFootprintDemo)
         return
     }
 

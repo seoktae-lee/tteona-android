@@ -388,6 +388,7 @@ object AuthService {
         com.seoktaedev.tteona.core.services.CourseService.clearUserData()
         com.seoktaedev.tteona.core.services.UserService.clear()
         com.seoktaedev.tteona.core.services.RoomService.clear()
+        com.seoktaedev.tteona.core.services.FootprintService.clear()
         auth.signOut()
     }
 

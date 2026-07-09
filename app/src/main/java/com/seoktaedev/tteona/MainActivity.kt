@@ -28,9 +28,20 @@ class MainActivity : ComponentActivity() {
         val previewOnboarding = BuildConfig.DEBUG &&
             intent?.getBooleanExtra("previewOnboarding", false) == true
         val previewStep = if (previewOnboarding) intent?.getIntExtra("previewOnboardingStep", 0) ?: 0 else 0
+        // 시각 검증용: 프로필 탭(발자취 지도) 바로 진입 + 가짜 발자취
+        //   adb shell am start -n com.seoktaedev.tteona/.MainActivity --ez previewProfileTab true [--ez previewFootprintDemo true]
+        val previewProfileTab = BuildConfig.DEBUG &&
+            intent?.getBooleanExtra("previewProfileTab", false) == true
+        val previewFootprintDemo = BuildConfig.DEBUG &&
+            intent?.getBooleanExtra("previewFootprintDemo", false) == true
         setContent {
             TteonaTheme {
-                AppRoot(previewOnboarding = previewOnboarding, previewOnboardingStep = previewStep)
+                AppRoot(
+                    previewOnboarding = previewOnboarding,
+                    previewOnboardingStep = previewStep,
+                    previewProfileTab = previewProfileTab,
+                    previewFootprintDemo = previewFootprintDemo,
+                )
             }
         }
     }

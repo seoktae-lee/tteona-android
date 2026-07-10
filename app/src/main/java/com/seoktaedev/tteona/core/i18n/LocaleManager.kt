@@ -34,6 +34,9 @@ object LocaleManager {
     /** 앱 컨텍스트 기반 문자열 조회 (컴포저블 밖·서비스 레이어용). */
     fun string(resId: Int, vararg args: Any): String = string(appContext, resId, *args)
 
+    /** 앱 컨텍스트 기반 현재 언어 조회 (ViewModel 등 Context가 없는 곳에서 사용). */
+    fun current(): AppLanguage = current(appContext)
+
     fun current(context: Context): AppLanguage {
         val saved = context
             .getSharedPreferences(PREFS, Context.MODE_PRIVATE)

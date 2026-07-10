@@ -11,11 +11,14 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -90,6 +93,7 @@ private sealed class TimelineEntry(val key: String, val date: Long) {
     class System(val feed: FeedItem) : TimelineEntry("s_${feed.feedId}", feed.createdAt)
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun GroupChatSection(room: Room, modifier: Modifier = Modifier) {
     val uid = AuthService.currentUser.value?.uid ?: ""
@@ -131,6 +135,14 @@ fun GroupChatSection(room: Room, modifier: Modifier = Modifier) {
     // 새 항목 추가 시 맨 아래로 스크롤
     LaunchedEffect(entries.size) {
         if (entries.isNotEmpty()) listState.animateScrollToItem(entries.size - 1)
+    }
+
+    // 키보드가 올라오면 리스트 뷰포트만 줄어들어 최신 메시지가 가려진다.
+    // imePadding()은 입력바만 밀어줄 뿐 스크롤 위치는 보정하지 않으므로 여기서 바닥으로 되돌린다.
+    // (iOS GroupChatView의 onChange(of: inputFocused) → scrollTo("BOTTOM") 대응)
+    val imeVisible = WindowInsets.isImeVisible
+    LaunchedEffect(imeVisible) {
+        if (imeVisible && entries.isNotEmpty()) listState.animateScrollToItem(entries.size - 1)
     }
 
     // 하이라이트 1.6초 후 해제 (iOS와 동일)

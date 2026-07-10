@@ -204,7 +204,9 @@ fun ImpromptuSessionScreen(
             val dateStr = SimpleDateFormat(LocaleManager.string(context, R.string.impromptu_dateFormat), locale).format(Date())
             LocaleManager.string(context, R.string.impromptu_myTodayDated, dateStr)
         }
-        val region = capturedPlaces.firstOrNull()?.let { String.format(Locale.US, "%.1f°N", it.latitude) } ?: LocaleManager.string(context, R.string.region_other)
+        // Firestore에 저장되는 값이므로 표시용 번역문이 아닌 표준 한글명을 쓴다.
+        // (번역은 읽는 쪽에서 Course.regionLabelRes가 담당)
+        val region = capturedPlaces.firstOrNull()?.let { String.format(Locale.US, "%.1f°N", it.latitude) } ?: "기타"
         val course = Course(
             courseId = UUID.randomUUID().toString(),
             authorId = uid,

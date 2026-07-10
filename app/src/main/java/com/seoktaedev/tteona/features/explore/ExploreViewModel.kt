@@ -5,10 +5,12 @@ import androidx.lifecycle.viewModelScope
 import com.seoktaedev.tteona.core.auth.AuthService
 import com.seoktaedev.tteona.core.model.Course
 import com.seoktaedev.tteona.core.model.CreatorRank
+import com.seoktaedev.tteona.core.i18n.LocaleManager
 import com.seoktaedev.tteona.core.services.CourseService
 import com.seoktaedev.tteona.core.services.CourseThumbnailService
 import com.seoktaedev.tteona.core.services.RecommendationService
 import com.seoktaedev.tteona.core.services.StatsService
+import com.seoktaedev.tteona.core.services.TranslationService
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -33,6 +35,8 @@ class ExploreViewModel : ViewModel() {
         val creatorRanking: List<CreatorRank> = emptyList(),
         val sortMode: SortMode = SortMode.RECOMMENDED,
         val isLoading: Boolean = false,
+        // 코스 제목(UGC) 번역문 — 원문 → 번역문. 없으면 카드가 원문을 그대로 쓴다.
+        val translatedTitles: Map<String, String> = emptyMap(),
     )
 
     private val _uiState = MutableStateFlow(UiState())
@@ -77,13 +81,27 @@ class ExploreViewModel : ViewModel() {
 
                 coursesJob.await()
                 likedJob.await()
+                val thumbs = thumbsJob.await()
+                val recommended = recJob.await()
+                // 랭킹 조회가 실패하면(null) 기존 스트립을 그대로 둔다 — 빈 목록이 내려오면
+                // if (creatorRanking.isNotEmpty()) 게이팅에 걸려 섹션이 통째로 사라진다.
+                val ranking = rankJob.await()
                 _uiState.update {
                     it.copy(
-                        thumbnails = thumbsJob.await(),
-                        recommendedIds = recJob.await(),
-                        creatorRanking = rankJob.await(),
+                        thumbnails = if (thumbs.isNotEmpty()) thumbs else it.thumbnails,
+                        recommendedIds = recommended,
+                        creatorRanking = ranking ?: it.creatorRanking,
                         isLoading = false,
                     )
+                }
+
+                // 제목 번역은 기다리지 않는다 — 원문으로 먼저 그리고, 번역문이 오면 교체한다.
+                launch {
+                    val titles = CourseService.courses.value.map { it.courseName }
+                    val translated = TranslationService.translate(titles, LocaleManager.current())
+                    if (translated.isNotEmpty()) {
+                        _uiState.update { it.copy(translatedTitles = translated) }
+                    }
                 }
             }
         }

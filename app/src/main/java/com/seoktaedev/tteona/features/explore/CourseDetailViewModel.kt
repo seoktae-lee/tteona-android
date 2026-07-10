@@ -7,8 +7,10 @@ import com.seoktaedev.tteona.core.model.AppUser
 import com.seoktaedev.tteona.core.model.Course
 import com.seoktaedev.tteona.core.model.RouteInfo
 import com.seoktaedev.tteona.core.model.WeatherInfo
+import com.seoktaedev.tteona.core.i18n.LocaleManager
 import com.seoktaedev.tteona.core.services.CourseService
 import com.seoktaedev.tteona.core.services.ExploreInfoService
+import com.seoktaedev.tteona.core.services.TranslationService
 import com.seoktaedev.tteona.core.services.UserService
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -28,6 +30,8 @@ class CourseDetailViewModel : ViewModel() {
         val transitRoute: RouteInfo? = null,
         val isLoadingRoute: Boolean = true,
         val isLoadingTransit: Boolean = true,
+        // 코스 제목(UGC) 번역문 — 도착 전·실패 시에는 원문을 보여준다.
+        val translatedTitle: String? = null,
     )
 
     private val _uiState = MutableStateFlow(UiState())
@@ -55,6 +59,12 @@ class CourseDetailViewModel : ViewModel() {
                     _uiState.update { it.copy(transitRoute = transit, isLoadingTransit = false) }
                 }
                 _uiState.update { it.copy(author = authorJob.await(), weather = weatherJob.await()) }
+
+                // 날씨·경로 조회 뒤로 밀리지 않도록 별도 코루틴 — 도착 전까지는 원문이 보인다.
+                launch {
+                    val translated = TranslationService.translate(course.courseName, LocaleManager.current())
+                    _uiState.update { it.copy(translatedTitle = translated) }
+                }
             }
         }
     }

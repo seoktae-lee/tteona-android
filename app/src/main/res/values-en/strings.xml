@@ -213,6 +213,12 @@
     <string name="impromptu_startRecord">Start recording</string>
     <string name="impromptu_myTodayDated">My Today %s</string>
     <string name="region_other">Other</string>
+    <string name="region_seoul">Seoul</string>
+    <string name="region_busan">Busan</string>
+    <string name="region_jeju">Jeju</string>
+    <string name="region_gyeongju">Gyeongju</string>
+    <string name="region_gangneung">Gangneung</string>
+    <string name="region_jeonju">Jeonju</string>
     <string name="impromptu_placesVisited">%d places visited</string>
     <string name="impromptu_savedSession_title">You have a session from today</string>
     <string name="impromptu_savedSession_detail">%d places · %s</string>
@@ -248,6 +254,10 @@
     <string name="vlog_photoPermission">Photo access is needed to save to your album.\nPlease allow photo access in Settings.</string>
     <string name="vlog_failed">Failed to create your vlog</string>
     <string name="vlog_goBack">Go Back</string>
+    <string name="vlog_retry">Try again</string>
+    <string name="vlog_resume">Resume</string>
+    <string name="vlog_error_serverBusy_title">Still rendering on the server</string>
+    <string name="vlog_error_serverBusy">The connection dropped, but the server is still rendering. Try again and we\'ll pick up the finished video without re-uploading.</string>
     <string name="vlog_done_title">Your vlog is ready!</string>
     <string name="vlog_done_savedMulti">%d versions were saved to your album automatically</string>
     <string name="vlog_done_savedSingle">The finished video was saved to your album automatically</string>
@@ -473,6 +483,7 @@
     <string name="vlogserver_error_badResponse">Server error: %s</string>
     <string name="vlogserver_error_processingFailed">Server editing failed: %s</string>
     <string name="vlogserver_prep">Preparing editing on the server</string>
+    <string name="vlogserver_resuming">Resuming your video...</string>
     <string name="vlogserver_uploading">Uploading clips (%d/%d)</string>
     <string name="vlogserver_editing">Editing on the server</string>
     <string name="vlogserver_receiving">Downloading the finished video</string>

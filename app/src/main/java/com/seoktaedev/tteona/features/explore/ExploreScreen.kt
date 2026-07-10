@@ -54,6 +54,8 @@ import coil3.compose.SubcomposeAsyncImage
 import com.seoktaedev.tteona.R
 import com.seoktaedev.tteona.core.model.Course
 import com.seoktaedev.tteona.core.model.CreatorRank
+import com.seoktaedev.tteona.core.model.regionLabelRes
+import com.seoktaedev.tteona.core.util.pressableCard
 import com.seoktaedev.tteona.ui.theme.TteFieldBackground
 import com.seoktaedev.tteona.ui.theme.TteMediumGray
 import com.seoktaedev.tteona.ui.theme.TteOrange
@@ -147,6 +149,7 @@ fun ExploreScreen(
                         GridCell(
                             course = course,
                             thumbnailUrl = thumb,
+                            translatedTitle = state.translatedTitles[course.courseName],
                             onClick = { onCourseClick(course, thumb) },
                         )
                     }
@@ -283,13 +286,13 @@ private fun RankInitial(nickname: String) {
 
 // MARK: - 그리드 셀 (iOS GridCell) — 3:4 세로 카드, 하단 그라디언트 + 코스명/지역·태그
 @Composable
-private fun GridCell(course: Course, thumbnailUrl: String?, onClick: () -> Unit) {
+private fun GridCell(course: Course, thumbnailUrl: String?, translatedTitle: String? = null, onClick: () -> Unit) {
     Box(
         modifier = Modifier
             .aspectRatio(3f / 4f)
             .clip(RoundedCornerShape(14.dp))
             .background(TteFieldBackground)
-            .clickable(onClick = onClick),
+            .pressableCard(onClick),
     ) {
         // 커스텀 썸네일 우선, 실패/부재 시 기본 썸네일
         // TODO: 장소 사진 폴백(PlacesPhotoService)은 해당 서비스 이식 후 연결
@@ -328,7 +331,7 @@ private fun GridCell(course: Course, thumbnailUrl: String?, onClick: () -> Unit)
                 .padding(10.dp),
         ) {
             Text(
-                course.courseName,
+                translatedTitle ?: course.courseName,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color.White,
@@ -336,8 +339,9 @@ private fun GridCell(course: Course, thumbnailUrl: String?, onClick: () -> Unit)
                 overflow = TextOverflow.Ellipsis,
             )
             Spacer(Modifier.height(3.dp))
+            val regionText = course.regionLabelRes?.let { stringResource(it) } ?: course.region
             Text(
-                "${course.region} · ${stringResource(course.tag.labelRes)}",
+                "$regionText · ${stringResource(course.tag.labelRes)}",
                 fontSize = 11.sp,
                 color = Color.White.copy(alpha = 0.9f),
                 maxLines = 1,

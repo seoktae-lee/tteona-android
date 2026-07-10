@@ -29,13 +29,74 @@ import java.util.UUID
 /**
  * 서버 사이드 Vlog 생성 클라이언트 — iOS Core/Services/VlogServerService.swift의 이식본.
  * 흐름: 잡 생성 → 클립 업로드 → start → 진행률 폴링 → 완성본 다운로드.
- * (iOS는 실패 시 로컬 AVFoundation 합성으로 폴백하지만 안드로이드는 서버 전용 — 실패 시 에러 표시)
+ *
+ * 안드로이드는 로컬 폴백이 없어 일시적 오류가 곧 "영상 없음"이 된다. 서버는 그 사이에도
+ * 렌더링을 계속하므로, 헛되이 포기하지 않도록 다음을 지킨다:
+ *   1) 잡 진행 상태를 기기에 저장해 재시도 시 처음부터 다시 하지 않고 이어받는다
+ *   2) 업로드는 지수 백오프로 재시도한다
+ *   3) 상태 폴링은 연속 실패를 일정 횟수까지 견딘다 (셀 전환·짧은 끊김 흡수)
  */
 object VlogServerService {
     private const val BASE_URL = "https://tteona.kr/api/vlog"
     private val json = Json { ignoreUnknownKeys = true }
 
-    class ServerVlogException(message: String) : Exception(message)
+    /** 서버가 "이 영상은 못 만든다"고 확정했는가 — DEFINITIVE면 이어받아도 결과가 같다. */
+    enum class ErrorKind { DEFINITIVE, TRANSIENT, JOB_GONE }
+
+    class ServerVlogException(
+        message: String,
+        val kind: ErrorKind = ErrorKind.TRANSIENT,
+    ) : Exception(message) {
+        val isDefinitive: Boolean get() = kind == ErrorKind.DEFINITIVE
+    }
+
+    // ── 진행 중인 잡 기억하기 ────────────────────────────────────────────
+    // 네트워크가 끊기거나 앱이 죽어도 서버는 렌더링을 계속한다.
+    // 세션별로 잡 진행 상태를 남겨 두면 재시도 시 업로드를 건너뛰고 결과만 받아올 수 있다.
+
+    @Serializable
+    private data class PendingJob(
+        val jobId: Int,
+        val courseId: String,
+        val uploadedOrders: List<Int> = emptyList(),
+        val started: Boolean = false,
+        val createdAt: Long = 0L,
+    )
+
+    private const val PREFS = "tteona_prefs"
+    private const val STORE_KEY = "vlog.pendingJobs"
+    private const val PENDING_TTL_MS = 24L * 3600 * 1000
+
+    private fun prefs(context: Context) =
+        context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+
+    private fun loadStore(context: Context): Map<String, PendingJob> {
+        val raw = prefs(context).getString(STORE_KEY, null) ?: return emptyMap()
+        val decoded = runCatching { json.decodeFromString<Map<String, PendingJob>>(raw) }.getOrNull()
+            ?: return emptyMap()
+        // 하루 지난 잡은 서버에서도 정리 대상이라 들고 있을 이유가 없다
+        val now = System.currentTimeMillis()
+        return decoded.filterValues { now - it.createdAt < PENDING_TTL_MS }
+    }
+
+    private fun saveStore(context: Context, store: Map<String, PendingJob>) {
+        prefs(context).edit().putString(STORE_KEY, json.encodeToString(store)).apply()
+    }
+
+    private fun loadPending(context: Context, sessionId: String): PendingJob? =
+        loadStore(context)[sessionId]
+
+    private fun savePending(context: Context, sessionId: String, job: PendingJob) {
+        saveStore(context, loadStore(context) + (sessionId to job))
+    }
+
+    private fun clearPending(context: Context, sessionId: String) {
+        saveStore(context, loadStore(context) - sessionId)
+    }
+
+    /** 이 세션에 대해 서버가 아직 붙잡고 있는 잡이 있는가 — 오류 화면의 "이어받기" 안내에 사용 */
+    fun hasPendingJob(context: Context, sessionId: String): Boolean =
+        loadPending(context, sessionId) != null
 
     @Serializable
     data class OutputItem(val format: String = "", val url: String = "")
@@ -96,56 +157,143 @@ object VlogServerService {
             val file = VlogClips.clipFile(context, place, sessionId)
             if (file.exists()) place to file else null
         }
-        if (clips.isEmpty()) throw ServerVlogException(LocaleManager.string(R.string.vlogserver_error_noClips))
+        if (clips.isEmpty()) {
+            throw ServerVlogException(LocaleManager.string(R.string.vlogserver_error_noClips), ErrorKind.DEFINITIVE)
+        }
 
         onProgress(0.02, LocaleManager.string(R.string.vlogserver_prep))
 
-        // 1) 잡 생성 (태그 → BGM 무드, shotAt → 클립별 촬영시각 자막)
-        val df = SimpleDateFormat("yyyy.MM.dd  HH:mm", Locale.KOREA)
-        val placesPayload = JsonArray(
-            clips.map { (place, file) ->
-                JsonObject(
-                    mapOf(
-                        "order" to JsonPrimitive(place.order),
-                        "placeName" to JsonPrimitive(place.placeName),
-                        "shotAt" to JsonPrimitive(df.format(Date(file.lastModified()))),
+        // 0) 이전 시도가 남긴 잡이 있으면 이어받는다
+        var pending = loadPending(context, sessionId)
+        if (pending != null && pending.courseId != course.courseId) {
+            clearPending(context, sessionId)   // 다른 코스의 잔재
+            pending = null
+        }
+        if (pending != null) {
+            onProgress(0.05, LocaleManager.string(R.string.vlogserver_resuming))
+            val st = runCatching { status(pending.jobId) }.getOrNull()
+            when {
+                st == null -> {
+                    clearPending(context, sessionId)   // 404 등 — 처음부터 다시
+                    pending = null
+                }
+                st.status == "completed" -> {
+                    // 폰이 놓친 사이 서버가 이미 완성해 뒀다 — 다운로드만 하면 끝
+                    return@withContext downloadOutputs(
+                        context, sessionId, st.outputUrl, st.outputs ?: emptyList(), onProgress,
                     )
-                )
+                }
+                st.status == "failed" -> {
+                    clearPending(context, sessionId)
+                    pending = null
+                }
+                else -> pending = pending.copy(started = st.status != "uploading")
             }
-        )
-        val jobId = createJob(userId, course, formats, bgm, watermark, priority, placesPayload)
+        }
 
-        // 2) 클립 업로드 (0.05 → 0.45)
-        clips.forEachIndexed { i, (place, file) ->
-            onProgress(0.05 + 0.40 * i / clips.size, LocaleManager.string(R.string.vlogserver_uploading, i + 1, clips.size))
-            uploadClip(jobId, place.order, file)
+        // 1) 잡 생성 (태그 → BGM 무드, shotAt → 클립별 촬영시각 자막)
+        val jobId: Int
+        val uploadedOrders: MutableSet<Int>
+        var alreadyStarted: Boolean
+
+        if (pending != null) {
+            jobId = pending.jobId
+            uploadedOrders = pending.uploadedOrders.toMutableSet()
+            alreadyStarted = pending.started
+        } else {
+            val df = SimpleDateFormat("yyyy.MM.dd  HH:mm", Locale.KOREA)
+            val placesPayload = JsonArray(
+                clips.map { (place, file) ->
+                    JsonObject(
+                        mapOf(
+                            "order" to JsonPrimitive(place.order),
+                            "placeName" to JsonPrimitive(place.placeName),
+                            "shotAt" to JsonPrimitive(df.format(Date(file.lastModified()))),
+                        )
+                    )
+                }
+            )
+            jobId = createJob(userId, course, formats, bgm, watermark, priority, placesPayload)
+            uploadedOrders = mutableSetOf()
+            alreadyStarted = false
+            savePending(context, sessionId, PendingJob(jobId, course.courseId, emptyList(), false, System.currentTimeMillis()))
+        }
+
+        // 2) 클립 업로드 (0.05 → 0.45) — 이미 올린 클립은 건너뛴다
+        if (!alreadyStarted) {
+            clips.forEachIndexed { i, (place, file) ->
+                onProgress(0.05 + 0.40 * i / clips.size, LocaleManager.string(R.string.vlogserver_uploading, i + 1, clips.size))
+                if (place.order !in uploadedOrders) {
+                    uploadClip(jobId, place.order, file)
+                    uploadedOrders.add(place.order)
+                    savePending(context, sessionId, PendingJob(jobId, course.courseId, uploadedOrders.toList(), false, System.currentTimeMillis()))
+                }
+            }
         }
         onProgress(0.45, LocaleManager.string(R.string.vlogserver_editing))
 
         // 3) 합성 시작
-        startJob(jobId)
+        if (!alreadyStarted) {
+            startJob(jobId)
+            alreadyStarted = true
+            savePending(context, sessionId, PendingJob(jobId, course.courseId, uploadedOrders.toList(), true, System.currentTimeMillis()))
+        }
 
         // 4) 진행률 폴링 (0.45 → 0.88) — 최대 30분 (멀티포맷 잡은 10분을 넘길 수 있음).
-        // 완료를 감지하면 즉시 루프를 빠져나가야 한다 (repeat의 return@repeat는 continue이므로 while 사용).
+        //    상태 조회 한 번 삐끗했다고 포기하지 않는다: 연속 실패 15회(≈30초)까지 견딘다.
         var outputUrl: String? = null
         var outputs: List<OutputItem> = emptyList()
-        var polls = 0
-        while (outputUrl == null && polls < 900) {
-            polls++
+        var consecutiveFailures = 0
+        val deadline = System.currentTimeMillis() + 30 * 60 * 1000
+
+        while (outputUrl == null && System.currentTimeMillis() < deadline) {
             delay(2000)
-            val st = status(jobId)
+            val st = try {
+                status(jobId).also { consecutiveFailures = 0 }
+            } catch (e: ServerVlogException) {
+                if (e.kind == ErrorKind.JOB_GONE) {
+                    clearPending(context, sessionId)
+                    throw e
+                }
+                consecutiveFailures++
+                if (consecutiveFailures > 15) throw ServerVlogException("status polling", ErrorKind.TRANSIENT)
+                continue
+            }
             when (st.status) {
                 "completed" -> {
                     outputUrl = st.outputUrl
                     outputs = st.outputs ?: emptyList()
                 }
-                "failed" -> throw ServerVlogException(LocaleManager.string(R.string.vlogserver_error_processingFailed, st.errorMsg ?: "unknown"))
+                "failed" -> {
+                    clearPending(context, sessionId)
+                    throw ServerVlogException(
+                        LocaleManager.string(R.string.vlogserver_error_processingFailed, st.errorMsg ?: "unknown"),
+                        ErrorKind.DEFINITIVE,
+                    )
+                }
                 else -> onProgress(0.45 + 0.43 * st.progress / 100.0, LocaleManager.string(R.string.vlogserver_editing))
             }
         }
-        val mainUrl = outputUrl ?: throw ServerVlogException(LocaleManager.string(R.string.vlogserver_error_timeout))
+        // 시간이 다 됐어도 서버 잡은 살아 있다 — pending을 지우지 않아 다음 시도에 이어받는다
+        if (outputUrl == null) {
+            throw ServerVlogException(LocaleManager.string(R.string.vlogserver_error_timeout), ErrorKind.TRANSIENT)
+        }
 
         // 5) 완성본 다운로드 (0.88 → 0.98) — 기본본 + 추가 포맷들
+        downloadOutputs(context, sessionId, outputUrl, outputs, onProgress)
+    }
+
+    /** 완성된 잡의 결과물을 내려받는다 — 성공 시 이 세션의 pending 기록을 지운다. */
+    private suspend fun downloadOutputs(
+        context: Context,
+        sessionId: String,
+        outputUrl: String?,
+        outputs: List<OutputItem>,
+        onProgress: suspend (Double, String) -> Unit,
+    ): GeneratedVlog {
+        val mainUrl = outputUrl
+            ?: throw ServerVlogException(LocaleManager.string(R.string.vlogserver_error_downloadFailed), ErrorKind.TRANSIENT)
+
         onProgress(0.90, LocaleManager.string(R.string.vlogserver_receiving))
         val mainLocal = download(context, mainUrl)
         val extras = mutableListOf<Pair<String, File>>()
@@ -155,12 +303,32 @@ object VlogServerService {
             runCatching { download(context, item.url) }.getOrNull()?.let { extras.add(item.format to it) }
         }
         onProgress(0.98, LocaleManager.string(R.string.vlogserver_almostDone))
-        GeneratedVlog(mainLocal, extras)
+        clearPending(context, sessionId)
+        return GeneratedVlog(mainLocal, extras)
+    }
+
+    // ── 재시도 헬퍼 ─────────────────────────────────────────────────────
+
+    /** 지수 백오프 재시도. 서버가 확정 실패를 알린 경우(isDefinitive)엔 즉시 포기한다. */
+    private suspend fun <T> retrying(attempts: Int, operation: () -> T): T {
+        var lastError: Exception = ServerVlogException("unknown", ErrorKind.TRANSIENT)
+        for (attempt in 0 until attempts) {
+            if (attempt > 0) delay(2000L shl (attempt - 1))   // 2s, 4s, 8s...
+            try {
+                return operation()
+            } catch (e: ServerVlogException) {
+                if (e.isDefinitive) throw e
+                lastError = e
+            } catch (e: java.io.IOException) {
+                lastError = e
+            }
+        }
+        throw lastError
     }
 
     // ── API 단계별 호출 ─────────────────────────────────────────────────
 
-    private fun createJob(
+    private suspend fun createJob(
         userId: String,
         course: Course,
         formats: List<String>,
@@ -168,7 +336,7 @@ object VlogServerService {
         watermark: Boolean,
         priority: Boolean,
         placesPayload: JsonArray,
-    ): Int {
+    ): Int = retrying(3) {
         val body = JsonObject(
             mapOf(
                 "userId" to JsonPrimitive(userId),
@@ -187,12 +355,13 @@ object VlogServerService {
         ApiClient.httpClient.newCall(req).execute().use { res ->
             val text = res.body?.string() ?: ""
             if (!res.isSuccessful) throw ServerVlogException(LocaleManager.string(R.string.vlogserver_error_jobCreateFailed, text.take(120)))
-            return json.parseToJsonElement(text).jsonObject["jobId"]?.jsonPrimitive?.content?.toIntOrNull()
+            json.parseToJsonElement(text).jsonObject["jobId"]?.jsonPrimitive?.content?.toIntOrNull()
                 ?: throw ServerVlogException(LocaleManager.string(R.string.vlogserver_error_jobCreateResponse))
         }
     }
 
-    private fun uploadClip(jobId: Int, order: Int, file: File) {
+    /** 클립 1개 업로드 실패로 전체가 무너지지 않도록 지수 백오프 3회 재시도 */
+    private suspend fun uploadClip(jobId: Int, order: Int, file: File) = retrying(3) {
         val body = MultipartBody.Builder()
             .setType(MultipartBody.FORM)
             .addFormDataPart("clip", "$order.mp4", file.asRequestBody("video/mp4".toMediaType()))
@@ -211,25 +380,35 @@ object VlogServerService {
         }
     }
 
-    private fun startJob(jobId: Int) {
+    private suspend fun startJob(jobId: Int) = retrying(3) {
         val req = Request.Builder()
             .url("$BASE_URL/jobs/$jobId/start")
             .post(ByteArray(0).toRequestBody(null))
             .build()
-        ApiClient.httpClient.newCall(req).execute().use { res ->
-            if (!res.isSuccessful) throw ServerVlogException(LocaleManager.string(R.string.vlogserver_error_compositeStartFailed))
+        val ok = ApiClient.httpClient.newCall(req).execute().use { res -> res.isSuccessful }
+        if (!ok) {
+            // 앞선 시도의 요청이 실제로는 서버에 닿았을 수 있다 (응답만 유실).
+            // 그 경우 잡은 이미 uploading을 벗어나 404가 오므로, 상태로 확인해 통과시킨다.
+            val st = runCatching { status(jobId) }.getOrNull()
+            if (st == null || st.status !in listOf("pending", "processing", "completed")) {
+                throw ServerVlogException(LocaleManager.string(R.string.vlogserver_error_compositeStartFailed))
+            }
         }
     }
 
     private fun status(jobId: Int): JobStatus {
         val req = Request.Builder().url("$BASE_URL/jobs/$jobId").build()
         ApiClient.httpClient.newCall(req).execute().use { res ->
+            // 404는 잡이 만료·삭제된 것 — 이어받기가 불가능하니 폴링을 즉시 끝낸다.
+            if (res.code == 404) {
+                throw ServerVlogException(LocaleManager.string(R.string.vlogserver_error_statusFailed), ErrorKind.JOB_GONE)
+            }
             if (!res.isSuccessful) throw ServerVlogException(LocaleManager.string(R.string.vlogserver_error_statusFailed))
             return json.decodeFromString(res.body?.string() ?: "{}")
         }
     }
 
-    private fun download(context: Context, urlString: String): File {
+    private suspend fun download(context: Context, urlString: String): File = retrying(3) {
         val req = Request.Builder().url(urlString).build()
         ApiClient.httpClient.newCall(req).execute().use { res ->
             if (!res.isSuccessful) throw ServerVlogException(LocaleManager.string(R.string.vlogserver_error_downloadFailed))
@@ -237,7 +416,7 @@ object VlogServerService {
             res.body?.byteStream()?.use { input ->
                 dest.outputStream().use { output -> input.copyTo(output) }
             } ?: throw ServerVlogException(LocaleManager.string(R.string.vlogserver_error_downloadFailed))
-            return dest
+            dest
         }
     }
 }

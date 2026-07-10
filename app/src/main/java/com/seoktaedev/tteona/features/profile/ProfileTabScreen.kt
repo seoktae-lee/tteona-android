@@ -85,6 +85,7 @@ import com.seoktaedev.tteona.core.services.UserService
 import com.seoktaedev.tteona.features.explore.CourseDetailScreen
 import com.seoktaedev.tteona.features.settings.NicknameEditSheet
 import com.seoktaedev.tteona.features.settings.SettingsScreen
+import com.seoktaedev.tteona.core.util.pressableCard
 import com.seoktaedev.tteona.features.settings.TravelStatsScreen
 import com.seoktaedev.tteona.ui.theme.TteDarkGray
 import com.seoktaedev.tteona.ui.theme.TteFieldBackground
@@ -921,7 +922,7 @@ private fun EditableCourseCard(
             .clip(RoundedCornerShape(14.dp))
             .background(TteFieldBackground)
             // 카드 본문 탭 → 코스 상세 (카메라 Box는 자체 clickable이라 자식 우선)
-            .clickable(onClick = onCardClick),
+            .pressableCard(onCardClick),
     ) {
         val url = thumbnailUrl ?: placePhotoUrl
         if (url != null) {

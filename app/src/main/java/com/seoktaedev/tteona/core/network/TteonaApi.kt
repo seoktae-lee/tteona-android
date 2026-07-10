@@ -71,6 +71,13 @@ data class ModerationRequest(val text: String)
 @Serializable
 data class ModerationResponse(val blocked: Boolean = false)
 
+// UGC(코스 제목) 번역 프록시 (iOS TranslationService 대응 — 서버가 결과를 영구 캐시)
+@Serializable
+data class TranslateRequest(val texts: List<String>, val target: String)
+
+@Serializable
+data class TranslateResponse(val translations: List<String> = emptyList(), val translated: Boolean = false)
+
 // 채팅 히스토리 (서버 PostgreSQL 컬럼명 그대로 snake_case)
 @Serializable
 data class ChatHistoryResponse(val messages: List<ChatHistoryRow> = emptyList())
@@ -185,6 +192,10 @@ interface TteonaApi {
     // 콘텐츠 모더레이션 — 부적절 텍스트 검사 (iOS StatsService.isTextAllowed)
     @POST("moderate")
     suspend fun moderateText(@Body body: ModerationRequest): ModerationResponse
+
+    // UGC 번역 — 원문+대상언어를 보내면 번역문을 돌려준다 (iOS TranslationService.fetchTranslations)
+    @POST("translate")
+    suspend fun translate(@Body body: TranslateRequest): TranslateResponse
 
     // 그룹 채팅 히스토리 (iOS ChatSocketService.loadHistory)
     @GET("rooms/{roomId}/messages")

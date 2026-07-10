@@ -213,6 +213,12 @@
     <string name="impromptu_startRecord">기록 시작</string>
     <string name="impromptu_myTodayDated">나의 오늘 %s</string>
     <string name="region_other">기타</string>
+    <string name="region_seoul">서울</string>
+    <string name="region_busan">부산</string>
+    <string name="region_jeju">제주</string>
+    <string name="region_gyeongju">경주</string>
+    <string name="region_gangneung">강릉</string>
+    <string name="region_jeonju">전주</string>
     <string name="impromptu_placesVisited">%d곳 방문</string>
     <string name="impromptu_savedSession_title">오늘 기록이 남아있어요</string>
     <string name="impromptu_savedSession_detail">장소 %d곳 · %s</string>
@@ -248,6 +254,10 @@
     <string name="vlog_photoPermission">앨범 저장을 위해 사진 권한이 필요해요.\n설정에서 사진 접근을 허용해주세요.</string>
     <string name="vlog_failed">Vlog 생성에 실패했어요</string>
     <string name="vlog_goBack">돌아가기</string>
+    <string name="vlog_retry">다시 시도</string>
+    <string name="vlog_resume">이어받기</string>
+    <string name="vlog_error_serverBusy_title">서버가 아직 만들고 있어요</string>
+    <string name="vlog_error_serverBusy">연결이 잠시 끊겼어요. 서버는 계속 영상을 만들고 있으니, 다시 시도하면 처음부터 올리지 않고 완성본을 그대로 받아옵니다.</string>
     <string name="vlog_done_title">Vlog가 완성됐어요!</string>
     <string name="vlog_done_savedMulti">%d가지 버전이 앨범에 자동 저장됐어요</string>
     <string name="vlog_done_savedSingle">완성된 영상은 앨범에 자동 저장됐어요</string>
@@ -473,6 +483,7 @@
     <string name="vlogserver_error_badResponse">서버 응답 오류: %s</string>
     <string name="vlogserver_error_processingFailed">서버 편집 실패: %s</string>
     <string name="vlogserver_prep">서버에 편집을 준비하고 있어요</string>
+    <string name="vlogserver_resuming">만들던 영상을 이어받는 중...</string>
     <string name="vlogserver_uploading">클립 업로드 중 (%d/%d)</string>
     <string name="vlogserver_editing">서버에서 편집 중이에요</string>
     <string name="vlogserver_receiving">완성본을 받아오고 있어요</string>

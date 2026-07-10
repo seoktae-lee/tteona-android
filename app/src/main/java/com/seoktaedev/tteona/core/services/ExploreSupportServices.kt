@@ -80,10 +80,14 @@ object RecommendationService {
 }
 
 object StatsService {
-    suspend fun fetchCreatorRanking(): List<CreatorRank> =
+    /**
+     * 실패(네트워크 오류·코루틴 취소)와 "정말 랭킹이 비어 있음"을 구분한다.
+     * null이면 호출부가 기존 목록을 유지해야 한다 — 빈 목록으로 덮으면 스트립이 통째로 사라진다.
+     */
+    suspend fun fetchCreatorRanking(): List<CreatorRank>? =
         runCatching { ApiClient.api.getCreatorRanking().ranking }
             .onFailure { Log.w("StatsService", "ranking 실패", it) }
-            .getOrDefault(emptyList())
+            .getOrNull()
 
     /** 개인 누적 통계 (iOS StatsService.fetchMyStats) */
     suspend fun fetchMyStats(userId: String): TravelStats? =

@@ -75,6 +75,7 @@ import com.seoktaedev.tteona.core.model.Course
 import com.seoktaedev.tteona.core.model.Place
 import com.seoktaedev.tteona.core.model.RouteInfo
 import com.seoktaedev.tteona.core.model.WeatherInfo
+import com.seoktaedev.tteona.core.model.regionLabelRes
 import com.seoktaedev.tteona.core.services.PlacesPhotoService
 import com.seoktaedev.tteona.ui.theme.TteDarkGray
 import com.seoktaedev.tteona.ui.theme.TteFieldBackground
@@ -118,7 +119,7 @@ fun CourseDetailScreen(
     ) { innerPadding ->
         Box(Modifier.fillMaxSize()) {
             LazyColumn(contentPadding = PaddingValues(bottom = 110.dp)) {
-                item { HeaderImage(course, thumbnailUrl) }
+                item { HeaderImage(course, thumbnailUrl, state.translatedTitle) }
                 item {
                     Column(
                         modifier = Modifier.padding(20.dp),
@@ -317,7 +318,7 @@ fun CourseDetailScreen(
 }
 
 @Composable
-private fun HeaderImage(course: Course, thumbnailUrl: String?) {
+private fun HeaderImage(course: Course, thumbnailUrl: String?, translatedTitle: String? = null) {
     Box(modifier = Modifier
         .fillMaxWidth()
         .height(300.dp)) {
@@ -342,14 +343,15 @@ private fun HeaderImage(course: Course, thumbnailUrl: String?) {
                 .align(Alignment.BottomStart)
                 .padding(20.dp),
         ) {
+            val regionText = course.regionLabelRes?.let { stringResource(it) } ?: course.region
             Text(
-                "${course.tag.emoji} ${stringResource(course.tag.labelRes)} · ${course.region}",
+                "${course.tag.emoji} ${stringResource(course.tag.labelRes)} · $regionText",
                 fontSize = 13.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = Color.White.copy(alpha = 0.9f),
             )
             Spacer(Modifier.height(6.dp))
-            Text(course.courseName, fontSize = 26.sp, fontWeight = FontWeight.Bold, color = Color.White)
+            Text(translatedTitle ?: course.courseName, fontSize = 26.sp, fontWeight = FontWeight.Bold, color = Color.White)
         }
     }
 }

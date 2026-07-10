@@ -42,6 +42,7 @@ import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CropSquare
 import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.MusicNote
@@ -96,6 +97,7 @@ import com.seoktaedev.tteona.core.services.VlogServerService
 import com.seoktaedev.tteona.core.util.Haptics
 import com.seoktaedev.tteona.ui.theme.TteOrange
 import com.seoktaedev.tteona.ui.theme.glowCircle
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -124,10 +126,20 @@ fun VlogGenerationScreen(
     var stageText by remember { mutableStateOf(creatingText) }
     var savedFormatsCount by remember { mutableIntStateOf(0) }
     var selectedFormats by remember { mutableStateOf<Set<String>>(emptySet()) }
-    var didGenerate by remember { mutableStateOf(false) }
     var shotPortrait by remember { mutableStateOf<Boolean?>(null) }
     var selectedBgm by remember { mutableStateOf("auto") }
     var showProNotice by remember { mutableStateOf(false) }
+    // 서버가 아직 이 잡을 렌더링 중이라 "이어받기"가 가능한 상태인가
+    var canResume by remember { mutableStateOf(false) }
+    // 재시도 횟수 — 증가할 때마다 생성 LaunchedEffect가 다시 돈다
+    var attempt by remember { mutableIntStateOf(0) }
+
+    // 합성은 수 분 걸린다. 화면이 잠기면 앱이 백그라운드로 내려가 업로드·폴링이 끊긴다.
+    // (iOS VlogGenerationView의 isIdleTimerDisabled 대응)
+    DisposableEffect(phase) {
+        view.keepScreenOn = phase == Phase.GENERATING
+        onDispose { view.keepScreenOn = false }
+    }
 
     val baseFormat = if (shotPortrait ?: true) "reels" else "youtube"
 
@@ -206,7 +218,12 @@ fun VlogGenerationScreen(
                 onDismiss = onDismissToHome,
             )
         }
-        Phase.ERROR -> ErrorView(errorMessage, onDismiss = onDismissToHome)
+        Phase.ERROR -> ErrorView(
+            message = errorMessage,
+            canResume = canResume,
+            onRetry = { attempt++; phase = Phase.GENERATING },
+            onDismiss = onDismissToHome,
+        )
     }
 
     // PRO 전용 기능 → 페이월 (iOS showPaywall 시트)
@@ -214,13 +231,18 @@ fun VlogGenerationScreen(
         com.seoktaedev.tteona.features.pro.ProPaywallScreen(onDismiss = { showProNotice = false })
     }
 
-    // 생성 실행 (iOS generatingView.task)
-    LaunchedEffect(phase) {
-        if (phase != Phase.GENERATING || didGenerate) return@LaunchedEffect
-        didGenerate = true
+    // 생성 실행 (iOS generatingView.task) — attempt가 바뀌면 재시도/이어받기로 다시 실행된다
+    LaunchedEffect(phase, attempt) {
+        if (phase != Phase.GENERATING) return@LaunchedEffect
+        canResume = false
         val uid = AuthService.currentUser.value?.uid
         try {
-            if (uid == null) throw VlogServerService.ServerVlogException(LocaleManager.string(context, R.string.vlog_loginRequired))
+            if (uid == null) {
+                throw VlogServerService.ServerVlogException(
+                    LocaleManager.string(context, R.string.vlog_loginRequired),
+                    VlogServerService.ErrorKind.DEFINITIVE,
+                )
+            }
             val result = VlogServerService.generate(
                 context = context,
                 course = course,
@@ -252,8 +274,20 @@ fun VlogGenerationScreen(
                 )
             }
             phase = Phase.PREVIEW
+        } catch (e: CancellationException) {
+            throw e   // 화면 이탈 등 정상 취소 — 에러 화면을 띄우지 않는다
         } catch (e: Exception) {
-            errorMessage = e.message
+            // 서버가 아직 이 잡을 붙잡고 있으면 이어받기를 안내한다.
+            // 지금 포기하면 서버는 헛일을 하고 유저는 영상을 통째로 잃는다.
+            val definitive = (e as? VlogServerService.ServerVlogException)?.isDefinitive ?: false
+            val pending = VlogServerService.hasPendingJob(context, sessionId)
+            if (!definitive && pending) {
+                canResume = true
+                errorMessage = LocaleManager.string(context, R.string.vlog_error_serverBusy)
+            } else {
+                canResume = false
+                errorMessage = e.message
+            }
             phase = Phase.ERROR
         }
     }
@@ -839,7 +873,12 @@ private var pendingThumbUri: Uri? = null
 // ── 에러 (iOS errorView) ─────────────────────────────────────────────────
 
 @Composable
-private fun ErrorView(message: String?, onDismiss: () -> Unit) {
+private fun ErrorView(
+    message: String?,
+    canResume: Boolean,
+    onRetry: () -> Unit,
+    onDismiss: () -> Unit,
+) {
     BackHandler(onBack = onDismiss)
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -847,14 +886,23 @@ private fun ErrorView(message: String?, onDismiss: () -> Unit) {
         modifier = Modifier.fillMaxSize().background(Color.Black),
     ) {
         Spacer(Modifier.weight(1f))
-        Icon(Icons.Filled.Error, contentDescription = null, tint = Color.Red, modifier = Modifier.size(48.dp))
-        Text(stringResource(R.string.vlog_failed), fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+        Icon(
+            if (canResume) Icons.Filled.History else Icons.Filled.Error,
+            contentDescription = null,
+            tint = if (canResume) TteOrange else Color.Red,
+            modifier = Modifier.size(48.dp),
+        )
+        Text(
+            stringResource(if (canResume) R.string.vlog_error_serverBusy_title else R.string.vlog_failed),
+            fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = Color.White,
+        )
         message?.let {
             Text(
                 it, fontSize = 13.sp, color = Color.White.copy(alpha = 0.7f),
                 textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = 32.dp),
             )
         }
+        // 다시 시도 — 서버에 잡이 남아 있으면 업로드를 건너뛰고 완성본만 받아온다
         Box(
             contentAlignment = Alignment.Center,
             modifier = Modifier
@@ -863,10 +911,18 @@ private fun ErrorView(message: String?, onDismiss: () -> Unit) {
                 .height(54.dp)
                 .clip(RoundedCornerShape(14.dp))
                 .background(TteOrange)
-                .clickable(onClick = onDismiss),
+                .clickable(onClick = onRetry),
         ) {
-            Text(stringResource(R.string.vlog_goBack), fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+            Text(
+                stringResource(if (canResume) R.string.vlog_resume else R.string.vlog_retry),
+                fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Color.White,
+            )
         }
+        Text(
+            stringResource(R.string.vlog_goBack),
+            fontSize = 14.sp, color = Color.White.copy(alpha = 0.7f),
+            modifier = Modifier.clickable(onClick = onDismiss).padding(8.dp),
+        )
         Spacer(Modifier.weight(1f))
     }
 }

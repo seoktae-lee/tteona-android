@@ -74,3 +74,19 @@ enum class CourseTag(val label: String, val emoji: String, val labelRes: Int) {
 }
 
 val courseRegions = listOf("서울", "부산", "제주", "경주", "강릉", "전주", "기타")
+
+// Firestore의 region 값은 한 가지 형태가 아니다: 초기 코스는 courseRegions의 한글 지역명을,
+// 즉석 세션은 "37.5°N" 같은 좌표 문자열을 저장한다. 아는 지역명만 매핑하고 나머지는 null(원문 사용).
+private val courseRegionResMap: Map<String, Int> = mapOf(
+    "서울" to com.seoktaedev.tteona.R.string.region_seoul,
+    "부산" to com.seoktaedev.tteona.R.string.region_busan,
+    "제주" to com.seoktaedev.tteona.R.string.region_jeju,
+    "경주" to com.seoktaedev.tteona.R.string.region_gyeongju,
+    "강릉" to com.seoktaedev.tteona.R.string.region_gangneung,
+    "전주" to com.seoktaedev.tteona.R.string.region_jeonju,
+    "기타" to com.seoktaedev.tteona.R.string.region_other,
+)
+
+// 화면 표시용 지역명 리소스 — region을 그대로 그리면 영어/일본어 유저에게 한글이 노출된다.
+// null이면 매핑에 없는 값(좌표 문자열 등)이므로 호출부가 course.region을 그대로 쓰면 된다.
+val Course.regionLabelRes: Int? get() = courseRegionResMap[region]

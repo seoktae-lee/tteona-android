@@ -49,6 +49,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -69,6 +70,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
@@ -214,6 +216,12 @@ fun HomeScreen(
         results.sortedByDescending { it.likeCount }
     }
 
+    // 코스명 라벨은 충분히 확대했을 때만 — 축소 상태에서 라벨이 지도를 뒤덮지 않게 한다
+    // (iOS GoogleMapView.labelZoomThreshold = 9.0과 동일). 경계를 넘을 때만 recompose.
+    val showLabels by remember {
+        derivedStateOf { cameraPositionState.position.zoom >= 9f }
+    }
+
     Box(modifier.fillMaxSize()) {
         GoogleMap(
             modifier = Modifier.fillMaxSize(),
@@ -230,7 +238,8 @@ fun HomeScreen(
                 val main = course.mainPlace ?: return@forEach
                 key(course.courseId) {
                     MarkerComposable(
-                        keys = arrayOf(course.courseId),
+                        // showLabels가 바뀌면 마커 비트맵을 다시 그려야 라벨이 나타나거나 사라진다.
+                        keys = arrayOf(course.courseId, showLabels),
                         state = rememberUpdatedMarkerState(
                             position = LatLng(main.latitude, main.longitude),
                         ),
@@ -239,7 +248,7 @@ fun HomeScreen(
                             true
                         },
                     ) {
-                        CoursePin(course)
+                        CoursePin(course, showLabel = showLabels)
                     }
                 }
             }
@@ -281,9 +290,17 @@ fun HomeScreen(
                             scope.launch { geocodeAndMove(context, searchText, cameraPositionState) }
                         }),
                         decorationBox = { inner ->
-                            Box {
+                            // placeholder가 두 줄로 줄바꿈되며 아래로 처지던 문제 — iOS처럼
+                            // 한 줄 말줄임 + 세로 중앙 정렬로 맞춘다.
+                            Box(contentAlignment = Alignment.CenterStart) {
                                 if (searchText.isEmpty()) {
-                                    Text(stringResource(R.string.main_searchPlaceholder), fontSize = 14.sp, color = TteMediumGray)
+                                    Text(
+                                        stringResource(R.string.main_searchPlaceholder),
+                                        fontSize = 14.sp,
+                                        color = TteMediumGray,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
                                 }
                                 inner()
                             }
@@ -613,28 +630,31 @@ private fun countrySpan(isoCode: String): Double = when (isoCode) {
 }
 
 // MARK: - 코스 핀 (태그별 이미지 + 코스명 라벨)
+// showLabel이 false면 핀만 그린다 — 지도를 충분히 확대했을 때만 코스명을 얹는다.
 @SuppressLint("UnrememberedMutableState")
 @Composable
-private fun CoursePin(course: Course) {
+private fun CoursePin(course: Course, showLabel: Boolean) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Image(
             painter = painterResource(pinRes(course.tag)),
             contentDescription = course.courseName,
             modifier = Modifier.size(46.dp),
         )
-        Text(
-            course.courseName,
-            fontSize = 10.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = TteDarkGray,
-            maxLines = 1,
-            textAlign = TextAlign.Center,
-            modifier = Modifier
-                .widthLimit()
-                .clip(RoundedCornerShape(6.dp))
-                .background(Color.White.copy(alpha = 0.85f))
-                .padding(horizontal = 5.dp, vertical = 1.dp),
-        )
+        if (showLabel) {
+            Text(
+                course.courseName,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = TteDarkGray,
+                maxLines = 1,
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .widthLimit()
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(Color.White.copy(alpha = 0.85f))
+                    .padding(horizontal = 5.dp, vertical = 1.dp),
+            )
+        }
     }
 }
 

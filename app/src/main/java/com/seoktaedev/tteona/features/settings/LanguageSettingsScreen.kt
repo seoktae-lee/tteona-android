@@ -34,6 +34,9 @@ import com.seoktaedev.tteona.R
 import com.seoktaedev.tteona.core.i18n.AppLanguage
 import com.seoktaedev.tteona.core.i18n.LocaleManager
 import com.seoktaedev.tteona.ui.theme.TteDarkGray
+import com.google.firebase.Firebase
+import com.google.firebase.auth.auth
+import com.seoktaedev.tteona.core.services.TteonaMessagingService
 import com.seoktaedev.tteona.ui.theme.TteFieldBackground
 import com.seoktaedev.tteona.ui.theme.TteMediumGray
 import com.seoktaedev.tteona.ui.theme.TteOrange
@@ -83,6 +86,10 @@ fun LanguageSettingsScreen(modifier: Modifier = Modifier, onBack: () -> Unit) {
                         .fillMaxWidth()
                         .clickable(enabled = language != current) {
                             LocaleManager.setLanguage(context, language)
+                            // 서버에 등록된 푸시 언어도 갱신 — 다음 알림부터 새 언어로 온다.
+                            Firebase.auth.currentUser?.uid?.let {
+                                TteonaMessagingService.registerCurrentToken(it)
+                            }
                             // baseContext에 새 로케일을 다시 씌우기 위해 액티비티 재생성
                             (context as? Activity)?.recreate()
                         }

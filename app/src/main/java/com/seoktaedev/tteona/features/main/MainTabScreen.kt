@@ -1,7 +1,9 @@
 package com.seoktaedev.tteona.features.main
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -99,6 +101,41 @@ fun MainTabScreen(initialTab: Int = 0, previewFootprintDemo: Boolean = false) {
     // 채팅 푸시 탭 → 채팅 탭 자동 전환 (iOS pendingChatRoom → selectedTab = 2)
     LaunchedEffect(pendingChatRoom) {
         if (pendingChatRoom != null) selectedTab = 2
+    }
+
+    // 좋아요·코스 따라가기 알림 탭 → 코스 상세 (딥링크와 같은 경로)
+    val pendingNotifCourseId by AppNotificationManager.pendingCourseId.collectAsState()
+    LaunchedEffect(pendingNotifCourseId) {
+        val id = pendingNotifCourseId ?: return@LaunchedEffect
+        AppNotificationManager.clearPendingCourseId()
+        val course = CourseService.fetchCourse(id) ?: return@LaunchedEffect
+        val thumb = runCatching { CourseThumbnailService.fetchAllThumbnails()[course.courseId] }.getOrNull()
+        courseSelection = CourseSelection(course, thumb)
+    }
+
+    // 주간 리포트 알림 탭 → 프로필 탭
+    val shouldOpenProfile by AppNotificationManager.shouldOpenProfile.collectAsState()
+    LaunchedEffect(shouldOpenProfile) {
+        if (shouldOpenProfile) {
+            AppNotificationManager.clearShouldOpenProfile()
+            selectedTab = 3
+        }
+    }
+
+    // Vlog 완성 알림 탭 → 완성본 재생. 완성본은 인증 없는 공개 정적 URL이라 시스템
+    // 비디오 플레이어로 연다(안드로이드엔 iOS VlogPreviewView 같은 앱 내 재생 화면이 없다).
+    val pendingVlogUrl by AppNotificationManager.pendingVlogUrl.collectAsState()
+    LaunchedEffect(pendingVlogUrl) {
+        val url = pendingVlogUrl ?: return@LaunchedEffect
+        AppNotificationManager.clearPendingVlogUrl()
+        runCatching {
+            context.startActivity(
+                Intent(Intent.ACTION_VIEW).apply {
+                    setDataAndType(Uri.parse(url), "video/*")
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+            )
+        }
     }
 
     // 그룹 초대 딥링크 → 채팅 탭(코드 참여) 전환

@@ -184,7 +184,7 @@ fun ActiveSessionScreen(
             uid, nickname, roomIds.toList(), courseName = course.courseName,
         )
         if (uid != course.authorId) {
-            scope.launch { PushService.notifyCourseFollowed(course.authorId, nickname, course.courseName) }
+            scope.launch { PushService.notifyCourseFollowed(course.authorId, nickname, course.courseName, course.courseId) }
         }
         if (roomIds.isNotEmpty()) {
             roomIds.firstOrNull()?.let { LocationSocketService.connect(it, uid, nickname) }

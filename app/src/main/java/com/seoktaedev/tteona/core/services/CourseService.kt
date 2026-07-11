@@ -98,7 +98,7 @@ object CourseService {
                 // 좋아요 시 코스 작성자에게 푸시 (본인 제외) + 통계 이벤트 (iOS와 동일)
                 val course = _courses.value.firstOrNull { it.courseId == courseId }
                 if (course != null && course.authorId != userId) {
-                    PushService.notifyCourseLiked(course.authorId, likerNickname, course.courseName)
+                    PushService.notifyCourseLiked(course.authorId, likerNickname, course.courseName, course.courseId)
                 }
                 StatsService.postEvent(com.seoktaedev.tteona.core.model.StatsEvent.COURSE_LIKED, userId)
             }

@@ -95,11 +95,13 @@ class TteonaMessagingService : FirebaseMessagingService() {
 
         // FCM 토큰을 userPrivate에 저장 (iOS FCMService.saveFCMToken과 동일 — Cloud Functions 그룹 알림용)
         // + 서버(server.js) device_tokens에도 등록 — 채팅·Vlog 완성 등 서버 직발송 푸시용
+        // lang은 두 발송 경로 모두 문구를 수신자 언어로 쓰도록 함께 저장한다.
         fun saveToken(userId: String, token: String) {
+            val lang = LocaleManager.current().code
             Firebase.firestore.collection("userPrivate").document(userId)
-                .set(mapOf("fcmToken" to token), SetOptions.merge())
+                .set(mapOf("fcmToken" to token, "lang" to lang), SetOptions.merge())
             CoroutineScope(Dispatchers.IO).launch {
-                runCatching { ApiClient.api.registerPush(PushRegisterRequest(token, platform = "android")) }
+                runCatching { ApiClient.api.registerPush(PushRegisterRequest(token, platform = "android", lang = lang)) }
             }
         }
 

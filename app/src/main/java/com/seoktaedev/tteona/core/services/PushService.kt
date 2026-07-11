@@ -45,19 +45,19 @@ object PushService {
     }
 
     // 코스 작성자에게 "누군가 내 코스를 따라가고 있어요" (iOS PushService.notifyCourseFollowed)
-    suspend fun notifyCourseFollowed(courseOwnerId: String, followerNickname: String, courseName: String) {
+    suspend fun notifyCourseFollowed(courseOwnerId: String, followerNickname: String, courseName: String, courseId: String) {
         runCatching {
             ApiClient.api.notifyCourseFollowed(
-                CourseFollowedRequest(courseOwnerId, followerNickname, courseName)
+                CourseFollowedRequest(courseOwnerId, followerNickname, courseName, courseId)
             )
         }
     }
 
     // 코스 좋아요 알림 트리거 (iOS PushService.notifyCourseLiked)
-    suspend fun notifyCourseLiked(courseOwnerId: String, likerNickname: String, courseName: String) {
+    suspend fun notifyCourseLiked(courseOwnerId: String, likerNickname: String, courseName: String, courseId: String) {
         runCatching {
             ApiClient.api.notifyCourseLiked(
-                com.seoktaedev.tteona.core.network.CourseLikedRequest(courseOwnerId, likerNickname, courseName)
+                com.seoktaedev.tteona.core.network.CourseLikedRequest(courseOwnerId, likerNickname, courseName, courseId)
             )
         }
     }

@@ -103,6 +103,8 @@ data class CourseFollowedRequest(
     val courseOwnerId: String,
     val followerNickname: String,
     val courseName: String,
+    // 수신자가 알림을 탭했을 때 이 코스를 열 수 있도록 함께 보낸다.
+    val courseId: String,
 )
 
 @Serializable
@@ -110,6 +112,7 @@ data class CourseLikedRequest(
     val courseOwnerId: String,
     val likerNickname: String,
     val courseName: String,
+    val courseId: String,
 )
 
 // 채팅 등 서버(server.js) 발송 푸시용 FCM 토큰 등록
@@ -119,6 +122,9 @@ data class CourseLikedRequest(
 data class PushRegisterRequest(
     val token: String,
     val platform: String,
+    // 서버가 알림 문구를 어느 언어로 쓸지 정하는 값. 미전송 시 서버 기본값 'ko'가 되어
+    // 언어를 바꿔도 항상 한국어 푸시가 온다.
+    val lang: String,
 )
 
 /**

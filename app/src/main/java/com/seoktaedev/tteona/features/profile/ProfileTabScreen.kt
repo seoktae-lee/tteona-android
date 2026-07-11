@@ -534,14 +534,14 @@ private fun ProfileMain(
                         modifier = Modifier.size(16.dp),
                     )
                 }
-                // "지금 여기 있네요" / "새 지역!" 배너
+                // "지금 여기 있네요" / "새 지역!" 배너 — 지도 한가운데 (iOS와 동일)
                 greetingText?.let { text ->
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier
-                            .align(Alignment.TopCenter)
-                            .offset(y = (-14).dp)
+                            .align(Alignment.Center)
+                            .padding(horizontal = 16.dp)
                             .clip(CircleShape)
                             .background(Color.White)
                             .padding(horizontal = 16.dp, vertical = 10.dp),

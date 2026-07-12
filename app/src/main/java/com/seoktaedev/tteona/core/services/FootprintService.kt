@@ -287,7 +287,7 @@ object FootprintService {
             val d = doc.data ?: return@mapNotNull null
             AppUser(
                 uid = d["uid"] as? String ?: doc.id,
-                email = d["email"] as? String ?: "",
+                email = "", // PII — 공개 users 문서에서 읽지 않음 (iOS와 동일)
                 nickname = d["nickname"] as? String ?: "",
                 isVerified = d["isVerified"] as? Boolean ?: false,
                 creatorLabel = d["creatorLabel"] as? String,

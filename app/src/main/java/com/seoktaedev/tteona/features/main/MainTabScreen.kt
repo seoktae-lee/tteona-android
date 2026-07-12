@@ -200,10 +200,13 @@ fun MainTabScreen(initialTab: Int = 0, previewFootprintDemo: Boolean = false) {
                         showCourseResumeSheet = true
                     },
                     onImpromptuTap = {
-                        // iOS handleImpromptuTap — 저장 세션이 있거나 그룹이 없으면 바로 시작, 아니면 방 선택
+                        // iOS handleImpromptuTap — 저장 세션이 있거나 그룹이 없으면 바로 시작, 아니면 방 선택.
+                        // 단, 방 목록 첫 스냅샷이 아직 안 왔으면(콜드 스타트 직후) '그룹 없음'으로
+                        // 오판하지 않고 시트를 띄운다 — 시트가 myRooms를 구독하므로 도착 즉시 채워진다.
                         val saved = ImpromptuSessionStore.loadTodaySession()
                         val hasSaved = saved?.places?.isNotEmpty() == true
-                        if (hasSaved || myRooms.isEmpty()) {
+                        val knownNoRooms = com.seoktaedev.tteona.core.services.RoomService.roomsLoaded.value && myRooms.isEmpty()
+                        if (hasSaved || knownNoRooms) {
                             impromptuRoomIds = saved?.roomIds?.toSet() ?: emptySet()
                         } else {
                             showImpromptuRoomSelect = true

@@ -266,7 +266,16 @@ fun CameraScreen(
                     isRecording = false
                     activeRecording = null
                     refreshUsedSeconds()
-                    if (!event.hasError() && file.exists()) {
+                    // 인터럽션(전화 수신 = SOURCE_INACTIVE)·한도 도달로 끝난 클립은 에러 코드가 붙어도
+                    // 파일이 재생 가능하다. 실제 인코딩 실패(ENCODING_FAILED·NO_VALID_DATA 등)와 구분해,
+                    // 유효 길이(≥0.5초)를 가진 파일만 저장 성공으로 처리한다 (부분 클립 무단 삭제 방지).
+                    val code = event.error
+                    val recoverable = code == VideoRecordEvent.Finalize.ERROR_NONE ||
+                        code == VideoRecordEvent.Finalize.ERROR_DURATION_LIMIT_REACHED ||
+                        code == VideoRecordEvent.Finalize.ERROR_FILE_SIZE_LIMIT_REACHED ||
+                        code == VideoRecordEvent.Finalize.ERROR_SOURCE_INACTIVE
+                    val validClip = recoverable && file.exists() && VlogClips.clipSeconds(file) >= 0.5
+                    if (validClip) {
                         Haptics.success(view)
                         saveDone = true
                     } else {

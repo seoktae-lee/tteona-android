@@ -187,12 +187,25 @@ fun NicknameEditSheet(onDismiss: () -> Unit) {
                         val uid = AuthService.currentUser.value?.uid ?: return@clickable
                         scope.launch {
                             isSaving = true
-                            runCatching { UserService.updateNickname(uid, nickname.trim()) }
+                            val trimmed = nickname.trim()
+                            val oldNickname = currentNickname
+                            // 새 닉네임 원자적 예약 — 실패하면 그 사이 남이 선점한 것 (iOS와 동일)
+                            if (!UserService.reserveNickname(trimmed, uid)) {
+                                state = EditState.TAKEN
+                                isSaving = false
+                                return@launch
+                            }
+                            runCatching { UserService.updateNickname(uid, trimmed) }
                                 .onSuccess {
+                                    // 옛 닉네임 예약 반납 (있으면)
+                                    if (oldNickname.isNotEmpty()) UserService.releaseNickname(oldNickname, uid)
                                     Haptics.medium(view)
                                     onDismiss()
                                 }
-                                .onFailure { saveFailed = true }
+                                .onFailure {
+                                    UserService.releaseNickname(trimmed, uid) // 실패 시 새 예약 반납
+                                    saveFailed = true
+                                }
                             isSaving = false
                         }
                     },

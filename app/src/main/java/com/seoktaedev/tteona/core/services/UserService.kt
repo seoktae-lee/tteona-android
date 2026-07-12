@@ -51,6 +51,32 @@ object UserService {
         _currentUser.value = _currentUser.value?.copy(profileImageUrl = url)
     }
 
+    /** 닉네임을 원자적으로 예약한다(중복 방지). 성공 true, 이미 남이 선점했으면 false.
+     *  nicknames/{닉네임} 문서를 create-only 규칙으로 만들어, 동시 가입 레이스에서도 선점이 원자적.
+     *  (기존 유저는 예약 문서가 없으므로 호출부에서 isNicknameTaken 검사도 함께 쓴다.) — iOS reserveNickname */
+    suspend fun reserveNickname(nickname: String, uid: String): Boolean {
+        val key = nickname.trim()
+        if (key.isEmpty()) return false
+        val ref = db.collection("nicknames").document(key)
+        return try {
+            ref.set(mapOf("uid" to uid, "createdAt" to FieldValue.serverTimestamp())).await()
+            true
+        } catch (e: Exception) {
+            // 이미 존재 — 내가 소유한 예약이면(재시도 등) 성공으로 간주
+            val doc = runCatching { ref.get().await() }.getOrNull()
+            (doc?.get("uid") as? String) == uid
+        }
+    }
+
+    /** 내 닉네임 예약을 반납한다(닉네임 변경 시 옛 닉네임 해제). — iOS releaseNickname */
+    suspend fun releaseNickname(nickname: String, uid: String) {
+        val key = nickname.trim()
+        if (key.isEmpty()) return
+        val ref = db.collection("nicknames").document(key)
+        val doc = runCatching { ref.get().await() }.getOrNull() ?: return
+        if ((doc.get("uid") as? String) == uid) runCatching { ref.delete().await() }
+    }
+
     suspend fun isNicknameTaken(nickname: String): Boolean {
         val snapshot = runCatching {
             db.collection("users")
@@ -92,7 +118,9 @@ private fun DocumentSnapshot.toAppUser(): AppUser? {
     val blocked = (d["blockedUserIds"] as? List<*>)?.filterIsInstance<String>()
     return AppUser(
         uid = d["uid"] as? String ?: id,
-        email = d["email"] as? String ?: "",
+        // email은 공개 users 문서에서 읽지 않는다 (PII) — 내 이메일은 Auth(currentUser)가 소유,
+        // 타인 이메일은 취급하지 않는다 (iOS AppUser와 동일). 레거시 잔존 값도 노출 안 함.
+        email = "",
         nickname = d["nickname"] as? String ?: "",
         createdAt = (d["createdAt"] as? Timestamp)?.toDate()?.time ?: 0L,
         isVerified = d["isVerified"] as? Boolean ?: false,

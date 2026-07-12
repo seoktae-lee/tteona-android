@@ -116,12 +116,7 @@ private enum class CourseFilter { ALL, LIKED, MINE }
 private fun zoomFor(latDelta: Double): Float =
     log2(360.0 / latDelta.coerceAtLeast(0.0001)).toFloat().coerceIn(3f, 19f)
 
-private fun pinRes(tag: CourseTag): Int = when (tag) {
-    CourseTag.COUPLE -> R.drawable.pin_couple
-    CourseTag.FAMILY -> R.drawable.pin_family
-    CourseTag.SOLO -> R.drawable.pin_solo
-    CourseTag.FRIENDS -> R.drawable.pin_friends
-}
+private fun pinRes(tag: CourseTag): Int = tag.pinRes
 
 @Composable
 fun HomeScreen(

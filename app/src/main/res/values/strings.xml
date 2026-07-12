@@ -21,6 +21,7 @@
     <string name="settings_appInfo">앱 정보</string>
     <string name="settings_version">버전</string>
     <string name="settings_push">푸시알림</string>
+    <string name="settings_groupNotif">그룹 활동 알림</string>
     <string name="settings_language">언어</string>
     <string name="settings_language_footer">앱에서 사용할 언어를 선택하세요.</string>
     <string name="settings_privacy">개인정보 처리방침</string>
@@ -310,6 +311,10 @@
     <string name="chat_react">반응</string>
     <string name="chat_reply">답장</string>
     <string name="chat_copy">복사</string>
+    <string name="chat_resend">다시 보내기</string>
+    <string name="chat_loadOlder">이전 메시지 더보기</string>
+    <string name="chat_blocked_title">전송할 수 없는 메시지예요</string>
+    <string name="chat_blocked_message">부적절한 표현이 포함되어 있어 메시지가 전송되지 않았어요.</string>
     <string name="feed_here">이곳</string>
     <string name="feed_tripStart">🚀 %s님이 %s 여행을 시작했어요</string>
     <string name="feed_tripEnd">✅ %s님이 %s 여행을 종료했어요</string>
@@ -621,4 +626,11 @@
     <string name="profile_blocked">차단됨</string>
     <string name="profile_myCourses">내 코스</string>
     <string name="profile_myCourses_hint">카메라를 눌러 코스 카드 썸네일을 꾸며보세요</string>
+    <string name="network_offline">인터넷 연결이 없어요</string>
+    <string name="paywall_bestValue">가장 인기</string>
+    <string name="paywall_noPaymentNow">지금은 결제되지 않아요</string>
+    <string name="room_membersTitle">참여 멤버</string>
+    <string name="room_changeImage">대표 이미지 변경</string>
+    <string name="room_creator">방장</string>
+    <string name="room_imageUploadFailed">이미지 업로드에 실패했어요. 잠시 후 다시 시도해주세요.</string>
 </resources>

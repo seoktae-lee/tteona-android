@@ -39,6 +39,7 @@ object CourseService {
         try {
             val snapshot = db.collection("courses")
                 .orderBy("likeCount", Query.Direction.DESCENDING)
+                .limit(300) // iOS와 동일 — 무제한 로드 방지 (인기순 상위 300개)
                 .get()
                 .await()
             _courses.value = snapshot.documents

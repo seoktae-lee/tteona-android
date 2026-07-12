@@ -218,49 +218,30 @@ fun PlaceDetailSheet(
         }
     }
 
-    // 신고 사유 선택 (iOS confirmationDialog)
+    // 신고 사유 선택 (iOS confirmationDialog) — 현지화 표기는 공용 다이얼로그가 처리,
+    // onSelect에는 운영 검토용 한국어 원문(reason)이 전달된다.
     if (showReportDialog) {
-        AlertDialog(
-            onDismissRequest = { showReportDialog = false },
-            title = { Text(stringResource(R.string.report_selectReason)) },
-            text = {
-                Column {
-                    ReportService.REASONS.forEach { reason ->
-                        Text(
-                            reason,
-                            fontSize = 15.sp,
-                            color = TteDarkGray,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    showReportDialog = false
-                                    val review = reviewForAction
-                                    if (uid != null && review != null) {
-                                        val key = PlaceDetailService.cacheKey(place.placeName)
-                                        scope.launch {
-                                            runCatching {
-                                                ReportService.reportContent(
-                                                    reporterId = uid,
-                                                    targetType = "review",
-                                                    targetId = "$key/${review.userId}",
-                                                    targetAuthorId = review.userId,
-                                                    reason = reason,
-                                                )
-                                            }.onSuccess {
-                                                resultMessage = LocaleManager.string(context, R.string.report_done_title) to LocaleManager.string(context, R.string.report_done_message)
-                                            }
-                                        }
-                                    }
-                                }
-                                .padding(vertical = 10.dp),
-                        )
+        com.seoktaedev.tteona.features.common.ReportReasonDialog(
+            onSelect = { reason ->
+                val review = reviewForAction
+                if (uid != null && review != null) {
+                    val key = PlaceDetailService.cacheKey(place.placeName)
+                    scope.launch {
+                        runCatching {
+                            ReportService.reportContent(
+                                reporterId = uid,
+                                targetType = "review",
+                                targetId = "$key/${review.userId}",
+                                targetAuthorId = review.userId,
+                                reason = reason,
+                            )
+                        }.onSuccess {
+                            resultMessage = LocaleManager.string(context, R.string.report_done_title) to LocaleManager.string(context, R.string.report_done_message)
+                        }
                     }
                 }
             },
-            confirmButton = {},
-            dismissButton = {
-                TextButton(onClick = { showReportDialog = false }) { Text(stringResource(R.string.common_cancel), color = TteMediumGray) }
-            },
+            onDismiss = { showReportDialog = false },
         )
     }
 

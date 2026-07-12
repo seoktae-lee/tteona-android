@@ -21,6 +21,7 @@
     <string name="settings_appInfo">アプリ情報</string>
     <string name="settings_version">バージョン</string>
     <string name="settings_push">プッシュ通知</string>
+    <string name="settings_groupNotif">グループ活動の通知</string>
     <string name="settings_language">言語</string>
     <string name="settings_language_footer">アプリで使用する言語を選択してください。</string>
     <string name="settings_privacy">プライバシーポリシー</string>
@@ -310,6 +311,10 @@
     <string name="chat_react">リアクション</string>
     <string name="chat_reply">返信</string>
     <string name="chat_copy">コピー</string>
+    <string name="chat_resend">再送信</string>
+    <string name="chat_loadOlder">以前のメッセージを読み込む</string>
+    <string name="chat_blocked_title">送信できないメッセージです</string>
+    <string name="chat_blocked_message">不適切な表現が含まれているため、メッセージは送信されませんでした。</string>
     <string name="feed_here">ここ</string>
     <string name="feed_tripStart">🚀 %1$sさんが%2$sの旅を始めました</string>
     <string name="feed_tripEnd">✅ %1$sさんが%2$sの旅を終えました</string>
@@ -621,4 +626,11 @@
     <string name="profile_blocked">ブロック済み</string>
     <string name="profile_myCourses">マイコース</string>
     <string name="profile_myCourses_hint">カメラを押してコースのサムネイルを飾りましょう</string>
+    <string name="network_offline">インターネット接続がありません</string>
+    <string name="paywall_bestValue">一番人気</string>
+    <string name="paywall_noPaymentNow">今すぐの請求はありません</string>
+    <string name="room_membersTitle">参加メンバー</string>
+    <string name="room_changeImage">グループ画像を変更</string>
+    <string name="room_creator">ホスト</string>
+    <string name="room_imageUploadFailed">画像のアップロードに失敗しました。しばらくしてからもう一度お試しください。</string>
 </resources>

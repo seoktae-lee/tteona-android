@@ -300,7 +300,7 @@ private fun RoomCard(room: Room, hasNewFeed: Boolean, onClick: () -> Unit) {
             .clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 14.dp),
     ) {
-        // 그라데이션 아바타 + 방 이름 첫 글자 + 새 소식 dot
+        // 대표 이미지 (설정 시) / 그라데이션 아바타 + 방 이름 첫 글자 + 새 소식 dot (iOS와 동일)
         Box {
             Box(
                 contentAlignment = Alignment.Center,
@@ -309,7 +309,16 @@ private fun RoomCard(room: Room, hasNewFeed: Boolean, onClick: () -> Unit) {
                     .clip(RoundedCornerShape(18.dp))
                     .background(Brush.linearGradient(gradient)),
             ) {
-                Text(initial, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                if (room.imageUrl != null) {
+                    coil3.compose.AsyncImage(
+                        model = room.imageUrl,
+                        contentDescription = null,
+                        contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                } else {
+                    Text(initial, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                }
             }
             if (hasNewFeed) {
                 Box(

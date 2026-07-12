@@ -4,7 +4,6 @@ import com.seoktaedev.tteona.R
 import com.seoktaedev.tteona.core.i18n.LocaleManager
 import com.google.firebase.Firebase
 import com.google.firebase.Timestamp
-import com.google.firebase.firestore.CollectionReference
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.ListenerRegistration
@@ -17,6 +16,8 @@ import com.seoktaedev.tteona.core.model.Room
 import com.seoktaedev.tteona.core.model.RoomMember
 import com.seoktaedev.tteona.core.network.ApiClient
 import com.seoktaedev.tteona.core.network.ModerationRequest
+import com.seoktaedev.tteona.core.network.RoomJoinRequest
+import com.seoktaedev.tteona.core.network.RoomLeaveRequest
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -35,6 +36,11 @@ object RoomService {
 
     private val _myRooms = MutableStateFlow<List<Room>>(emptyList())
     val myRooms: StateFlow<List<Room>> = _myRooms
+
+    // 첫 스냅샷 도착 여부 — 도착 전 myRooms.isEmpty()는 '그룹 없음'이 아니라 '아직 모름'.
+    // 나의 오늘 방 선택 시트가 콜드 스타트 직후 그룹 없음으로 오판해 건너뛰는 레이스 방지.
+    private val _roomsLoaded = MutableStateFlow(false)
+    val roomsLoaded: StateFlow<Boolean> = _roomsLoaded
 
     private val _currentRoomMembers = MutableStateFlow<List<RoomMember>>(emptyList())
     val currentRoomMembers: StateFlow<List<RoomMember>> = _currentRoomMembers
@@ -89,28 +95,28 @@ object RoomService {
         )
     }
 
-    // MARK: - 초대코드로 방 참여
+    // MARK: - 초대코드로 방 참여 (서버 경유)
+    // Firestore rules가 "멤버만 읽기"라 초대코드 검색을 클라가 할 수 없다 —
+    // 서버 Admin SDK(POST /api/rooms/join)가 rules를 우회해 검색·멤버 추가를 처리한다.
     suspend fun joinRoom(inviteCode: String, userId: String, nickname: String): Room {
-        val snapshot = db.collection("rooms")
-            .whereEqualTo("inviteCode", inviteCode.uppercase())
-            .get().await()
-        val doc = snapshot.documents.firstOrNull() ?: throw RoomNotFoundException()
-        val room = doc.toRoom() ?: throw RoomNotFoundException()
+        val response = runCatching {
+            ApiClient.api.joinRoom(RoomJoinRequest(inviteCode.uppercase(), userId, nickname))
+        }.getOrElse { throw RoomNotFoundException() }
 
-        if (userId in room.memberIds) return room
+        if (response.code() == 404) throw RoomNotFoundException()
+        val body = response.body()
+        if (!response.isSuccessful || body == null) throw RoomNotFoundException()
 
-        db.collection("rooms").document(room.roomId)
-            .update("memberIds", FieldValue.arrayUnion(userId)).await()
-        db.collection("rooms").document(room.roomId)
-            .collection("members").document(userId)
-            .set(
-                mapOf(
-                    "userId" to userId,
-                    "nickname" to nickname,
-                    "joinedAt" to FieldValue.serverTimestamp(),
-                )
-            ).await()
+        val room = Room(
+            roomId = body.roomId,
+            name = body.name.ifEmpty { LocaleManager.string(R.string.room_groupTrip) },
+            inviteCode = body.inviteCode.ifEmpty { inviteCode.uppercase() },
+            creatorId = body.creatorId,
+            memberIds = body.memberIds.ifEmpty { listOf(userId) },
+            createdAt = System.currentTimeMillis(),
+        )
 
+        // 기본 피드 생성 (댓글 작성 보장 — iOS와 동일)
         postFeed(room.roomId, FeedType.TRIP_START, userId, nickname, "system", LocaleManager.string(R.string.room_groupTrip))
         return room
     }
@@ -123,6 +129,7 @@ object RoomService {
             .addSnapshotListener { snapshot, _ ->
                 val docs = snapshot?.documents ?: return@addSnapshotListener
                 _myRooms.value = docs.mapNotNull { it.toRoom() }.sortedByDescending { it.createdAt }
+                _roomsLoaded.value = true
             }
     }
 
@@ -141,30 +148,22 @@ object RoomService {
 
     // 동행 세션 중 실시간 위치 공유는 LocationSocketService(WebSocket) 경로가 담당한다.
 
-    // MARK: - 방 나가기 및 자동 파기
+    // MARK: - 방 나가기 및 자동 파기 (서버 경유)
+    // 마지막 멤버의 방 정리는 다른 멤버가 남긴 피드/문서 삭제 권한이 클라이언트에
+    // 없으므로(rules 차단) 서버 Admin SDK가 recursiveDelete로 처리한다.
+    // 서버 실패 시 멤버 제거만 클라이언트에서 폴백한다 (iOS와 동일).
     suspend fun leaveRoom(roomId: String, userId: String) {
-        val roomRef = db.collection("rooms").document(roomId)
-        val room = roomRef.get().await().toRoom() ?: return
+        val ok = runCatching {
+            ApiClient.api.leaveRoom(roomId, RoomLeaveRequest(userId)).isSuccessful
+        }.getOrDefault(false)
+        if (ok) return
 
-        if (room.memberIds.size <= 1) {
-            // 마지막 멤버라면 방 전체 데이터 삭제
-            deleteCollection(roomRef.collection("locations"))
-            deleteCollection(roomRef.collection("members"))
-            val feeds = roomRef.collection("feed").get().await()
-            for (feedDoc in feeds.documents) {
-                deleteCollection(feedDoc.reference.collection("comments"))
-                feedDoc.reference.delete().await()
-            }
-            roomRef.delete().await()
-        } else {
+        // 폴백: 멤버 목록에서 나만 제거 (빈 방 정리는 서버 복구 후 재시도 가능)
+        val roomRef = db.collection("rooms").document(roomId)
+        runCatching {
             roomRef.update("memberIds", FieldValue.arrayRemove(userId)).await()
             roomRef.collection("members").document(userId).delete().await()
         }
-    }
-
-    private suspend fun deleteCollection(ref: CollectionReference) {
-        val snapshot = ref.get().await()
-        for (doc in snapshot.documents) doc.reference.delete().await()
     }
 
     // MARK: - 피드 자동 기록
@@ -364,8 +363,19 @@ object RoomService {
             .set(mapOf("lastReadAt" to FieldValue.serverTimestamp()), com.google.firebase.firestore.SetOptions.merge())
     }
 
-    /** 방별 마지막 읽음 시각과 최신 피드 시각을 비교해 안읽음 방 집합 갱신 (iOS refreshUnreadStatus — 채팅 탭 배지 공용) */
+    /** 방별 마지막 읽음 시각과 최신 피드 시각을 비교해 안읽음 방 집합 갱신 (iOS refreshUnreadStatus — 채팅 탭 배지 공용).
+     *  서버 1회 집계(GET /api/rooms/unread) 우선, 실패 시에만 클라 팬아웃 폴백. */
     suspend fun refreshUnreadStatus(userId: String) {
+        val serverIds = runCatching { ApiClient.api.getUnreadRooms().unreadRoomIds }.getOrNull()
+        if (serverIds != null) {
+            _unreadRoomIds.value = serverIds.toSet()
+            return
+        }
+        refreshUnreadStatusLocal(userId)
+    }
+
+    // 폴백: 클라이언트에서 방별로 직접 계산 (서버 미배포/오류 대비 — 방×멤버 팬아웃)
+    private suspend fun refreshUnreadStatusLocal(userId: String) {
         val rooms = _myRooms.value
         val unread = coroutineScope {
             rooms.map { room ->
@@ -411,6 +421,7 @@ object RoomService {
         stopListeningFeed()
         stopListeningMemberFeed()
         _myRooms.value = emptyList()
+        _roomsLoaded.value = false
         _currentRoomMembers.value = emptyList()
     }
 
@@ -454,6 +465,7 @@ private fun DocumentSnapshot.toRoom(): Room? {
         creatorId = d["creatorId"] as? String ?: "",
         memberIds = (d["memberIds"] as? List<*>)?.filterIsInstance<String>() ?: emptyList(),
         createdAt = (d["createdAt"] as? Timestamp)?.toDate()?.time ?: 0L,
+        imageUrl = (d["imageUrl"] as? String)?.takeIf { it.isNotEmpty() },
     )
 }
 

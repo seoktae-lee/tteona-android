@@ -20,11 +20,17 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import android.app.Activity
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChatBubble
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.MarkEmailRead
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -61,7 +67,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.layout.ContentScale
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.ui.draw.clip
 import com.seoktaedev.tteona.R
+import com.seoktaedev.tteona.core.i18n.AppLanguage
+import com.seoktaedev.tteona.core.i18n.LocaleManager
 import com.seoktaedev.tteona.ui.theme.TteFieldBackground
 import com.seoktaedev.tteona.ui.theme.TteMediumGray
 import com.seoktaedev.tteona.ui.theme.TteOrange
@@ -98,6 +107,14 @@ fun LoginScreen(viewModel: AuthViewModel = viewModel()) {
     Box(modifier = Modifier.fillMaxSize()) {
         // 주황 일렁임 배경 (iOS AuthView의 TteonaSplashBackground)
         com.seoktaedev.tteona.ui.theme.TteonaSplashBackground()
+
+        // 언어 선택 — 외국인 사용자가 가입 전부터 앱을 이해할 수 있게 첫 화면에서 고른다 (iOS AuthView와 동일)
+        LanguagePickerChip(
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(top = 24.dp, end = 20.dp),
+        )
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -439,6 +456,61 @@ private fun VerificationSentView(
                 TextButton(onClick = { showResendAlert = false }) { Text(stringResource(R.string.common_ok), color = TteOrange) }
             },
         )
+    }
+}
+
+// 로그인 전 언어 선택 칩 — 선택 시 액티비티 recreate로 즉시 전체 반영 (iOS AuthView languagePicker)
+@Composable
+private fun LanguagePickerChip(modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    val current = LocaleManager.current(context)
+    var expanded by rememberSaveable { mutableStateOf(false) }
+
+    Box(modifier = modifier) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier
+                .clip(CircleShape)
+                .background(Color.White.copy(alpha = 0.7f))
+                .border(1.dp, Color(0x22000000), CircleShape)
+                .clickable { expanded = true }
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+        ) {
+            Icon(
+                Icons.Filled.Language,
+                contentDescription = null,
+                tint = TteMediumGray,
+                modifier = Modifier.size(16.dp),
+            )
+            Text(current.nativeName, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = TteMediumGray)
+            Icon(
+                Icons.Filled.ExpandMore,
+                contentDescription = null,
+                tint = TteMediumGray,
+                modifier = Modifier.size(14.dp),
+            )
+        }
+
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            AppLanguage.entries.forEach { language ->
+                DropdownMenuItem(
+                    text = { Text("${language.flag} ${language.nativeName}") },
+                    trailingIcon = {
+                        if (language == current) {
+                            Icon(Icons.Filled.Check, contentDescription = null, tint = TteOrange, modifier = Modifier.size(18.dp))
+                        }
+                    },
+                    onClick = {
+                        expanded = false
+                        if (language != current) {
+                            LocaleManager.setLanguage(context, language)
+                            (context as? Activity)?.recreate()
+                        }
+                    },
+                )
+            }
+        }
     }
 }
 

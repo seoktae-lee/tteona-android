@@ -9,6 +9,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import okhttp3.Request
 import okhttp3.Response
 import okhttp3.WebSocket
@@ -16,12 +17,20 @@ import okhttp3.WebSocketListener
 import org.json.JSONObject
 import java.time.Instant
 import java.time.OffsetDateTime
+import java.time.format.DateTimeFormatter
 import java.util.UUID
 
 /**
  * iOS Core/Services/ChatSocketService.swift의 Kotlin 이식본.
  * wss://tteona.kr/ws/location 순수 WebSocket + JSON 프로토콜 (Socket.IO 아님).
  * 히스토리는 REST(/api/rooms/{id}/messages)로 선로드 후 실시간 수신.
+ *
+ * 견고성(iOS와 동일):
+ *  - join은 Firebase ID 토큰을 함께 보낸다 (서버 AUTH_ENFORCE 시 필수). 서버의 "joined"
+ *    확정(ack)을 받아야 isConnected=true가 되고, 그전엔 전송을 outbox에 쌓아 둔다.
+ *  - 전송 실패(12초 타임아웃)는 failed로 표시해 사용자가 재전송할 수 있다.
+ *  - 재연결/onClosed 시 joined를 내리고 재조인 후 outbox를 flush한다.
+ *  - 위로 스크롤 시 before 커서로 이전 메시지를 페이지네이션한다.
  */
 data class ChatMessage(
     val id: String,              // 서버 messageId(uuid). 낙관적 메시지는 확정 전까지 clientMsgId
@@ -33,6 +42,7 @@ data class ChatMessage(
     val replyToText: String? = null,
     val reactions: Map<String, Set<String>> = emptyMap(), // 이모지 → 반응한 userId 집합
     val pending: Boolean = false, // 서버 확정 전 낙관적 표시
+    val failed: Boolean = false,  // 전송 실패(타임아웃) — 재전송 가능
 ) {
     val hasReply: Boolean get() = replyToNickname != null
 
@@ -52,6 +62,17 @@ class ChatSocketService {
     private val _isConnected = MutableStateFlow(false)
     val isConnected: StateFlow<Boolean> = _isConnected
 
+    /** 금칙어로 서버가 메시지를 차단했을 때 true — 뷰에서 안내 후 리셋 */
+    private val _moderationBlocked = MutableStateFlow(false)
+    val moderationBlocked: StateFlow<Boolean> = _moderationBlocked
+
+    /** 더 이전 메시지가 남아 있는가 (페이지네이션) */
+    private val _canLoadOlder = MutableStateFlow(false)
+    val canLoadOlder: StateFlow<Boolean> = _canLoadOlder
+
+    private val _isLoadingOlder = MutableStateFlow(false)
+    val isLoadingOlder: StateFlow<Boolean> = _isLoadingOlder
+
     private var webSocket: WebSocket? = null
     private var roomId: String? = null
     private var userId: String? = null
@@ -59,7 +80,17 @@ class ChatSocketService {
     private var reconnectJob: Job? = null
     private var closed = false
 
+    /** 서버의 join 확정(ack)을 받았는가 — 이게 true여야 실제 전송이 나간다. */
+    private var joined = false
+    /** 아직 서버가 확정하지 않은 내 채팅 페이로드 (clientMsgId → payload) */
+    private val outbox = mutableMapOf<String, JSONObject>()
+    /** clientMsgId별 전송 타임아웃 잡 — 확정되면 취소, 만료되면 실패 표시 */
+    private val timeoutJobs = mutableMapOf<String, Job>()
+    private val sendTimeoutMs = 12_000L
+
     private val wsUrl = "wss://tteona.kr/ws/location"
+    private val historyLimit = 50
+    private val pageLimit = 30
 
     // MARK: - 연결 (히스토리 로드 → WebSocket)
     fun connect(roomId: String, userId: String, nickname: String) {
@@ -74,38 +105,55 @@ class ChatSocketService {
     }
 
     private suspend fun loadHistory(roomId: String) {
-        val rows = runCatching { ApiClient.api.getChatHistory(roomId).messages }.getOrNull() ?: return
-        val history = rows.mapNotNull { row ->
-            val uid = row.userId ?: return@mapNotNull null
-            val nick = row.nickname ?: return@mapNotNull null
-            val text = row.text ?: return@mapNotNull null
-            // message_id(uuid) 우선, 구 메시지는 srv_<dbid> 폴백 (iOS와 동일)
-            val msgId = row.messageId ?: row.id?.let { "srv_$it" } ?: UUID.randomUUID().toString()
-            val reactions = mutableMapOf<String, MutableSet<String>>()
-            row.reactions?.forEach { r -> reactions.getOrPut(r.emoji) { mutableSetOf() }.add(r.userId) }
-            ChatMessage(
-                id = msgId, userId = uid, nickname = nick, text = text,
-                createdAt = parseDate(row.createdAt) ?: System.currentTimeMillis(),
-                replyToNickname = row.replyToNickname,
-                replyToText = row.replyToText,
-                reactions = reactions,
-            )
-        }
-        _messages.value = history
+        val rows = runCatching { ApiClient.api.getChatHistory(roomId, historyLimit).messages }.getOrNull() ?: return
+        _messages.value = rows.mapNotNull { it.toChatMessage() }
+        _canLoadOlder.value = rows.size >= historyLimit // 꽉 찼으면 더 있을 수 있음
     }
 
-    private fun openSocket() {
+    /** 위로 스크롤해 더 이전 메시지를 불러온다 (서버 before 커서 페이지네이션). */
+    suspend fun loadOlderMessages() {
+        val rid = roomId ?: return
+        if (_isLoadingOlder.value || !_canLoadOlder.value) return
+        val oldest = _messages.value.firstOrNull { !it.pending && !it.failed }?.createdAt ?: return
+        _isLoadingOlder.value = true
+        try {
+            val beforeStr = DateTimeFormatter.ISO_INSTANT.format(Instant.ofEpochMilli(oldest))
+            val rows = runCatching {
+                ApiClient.api.getChatHistory(rid, pageLimit, before = beforeStr).messages
+            }.getOrNull() ?: return
+            val older = rows.mapNotNull { it.toChatMessage() }
+            val existingIds = _messages.value.map { it.id }.toSet()
+            val newOnes = older.filter { it.id !in existingIds }
+            if (newOnes.isEmpty() || rows.size < pageLimit) _canLoadOlder.value = false
+            _messages.value = newOnes + _messages.value
+        } finally {
+            _isLoadingOlder.value = false
+        }
+    }
+
+    private suspend fun openSocket() {
         if (closed) return
         val request = Request.Builder().url(wsUrl).build()
         webSocket = ApiClient.wsClient.newWebSocket(request, listener)
+        // 서버가 join 시 Firebase ID 토큰으로 본인·방 멤버십을 검증한다 (AUTH_ENFORCE 시 필수).
+        // isConnected는 낙관적으로 true로 두지 않는다 — "joined" 확정을 받아야 진짜 연결.
+        val token = fetchIdToken()
         sendJson(
             JSONObject()
                 .put("type", "join")
                 .put("roomId", roomId ?: "")
                 .put("userId", userId ?: "")
                 .put("nickname", nickname)
+                .put("idToken", token ?: "")
         )
-        _isConnected.value = true
+    }
+
+    private suspend fun fetchIdToken(): String? = withContext(Dispatchers.IO) {
+        runCatching {
+            com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.let { user ->
+                com.google.android.gms.tasks.Tasks.await(user.getIdToken(false))?.token
+            }
+        }.getOrNull()
     }
 
     // MARK: - 전송 (낙관적 추가)
@@ -129,14 +177,57 @@ class ChatSocketService {
             payload.put("replyToNickname", it.nickname)
             payload.put("replyToText", it.text)
         }
-        sendJson(payload)
+        outbox[clientMsgId] = payload
+        deliver(clientMsgId)
+    }
+
+    /** 실패 표시된 메시지를 사용자가 다시 보낸다. */
+    fun resend(message: ChatMessage) {
+        if (!message.failed || outbox[message.id] == null) return
+        updateMessage(message.id) { it.copy(failed = false, pending = true) }
+        deliver(message.id)
+    }
+
+    /** 조인 확정 상태면 즉시 전송, 아니면 outbox에 남겨 join 시 flush에 맡긴다.
+     *  어느 경우든 타임아웃을 걸어 무한 pending을 막는다. */
+    private fun deliver(clientMsgId: String) {
+        val payload = outbox[clientMsgId] ?: return
+        if (joined && webSocket != null) sendJson(payload)
+        scheduleTimeout(clientMsgId)
+    }
+
+    private fun scheduleTimeout(clientMsgId: String) {
+        timeoutJobs[clientMsgId]?.cancel()
+        timeoutJobs[clientMsgId] = scope.launch {
+            delay(sendTimeoutMs)
+            markFailed(clientMsgId)
+        }
+    }
+
+    private fun markFailed(clientMsgId: String) {
+        // 아직 outbox에 남아 있으면(= 서버 확정 못 받음) 실패로 표시. 확정됐으면 무시.
+        if (outbox[clientMsgId] == null) return
+        updateMessage(clientMsgId) { it.copy(pending = false, failed = true) }
+    }
+
+    private fun confirmSent(clientMsgId: String) {
+        outbox.remove(clientMsgId)
+        timeoutJobs.remove(clientMsgId)?.cancel()
+    }
+
+    /** join 확정 시 아직 확정 못 받은 메시지를 모두 재전송한다. */
+    private fun flushOutbox() {
+        for ((clientMsgId, payload) in outbox) {
+            sendJson(payload)
+            updateMessage(clientMsgId) { it.copy(failed = false, pending = true) }
+            scheduleTimeout(clientMsgId)
+        }
     }
 
     // MARK: - 이모지 반응 토글 (낙관적)
     fun toggleReaction(messageId: String, emoji: String) {
         val uid = userId ?: return
-        _messages.value = _messages.value.map { msg ->
-            if (msg.id != messageId) return@map msg
+        updateMessage(messageId) { msg ->
             val users = msg.reactions[emoji] ?: emptySet()
             val newUsers = if (uid in users) users - uid else users + uid
             val newReactions = msg.reactions.toMutableMap()
@@ -155,6 +246,10 @@ class ChatSocketService {
             .lastOrNull()?.id
     }
 
+    fun clearModerationBlocked() {
+        _moderationBlocked.value = false
+    }
+
     // MARK: - 해제
     fun disconnect() {
         closed = true
@@ -168,6 +263,10 @@ class ChatSocketService {
         webSocket?.close(1000, null)
         webSocket = null
         _isConnected.value = false
+        joined = false
+        // 화면을 떠나므로 대기 중인 전송 타임아웃도 정리
+        timeoutJobs.values.forEach { it.cancel() }
+        timeoutJobs.clear()
     }
 
     // MARK: - 수신
@@ -180,17 +279,44 @@ class ChatSocketService {
         override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
             scope.launch { scheduleReconnect() }
         }
+
+        override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+            // 서버 정상 종료(재배포·auth_error 후 close 등)도 재연결 대상 — closed(사용자 이탈)만 예외
+            scope.launch { scheduleReconnect() }
+        }
     }
 
     private fun handle(json: JSONObject) {
         when (json.optString("type")) {
+            // 서버 join 확정 — 이제부터 진짜 연결. 미연결 구간에 쌓인 메시지를 flush.
+            "joined" -> {
+                joined = true
+                _isConnected.value = true
+                flushOutbox()
+            }
+
+            // 인증/멤버십 검증 실패 — 연결 끊김으로 처리 (서버가 곧 close 4001/4003)
+            "auth_error" -> {
+                joined = false
+                _isConnected.value = false
+            }
+
+            // 금칙어 차단 — 낙관적으로 띄웠던 내 메시지를 제거하고 안내
+            "chat_blocked" -> {
+                val clientMsgId = json.optString("clientMsgId").takeIf { it.isNotEmpty() }
+                if (clientMsgId != null) {
+                    _messages.value = _messages.value.filterNot { it.id == clientMsgId }
+                    confirmSent(clientMsgId) // outbox·타임아웃 정리 (재전송 방지)
+                }
+                _moderationBlocked.value = true
+            }
+
             "reaction" -> {
                 val messageId = json.optString("messageId").ifEmpty { return }
                 val emoji = json.optString("emoji").ifEmpty { return }
                 val uid = json.optString("userId").ifEmpty { return }
                 val added = json.optBoolean("added")
-                _messages.value = _messages.value.map { msg ->
-                    if (msg.id != messageId) return@map msg
+                updateMessage(messageId) { msg ->
                     val users = msg.reactions[emoji] ?: emptySet()
                     val newUsers = if (added) users + uid else users - uid
                     val newReactions = msg.reactions.toMutableMap()
@@ -203,7 +329,7 @@ class ChatSocketService {
                 val uid = json.optString("userId").ifEmpty { return }
                 val nick = json.optString("nickname").ifEmpty { return }
                 val text = json.optString("text").ifEmpty { return }
-                val ts = if (json.has("ts")) (json.optDouble("ts") / 1000).toLong() * 1000 else System.currentTimeMillis()
+                val ts = if (json.has("ts")) json.optLong("ts") else System.currentTimeMillis()
                 val clientMsgId = json.optString("clientMsgId").takeIf { it.isNotEmpty() }
                 val messageId = json.optString("messageId").takeIf { it.isNotEmpty() }
                     ?: clientMsgId?.let { "cli_$it" }
@@ -214,10 +340,13 @@ class ChatSocketService {
                     val idx = _messages.value.indexOfFirst { it.id == clientMsgId }
                     if (idx >= 0) {
                         _messages.value = _messages.value.toMutableList().also {
-                            it[idx] = it[idx].copy(id = messageId, pending = false)
+                            it[idx] = it[idx].copy(id = messageId, pending = false, failed = false)
                         }
+                        confirmSent(clientMsgId)
                         return
                     }
+                    // messages에 없더라도(재연결 등) outbox는 확정 처리
+                    confirmSent(clientMsgId)
                 }
                 // 중복 방지 (재연결 시 서버 에코 등)
                 if (_messages.value.any { it.id == messageId }) return
@@ -230,21 +359,43 @@ class ChatSocketService {
         }
     }
 
-    // MARK: - 재연결 (3초 후, iOS와 동일)
+    // MARK: - 재연결 (3초 후, iOS와 동일) — 재조인 후 outbox flush로 미확정 메시지 재전송
     private fun scheduleReconnect() {
         if (closed || roomId == null) return
         webSocket?.cancel()
         webSocket = null
         _isConnected.value = false
+        joined = false // 재연결 후 "joined" ack를 다시 받아야 전송 재개(+outbox flush)
         reconnectJob?.cancel()
         reconnectJob = scope.launch {
             delay(3000)
-            openSocket()
+            if (!closed) openSocket()
         }
     }
 
     private fun sendJson(json: JSONObject) {
         webSocket?.send(json.toString())
+    }
+
+    private inline fun updateMessage(id: String, transform: (ChatMessage) -> ChatMessage) {
+        _messages.value = _messages.value.map { if (it.id == id) transform(it) else it }
+    }
+
+    private fun com.seoktaedev.tteona.core.network.ChatHistoryRow.toChatMessage(): ChatMessage? {
+        val uid = userId ?: return null
+        val nick = nickname ?: return null
+        val body = text ?: return null
+        // message_id(uuid) 우선, 구 메시지는 srv_<dbid> 폴백 (iOS와 동일)
+        val msgId = messageId ?: id?.let { "srv_$it" } ?: UUID.randomUUID().toString()
+        val rx = mutableMapOf<String, MutableSet<String>>()
+        reactions?.forEach { r -> rx.getOrPut(r.emoji) { mutableSetOf() }.add(r.userId) }
+        return ChatMessage(
+            id = msgId, userId = uid, nickname = nick, text = body,
+            createdAt = parseDate(createdAt) ?: System.currentTimeMillis(),
+            replyToNickname = replyToNickname,
+            replyToText = replyToText,
+            reactions = rx,
+        )
     }
 
     companion object {

@@ -18,6 +18,10 @@ val localProps = Properties().apply {
     if (f.exists()) f.inputStream().use { load(it) }
 }
 
+// release 서명 keystore — 경로/비밀번호는 git 제외 대상인 local.properties에서만 읽는다
+// (코드에 비밀번호를 박지 않기 위함). 미설정이면 release 빌드는 서명 없이(unsigned) 진행된다.
+val releaseKeystore = localProps.getProperty("RELEASE_STORE_FILE")?.let { rootProject.file(it) }
+
 android {
     namespace = "com.seoktaedev.tteona"
     compileSdk = 36
@@ -27,7 +31,7 @@ android {
         minSdk = 26
         targetSdk = 36
         versionCode = 1
-        versionName = "0.1.0"
+        versionName = "1.0.0"
 
         // local.properties에 MAPS_API_KEY=... 형태로 저장 (VCS 제외 대상)
         manifestPlaceholders["MAPS_API_KEY"] = localProps.getProperty("MAPS_API_KEY") ?: ""
@@ -44,6 +48,18 @@ android {
         resValue("string", "kakao_native_app_key", kakaoNativeAppKey)
     }
 
+    signingConfigs {
+        // local.properties에 RELEASE_STORE_FILE 등이 있을 때만 release 서명 구성을 만든다.
+        if (releaseKeystore != null) {
+            create("release") {
+                storeFile = releaseKeystore
+                storePassword = localProps.getProperty("RELEASE_STORE_PASSWORD")
+                keyAlias = localProps.getProperty("RELEASE_KEY_ALIAS")
+                keyPassword = localProps.getProperty("RELEASE_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
@@ -52,6 +68,10 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            // keystore가 설정돼 있으면 release를 서명한다 (없으면 unsigned로 빌드).
+            if (releaseKeystore != null) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
 

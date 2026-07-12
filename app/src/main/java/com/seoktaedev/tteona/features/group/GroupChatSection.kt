@@ -35,10 +35,13 @@ import androidx.compose.material.icons.automirrored.filled.Reply
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -103,6 +106,9 @@ fun GroupChatSection(room: Room, modifier: Modifier = Modifier) {
     val chat = remember(room.roomId) { ChatSocketService() }
     val messages by chat.messages.collectAsState()
     val feedItems by RoomService.feedItems.collectAsState()
+    val canLoadOlder by chat.canLoadOlder.collectAsState()
+    val isLoadingOlder by chat.isLoadingOlder.collectAsState()
+    val moderationBlocked by chat.moderationBlocked.collectAsState()
 
     var draft by remember { mutableStateOf("") }
     var replyingTo by remember { mutableStateOf<ChatMessage?>(null) }
@@ -132,9 +138,22 @@ fun GroupChatSection(room: Room, modifier: Modifier = Modifier) {
         all.sortedBy { it.date }
     }
 
-    // 새 항목 추가 시 맨 아래로 스크롤
-    LaunchedEffect(entries.size) {
+    // 새 메시지가 바닥에 추가될 때만 맨 아래로 스크롤한다.
+    // (entries.size 기준으로 하면 이전 메시지 페이지네이션 prepend에도 바닥으로 튄다 —
+    //  마지막 항목 key가 바뀔 때만 스크롤해 위로 로드한 과거 메시지 위치를 보존한다.)
+    val lastEntryKey = entries.lastOrNull()?.key
+    LaunchedEffect(lastEntryKey) {
         if (entries.isNotEmpty()) listState.animateScrollToItem(entries.size - 1)
+    }
+
+    // 위로 스크롤해 최상단에 닿으면 이전 메시지 페이지 로드 (iOS loadOlderMessages)
+    val atTop by remember {
+        androidx.compose.runtime.derivedStateOf {
+            listState.firstVisibleItemIndex <= 1
+        }
+    }
+    LaunchedEffect(atTop, canLoadOlder) {
+        if (atTop && canLoadOlder && !isLoadingOlder) chat.loadOlderMessages()
     }
 
     // 키보드가 올라오면 리스트 뷰포트만 줄어들어 최신 메시지가 가려진다.
@@ -170,6 +189,7 @@ fun GroupChatSection(room: Room, modifier: Modifier = Modifier) {
                         onReply = { replyingTo = entry.message },
                         onReact = { emoji -> chat.toggleReaction(entry.message.id, emoji) },
                         onCopy = { copyToClipboard(context, entry.message.text) },
+                        onResend = { chat.resend(entry.message) },
                         onQuoteTap = {
                             chat.originalMessageId(entry.message)?.let { targetId ->
                                 highlightedId = targetId
@@ -274,6 +294,20 @@ fun GroupChatSection(room: Room, modifier: Modifier = Modifier) {
             }
         }
     }
+
+    // 금칙어 차단 안내 (iOS moderationBlocked 알림)
+    if (moderationBlocked) {
+        AlertDialog(
+            onDismissRequest = { chat.clearModerationBlocked() },
+            title = { Text(stringResource(R.string.chat_blocked_title)) },
+            text = { Text(stringResource(R.string.chat_blocked_message)) },
+            confirmButton = {
+                TextButton(onClick = { chat.clearModerationBlocked() }) {
+                    Text(stringResource(R.string.common_ok), color = TteOrange)
+                }
+            },
+        )
+    }
 }
 
 // MARK: - 말풍선 (iOS ChatBubble)
@@ -287,6 +321,7 @@ private fun ChatBubbleRow(
     onReply: () -> Unit,
     onReact: (String) -> Unit,
     onCopy: () -> Unit,
+    onResend: () -> Unit,
     onQuoteTap: () -> Unit,
 ) {
     var showMenu by remember { mutableStateOf(false) }
@@ -303,7 +338,19 @@ private fun ChatBubbleRow(
                 )
             }
             Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                if (isMine) TimeLabel(message.createdAt)
+                // 전송 실패 시 재전송 버튼 (내 메시지 좌측)
+                if (isMine && message.failed) {
+                    Icon(
+                        Icons.Filled.ErrorOutline,
+                        contentDescription = stringResource(R.string.chat_resend),
+                        tint = Color.Red,
+                        modifier = Modifier
+                            .size(18.dp)
+                            .clickable(onClick = onResend),
+                    )
+                } else if (isMine) {
+                    TimeLabel(message.createdAt)
+                }
                 Box {
                     Column(
                         modifier = Modifier
@@ -462,7 +509,8 @@ private fun systemText(context: android.content.Context, item: FeedItem): String
 }
 
 private fun timeText(millis: Long): String =
-    SimpleDateFormat("a h:mm", Locale.KOREAN).format(Date(millis))
+    // 앱 선택 언어의 오전/오후 표기를 따른다 (영어 AM/PM·일본어 午前/午後)
+    SimpleDateFormat("a h:mm", Locale(LocaleManager.current().code)).format(Date(millis))
 
 private fun copyToClipboard(context: Context, text: String) {
     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager

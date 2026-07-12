@@ -7,7 +7,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
-import java.util.Calendar
 
 /**
  * iOS Core/Services/SavedActiveSession.swift(ActiveSessionStore)의 Kotlin 이식본.
@@ -55,11 +54,10 @@ object ActiveSessionStore {
 
     fun loadTodaySession(): SavedActiveSession? {
         val session = load() ?: return null
-        val saved = Calendar.getInstance().apply { timeInMillis = session.date }
-        val now = Calendar.getInstance()
-        val isToday = saved.get(Calendar.YEAR) == now.get(Calendar.YEAR) &&
-            saved.get(Calendar.DAY_OF_YEAR) == now.get(Calendar.DAY_OF_YEAR)
-        return if (isToday) session else null
+        // 달력상 '오늘'로 판정하면 밤 11시에 하던 여행이 자정을 넘기는 순간 사라진다.
+        // session.date는 저장할 때마다 갱신되는 '마지막 활동 시각'이므로, 그로부터 18시간
+        // 이내면 같은 나들이로 보고 이어할 수 있게 한다(자정 교차 커버, 며칠 전 세션은 제외). — iOS와 동일
+        return if (System.currentTimeMillis() - session.date < SESSION_WINDOW_MS) session else null
     }
 
     fun clear() {
@@ -67,6 +65,9 @@ object ActiveSessionStore {
         _hasTodaySession.value = false
     }
 }
+
+/** 진행 중 세션을 '이어할 수 있는' 시간 창 — 마지막 활동에서 18시간 (자정 교차 커버) */
+private const val SESSION_WINDOW_MS = 18L * 3600 * 1000
 
 /**
  * 즉흥 '나의 오늘' 세션 저장 — iOS SavedImpromptuSession.swift(ImpromptuSessionStore)의 이식본.
@@ -113,11 +114,8 @@ object ImpromptuSessionStore {
 
     fun loadTodaySession(): SavedImpromptuSession? {
         val session = load() ?: return null
-        val saved = Calendar.getInstance().apply { timeInMillis = session.date }
-        val now = Calendar.getInstance()
-        val isToday = saved.get(Calendar.YEAR) == now.get(Calendar.YEAR) &&
-            saved.get(Calendar.DAY_OF_YEAR) == now.get(Calendar.DAY_OF_YEAR)
-        return if (isToday) session else null
+        // 마지막 활동에서 18시간 이내면 이어하기 허용 (자정 교차 커버) — iOS와 동일
+        return if (System.currentTimeMillis() - session.date < SESSION_WINDOW_MS) session else null
     }
 
     fun clear() {

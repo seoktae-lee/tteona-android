@@ -268,7 +268,7 @@ fun ImpromptuSessionScreen(
     // 그룹 위치 공유 — 방이 선택돼 있으면 소켓 연결 + 위치 추적 시작 (iOS와 동일)
     LaunchedEffect(activeRoomIds) {
         if (activeRoomIds.isNotEmpty() && uid.isNotEmpty()) {
-            activeRoomIds.firstOrNull()?.let { LocationSocketService.connect(it, uid, nickname) }
+            LocationSocketService.connect(activeRoomIds, uid, nickname)
             locationService.startTracking(emptyList()) // 장소 도착 감지 없이 위치 갱신만
         }
     }
@@ -635,6 +635,8 @@ fun ImpromptuSessionScreen(
                 sessionId = sessionId,
                 thumbnailCourseId = if (courseSavedToFirestore) course.courseId else null,
                 onDismissToHome = onClose,
+                // 포맷/BGM 선택·에러에서 닫기 = 즉흥 세션 화면 복귀 (촬영 기록 보존)
+                onBack = { showVlog = false },
             )
         }
     }

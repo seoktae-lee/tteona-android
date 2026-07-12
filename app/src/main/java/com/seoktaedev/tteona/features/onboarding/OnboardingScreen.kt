@@ -165,7 +165,12 @@ fun OnboardingScreen(initialStep: Int = 0) {
                         onNext = { step = 4 },
                     )
                     4 -> PermissionStep(onNext = { step = 5 })
-                    else -> TermsStep(nickname = nickname, preferredTag = preferredTag)
+                    else -> TermsStep(
+                        nickname = nickname,
+                        preferredTag = preferredTag,
+                        // 저장 직전 닉네임 선점 레이스에서 지면 닉네임 단계로 되돌린다 (iOS와 동일)
+                        onNicknameTaken = { step = 2 },
+                    )
                 }
             }
         }
@@ -666,7 +671,12 @@ private fun StyleStep(
                                     onSelect(if (isOn) null else tag.label)
                                 },
                         ) {
-                            Text(tag.emoji, fontSize = 40.sp)
+                            // 홈 지도 태그 핀과 동일한 에셋 — 취향 선택과 지도 핀의 시각 연결 (iOS와 동일)
+                            androidx.compose.foundation.Image(
+                                painter = androidx.compose.ui.res.painterResource(tag.pinRes),
+                                contentDescription = null,
+                                modifier = Modifier.size(48.dp),
+                            )
                             Text(
                                 stringResource(tag.labelRes),
                                 fontSize = 15.sp,
@@ -849,7 +859,11 @@ private fun PermissionRow(
 // ── Step 5: 약관 (iOS termsStep) ────────────────────────────────────────
 
 @Composable
-private fun TermsStep(nickname: String, preferredTag: String? = null) {
+private fun TermsStep(
+    nickname: String,
+    preferredTag: String? = null,
+    onNicknameTaken: () -> Unit = {},
+) {
     val context = LocalContext.current
     val view = LocalView.current
     val scope = rememberCoroutineScope()
@@ -935,7 +949,10 @@ private fun TermsStep(nickname: String, preferredTag: String? = null) {
             } else {
                 NextButton(stringResource(R.string.onboarding_letsGo), enabled = allAgreed) {
                     Haptics.medium(view)
-                    scope.launch { AuthService.completeOnboarding(nickname.trim(), preferredTag) }
+                    scope.launch {
+                        val result = AuthService.completeOnboarding(nickname.trim(), preferredTag)
+                        if (result == AuthService.OnboardingResult.NICKNAME_TAKEN) onNicknameTaken()
+                    }
                 }
             }
         }

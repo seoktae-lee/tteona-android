@@ -14,3 +14,33 @@
 -keepclasseswithmembers class com.seoktaedev.tteona.** {
     kotlinx.serialization.KSerializer serializer(...);
 }
+# @Serializable 데이터 클래스의 필드가 R8에 의해 이름 변경/제거되면 JSON 직렬화가 깨진다.
+-keepclassmembers @kotlinx.serialization.Serializable class com.seoktaedev.tteona.** {
+    <fields>;
+}
+
+# ── Retrofit / OkHttp (R8 full-mode 대응) ──────────────────────────────
+# Retrofit이 인터페이스 메서드의 제네릭 반환타입·애노테이션을 리플렉션으로 읽으므로 보존한다.
+-keepattributes Signature, Exceptions, RuntimeVisibleAnnotations, RuntimeVisibleParameterAnnotations
+# API 인터페이스 자체 (suspend 반환타입 시그니처 포함)
+-keep,allowobfuscation interface com.seoktaedev.tteona.core.network.TteonaApi { *; }
+-keep,allowobfuscation interface retrofit2.Call
+-keep,allowobfuscation,allowshrinking class retrofit2.Response
+# Retrofit 2.x 공식 권장 규칙
+-dontwarn retrofit2.**
+-keep class retrofit2.** { *; }
+-keepclasseswithmembers class * {
+    @retrofit2.http.* <methods>;
+}
+-keepclassmembers,allowshrinking,allowobfuscation interface * {
+    @retrofit2.http.* <methods>;
+}
+# kotlin suspend 함수의 Continuation 파라미터 시그니처 보존
+-keep,allowobfuscation,allowshrinking class kotlin.coroutines.Continuation
+
+# OkHttp / Okio — 플랫폼 옵셔널 참조 경고 억제
+-dontwarn okhttp3.**
+-dontwarn okio.**
+-dontwarn org.conscrypt.**
+-dontwarn org.bouncycastle.**
+-dontwarn org.openjsse.**

@@ -187,7 +187,7 @@ fun ActiveSessionScreen(
             scope.launch { PushService.notifyCourseFollowed(course.authorId, nickname, course.courseName, course.courseId) }
         }
         if (roomIds.isNotEmpty()) {
-            roomIds.firstOrNull()?.let { LocationSocketService.connect(it, uid, nickname) }
+            LocationSocketService.connect(roomIds, uid, nickname)
             roomIds.forEach { rid ->
                 RoomService.postFeed(rid, FeedType.TRIP_START, uid, nickname, course.courseId, course.courseName)
             }
@@ -207,7 +207,7 @@ fun ActiveSessionScreen(
             locationService.startTracking(saved.orderedPlaces)
             if (isResuming) {
                 if (roomIds.isNotEmpty() && uid.isNotEmpty()) {
-                    roomIds.firstOrNull()?.let { LocationSocketService.connect(it, uid, nickname) }
+                    LocationSocketService.connect(roomIds, uid, nickname)
                 }
             } else {
                 showResumeSheet = true
@@ -435,7 +435,13 @@ fun ActiveSessionScreen(
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(16.dp))
                         .background(TteOrange)
-                        .clickable { showCamera = true }
+                        .clickable {
+                            // 도착한 장소로 현재 인덱스를 맞춘 뒤 카메라를 연다 —
+                            // 순서상 아직 앞 장소를 가리키고 있으면 엉뚱한 장소로 촬영되던 문제 방지.
+                            orderedPlaces.indexOfFirst { it.order == place.order }
+                                .takeIf { it >= 0 }?.let { currentPlaceIndex = it }
+                            showCamera = true
+                        }
                         .padding(16.dp),
                 ) {
                     Text("📍", fontSize = 20.sp)
@@ -619,6 +625,8 @@ fun ActiveSessionScreen(
                 ActiveSessionStore.clear()
                 onClose()
             },
+            // 포맷/BGM 선택·에러에서 닫기 = 세션 화면 복귀 (기록 보존 — 세션 미정리)
+            onBack = { showVlog = false },
         )
     }
 
@@ -705,7 +713,7 @@ fun ActiveSessionScreen(
                             showResumeSheet = false
                             locationService.startTracking(orderedPlaces)
                             if (roomIds.isNotEmpty() && uid.isNotEmpty()) {
-                                roomIds.firstOrNull()?.let { LocationSocketService.connect(it, uid, nickname) }
+                                LocationSocketService.connect(roomIds, uid, nickname)
                             }
                         },
                 ) {

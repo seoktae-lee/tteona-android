@@ -39,6 +39,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Mail
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.PersonOff
 import androidx.compose.material.icons.filled.PersonRemove
 import androidx.compose.material.icons.filled.Shield
@@ -86,6 +87,7 @@ import com.seoktaedev.tteona.ui.theme.TteFieldBackground
 import com.seoktaedev.tteona.ui.theme.TteMediumGray
 import com.seoktaedev.tteona.ui.theme.TteOrange
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 
 /**
  * 설정 탭 — iOS Features/Settings/SettingsView.swift의 이식본.
@@ -140,10 +142,18 @@ private fun SettingsMain(
     var isDeleting by remember { mutableStateOf(false) }
     var deleteFailed by remember { mutableStateOf(false) }
     var notificationGranted by remember { mutableStateOf<Boolean?>(null) }
+    // 그룹 활동 알림(여행 시작/종료·영상·댓글) 앱 차원 스위치 — 서버가 userPrivate.groupNotifEnabled로 게이팅
+    var groupNotifEnabled by remember { mutableStateOf(true) }
 
-    // Firestore 프로필 로드
+    // Firestore 프로필 + 그룹 알림 설정 로드
     LaunchedEffect(authUser?.uid) {
-        authUser?.uid?.let { UserService.fetchUser(it) }
+        val uid = authUser?.uid ?: return@LaunchedEffect
+        UserService.fetchUser(uid)
+        // 기본값 true — 필드가 없으면(기존 유저) 알림을 계속 받는다
+        val doc = runCatching {
+            com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("userPrivate").document(uid).get().await()
+        }.getOrNull()
+        groupNotifEnabled = (doc?.get("groupNotifEnabled") as? Boolean) ?: true
     }
 
     // 알림 권한 상태 — 설정 앱에 다녀온 뒤에도 갱신되도록 ON_RESUME마다 확인 (iOS didBecomeActive 대응)
@@ -266,6 +276,25 @@ private fun SettingsMain(
                         )
                     }
                     Chevron()
+                }
+                SettingsDivider()
+                // 그룹 활동 알림 스위치 — 시스템 알림 권한과 별개로 앱 차원에서 끌 수 있다 (iOS groupNotif Toggle)
+                SettingsRow(Icons.Filled.NotificationsActive, stringResource(R.string.settings_groupNotif)) {
+                    androidx.compose.material3.Switch(
+                        checked = groupNotifEnabled,
+                        onCheckedChange = { enabled ->
+                            groupNotifEnabled = enabled
+                            val uid = authUser?.uid ?: return@Switch
+                            scope.launch {
+                                runCatching {
+                                    com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("userPrivate").document(uid)
+                                        .set(mapOf("groupNotifEnabled" to enabled), com.google.firebase.firestore.SetOptions.merge())
+                                        .await()
+                                }
+                            }
+                        },
+                        colors = androidx.compose.material3.SwitchDefaults.colors(checkedTrackColor = TteOrange),
+                    )
                 }
                 SettingsDivider()
                 val currentLang = remember { LocaleManager.current(context) }
@@ -406,8 +435,17 @@ private fun TravelStyleRow(
             stringResource(R.string.settings_travelStyle),
             onClick = { expanded = true },
         ) {
+            // 아이콘은 홈 지도에 찍히는 태그별 커스텀 핀과 동일 (이모지 대신 핀으로 통일, iOS와 동일)
+            if (current != null) {
+                androidx.compose.foundation.Image(
+                    painter = androidx.compose.ui.res.painterResource(current.pinRes),
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                )
+                Spacer(Modifier.width(4.dp))
+            }
             Text(
-                if (current != null) "${current.emoji} ${stringResource(current.labelRes)}"
+                if (current != null) stringResource(current.labelRes)
                 else stringResource(R.string.settings_travelStyle_none),
                 fontSize = 14.sp,
                 color = TteMediumGray,
@@ -420,7 +458,14 @@ private fun TravelStyleRow(
         ) {
             tags.forEach { tag ->
                 androidx.compose.material3.DropdownMenuItem(
-                    text = { Text("${tag.emoji} ${stringResource(tag.labelRes)}") },
+                    text = { Text(stringResource(tag.labelRes)) },
+                    leadingIcon = {
+                        androidx.compose.foundation.Image(
+                            painter = androidx.compose.ui.res.painterResource(tag.pinRes),
+                            contentDescription = null,
+                            modifier = Modifier.size(28.dp),
+                        )
+                    },
                     trailingIcon = {
                         if (currentTag == tag.label) {
                             Icon(Icons.Filled.Check, contentDescription = null, tint = TteOrange, modifier = Modifier.size(16.dp))

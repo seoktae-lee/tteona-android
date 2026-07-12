@@ -15,6 +15,7 @@ data class Room(
     val creatorId: String,
     val memberIds: List<String>,
     val createdAt: Long,
+    val imageUrl: String? = null, // 방 대표 이미지 (전 멤버 공통) — WAS 업로드 후 서버가 세팅
 )
 
 @Serializable

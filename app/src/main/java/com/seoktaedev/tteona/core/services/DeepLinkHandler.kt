@@ -33,11 +33,18 @@ object DeepLinkHandler {
             uri.host == "tteona.kr" -> {
                 val path = uri.path ?: ""
                 when {
-                    path == "/course" || path.startsWith("/course/") ->
-                        uri.getQueryParameter("id")?.let { _pendingCourseId.value = it }
+                    path == "/course" || path.startsWith("/course/") -> {
+                        // ?id= 우선, 경로형(/course/{id})도 지원 (iOS와 동일)
+                        val id = uri.getQueryParameter("id")
+                            ?: path.removePrefix("/course/").takeIf { it.isNotEmpty() && it != path }
+                        if (!id.isNullOrEmpty()) _pendingCourseId.value = id
+                    }
 
-                    path == "/room" ->
-                        uri.getQueryParameter("code")?.let { _pendingRoomCode.value = it }
+                    path == "/room" || path.startsWith("/room/") -> {
+                        val code = uri.getQueryParameter("code")
+                            ?: path.removePrefix("/room/").takeIf { it.isNotEmpty() && it != path }
+                        if (!code.isNullOrEmpty()) _pendingRoomCode.value = code
+                    }
                 }
             }
         }

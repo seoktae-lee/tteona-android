@@ -112,7 +112,11 @@ fun VlogGenerationScreen(
     course: Course,
     sessionId: String,
     thumbnailCourseId: String? = null,
+    // 완료 후 "홈으로" — 세션을 정리하고 세션 화면까지 닫는다.
     onDismissToHome: () -> Unit,
+    // 포맷/BGM 선택·에러 화면에서 닫기 — 세션 화면으로 되돌아가 기록을 보존한다.
+    // (iOS VlogGenerationView의 dismiss() 대응. 미전달 시 홈으로 폴백.)
+    onBack: () -> Unit = onDismissToHome,
 ) {
     val context = LocalContext.current
     val view = LocalView.current
@@ -187,7 +191,8 @@ fun VlogGenerationScreen(
         }
     }
 
-    BackHandler { if (phase == Phase.CHOOSE_FORMAT) onDismissToHome() }
+    // 포맷 선택 단계에서 뒤로가기 = 세션 화면 복귀(기록 보존). 그 외 단계는 뒤로가기를 막는다.
+    BackHandler { if (phase == Phase.CHOOSE_FORMAT) onBack() }
 
     when (phase) {
         Phase.CHOOSE_FORMAT -> ChooseFormatView(
@@ -199,7 +204,7 @@ fun VlogGenerationScreen(
                 else selectedFormats = if (key in selectedFormats) selectedFormats - key else selectedFormats + key
             },
             onNext = { phase = Phase.CHOOSE_BGM },
-            onClose = onDismissToHome,
+            onClose = onBack,
         )
         Phase.CHOOSE_BGM -> ChooseBgmView(
             courseTagLabel = stringResource(course.tag.labelRes),
@@ -222,7 +227,8 @@ fun VlogGenerationScreen(
             message = errorMessage,
             canResume = canResume,
             onRetry = { attempt++; phase = Phase.GENERATING },
-            onDismiss = onDismissToHome,
+            // 실패 후 돌아가기 = 세션 화면 복귀(클립 보존 → 재시도·재촬영 가능, iOS와 동일)
+            onDismiss = onBack,
         )
     }
 

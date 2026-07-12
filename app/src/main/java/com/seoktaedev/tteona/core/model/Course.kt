@@ -66,11 +66,12 @@ data class Course(
 
 @Serializable
 // label은 Firestore 저장·서버 전송용 한국어 원문(직렬화 값). 화면 표시는 labelRes를 사용할 것.
-enum class CourseTag(val label: String, val emoji: String, val labelRes: Int) {
-    @SerialName("커플") COUPLE("커플", "💑", com.seoktaedev.tteona.R.string.tag_couple),
-    @SerialName("친구") FRIENDS("친구", "👫", com.seoktaedev.tteona.R.string.tag_friends),
-    @SerialName("가족") FAMILY("가족", "👨‍👩‍👧‍👦", com.seoktaedev.tteona.R.string.tag_family),
-    @SerialName("혼자") SOLO("혼자", "🧍", com.seoktaedev.tteona.R.string.tag_solo),
+// pinRes는 홈 지도에 찍히는 태그별 커스텀 핀 — 취향 선택 UI도 같은 핀으로 보여준다 (iOS pinImageName).
+enum class CourseTag(val label: String, val emoji: String, val labelRes: Int, val pinRes: Int) {
+    @SerialName("커플") COUPLE("커플", "💑", com.seoktaedev.tteona.R.string.tag_couple, com.seoktaedev.tteona.R.drawable.pin_couple),
+    @SerialName("친구") FRIENDS("친구", "👫", com.seoktaedev.tteona.R.string.tag_friends, com.seoktaedev.tteona.R.drawable.pin_friends),
+    @SerialName("가족") FAMILY("가족", "👨‍👩‍👧‍👦", com.seoktaedev.tteona.R.string.tag_family, com.seoktaedev.tteona.R.drawable.pin_family),
+    @SerialName("혼자") SOLO("혼자", "🧍", com.seoktaedev.tteona.R.string.tag_solo, com.seoktaedev.tteona.R.drawable.pin_solo),
 }
 
 val courseRegions = listOf("서울", "부산", "제주", "경주", "강릉", "전주", "기타")

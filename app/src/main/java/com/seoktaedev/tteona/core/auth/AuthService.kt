@@ -16,6 +16,7 @@ import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuthException
 import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.auth.auth
+import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.firestore
 import com.seoktaedev.tteona.R
 import com.seoktaedev.tteona.core.i18n.LocaleManager
@@ -358,25 +359,47 @@ object AuthService {
             }
         }
 
-    // MARK: - 온보딩 완료 (users 문서 생성 — iOS OnboardingView의 저장 로직에 대응)
-    suspend fun completeOnboarding(nickname: String, preferredTag: String? = null) {
-        val user = auth.currentUser ?: return
+    enum class OnboardingResult { SUCCESS, NICKNAME_TAKEN, FAILED }
+
+    // MARK: - 온보딩 완료 (users 문서 생성 — iOS OnboardingView.finishOnboarding에 대응)
+    suspend fun completeOnboarding(nickname: String, preferredTag: String? = null): OnboardingResult {
+        val user = auth.currentUser ?: return OnboardingResult.FAILED
+        val trimmed = nickname.trim()
         _isLoading.value = true
         try {
+            // 닉네임 원자적 예약 — 두 사람이 동시에 같은 닉네임으로 가입하는 레이스를 막는다.
+            // 실패하면(그 사이 남이 선점) 닉네임 단계로 되돌려 다시 고르게 한다.
+            val reserved = com.seoktaedev.tteona.core.services.UserService.reserveNickname(trimmed, user.uid)
+            if (!reserved) return OnboardingResult.NICKNAME_TAKEN
+
+            // email·isVerified는 공개 users 문서에 저장하지 않는다:
+            //   · email — PII, Auth(currentUser)가 소유
+            //   · isVerified — 관리자(Firebase 콘솔)만 설정, rules도 클라 쓰기 차단
+            // merge=true — 온보딩을 다시 밟은 기존 유저의 좋아요·발자취·프로필사진 등이
+            //   통째로 덮어써져 사라지는 것을 막는다.
             val data = buildMap {
                 put("uid", user.uid)
-                put("email", user.email ?: "")
-                put("nickname", nickname)
+                put("nickname", trimmed)
                 put("createdAt", Timestamp.now())
-                put("isVerified", false)
-                // 온보딩 여행 취향 (건너뛰면 미저장) — 추천 개인화 시드
                 preferredTag?.let { put("preferredTag", it) }
             }
-            db.collection("users").document(user.uid).set(data).await()
-            _currentUser.value = _currentUser.value?.copy(nickname = nickname)
+            db.collection("users").document(user.uid)
+                .set(data, com.google.firebase.firestore.SetOptions.merge()).await()
+            // 과거 버전이 공개 users 문서에 저장해 둔 email(PII)이 남아 있으면 제거한다.
+            runCatching {
+                db.collection("users").document(user.uid)
+                    .update("email", FieldValue.delete()).await()
+            }
+            // 저장 성공 시에만 완료 처리 — 저장이 실패했는데 완료로 넘기면 닉네임 없는
+            // 반쪽 계정으로 메인에 진입하고, 다음 실행 때 온보딩이 다시 뜬다.
+            _currentUser.value = _currentUser.value?.copy(nickname = trimmed)
             _onboardingComplete.value = true
+            return OnboardingResult.SUCCESS
         } catch (e: Exception) {
+            // 저장 실패 시 예약 반납 (다음 시도·타인 선점 허용)
+            runCatching { com.seoktaedev.tteona.core.services.UserService.releaseNickname(trimmed, user.uid) }
             _errorMessage.value = LocaleManager.string(appContext, R.string.auth_error_profileSaveFailed)
+            return OnboardingResult.FAILED
         } finally {
             _isLoading.value = false
         }
@@ -397,6 +420,11 @@ object AuthService {
     suspend fun deleteAccount(context: Context): Boolean {
         _isLoading.value = true
         return try {
+            // 1) WAS 측 개인정보(푸시토큰·통계·아바타·채팅닉네임·Vlog파일) 삭제 —
+            //    Auth 계정이 지워지기 전, 토큰이 유효할 때 먼저 호출 (iOS와 동일)
+            runCatching { com.seoktaedev.tteona.core.network.ApiClient.api.purgeMyData() }
+
+            // 2) 서버(Cloud Function)에서 Firestore 데이터 + Auth 계정을 일괄 삭제
             com.google.firebase.functions.FirebaseFunctions.getInstance("us-central1")
                 .getHttpsCallable("deleteMyAccount")
                 .call()
@@ -405,6 +433,11 @@ object AuthService {
             com.seoktaedev.tteona.core.services.CourseService.clearUserData()
             com.seoktaedev.tteona.core.services.UserService.clear()
             com.seoktaedev.tteona.core.services.RoomService.clear()
+            com.seoktaedev.tteona.core.services.FootprintService.clear()
+            // 로컬 세션·촬영 클립 정리 (iOS의 세션스토어 clear + Tteona 파일 삭제 대응)
+            com.seoktaedev.tteona.core.services.ActiveSessionStore.clear()
+            com.seoktaedev.tteona.core.services.ImpromptuSessionStore.clear()
+            runCatching { java.io.File(context.filesDir, "Tteona").deleteRecursively() }
             // 구글 로그인 세션 완전 해제 (iOS GIDSignIn.disconnect 대응)
             runCatching {
                 CredentialManager.create(context)
@@ -437,9 +470,19 @@ object AuthService {
 
     // MARK: - Helpers
     private suspend fun refreshOnboardingStatus(uid: String) {
-        // 기존 가입 유저는 Firestore users 문서가 이미 존재하므로 온보딩을 다시 하지 않음
-        val doc = runCatching { db.collection("users").document(uid).get().await() }.getOrNull()
-        _onboardingComplete.value = doc?.exists() == true
+        // 기존 가입 유저는 Firestore users 문서가 이미 존재하므로 온보딩을 다시 하지 않도록 처리.
+        // ⚠️ 네트워크 오류로 조회가 실패했을 때 onboardingComplete=false로 떨어뜨리면,
+        //    기존 유저가 온보딩 화면으로 밀려나고 거기서 저장 시 프로필이 덮어써질 위험이 있다.
+        //    따라서 "문서 없음"(정상 조회 후 exists=false)과 "조회 실패"(예외)를 반드시 구분한다.
+        try {
+            val doc = db.collection("users").document(uid).get().await()
+            _onboardingComplete.value = doc.exists()
+        } catch (e: Exception) {
+            // 조회 실패 — 문서 존재 여부를 확신할 수 없으므로 상태를 함부로 바꾸지 않는다.
+            // (기존 유저를 온보딩으로 되돌리지 않는다. 실제 신규 유저면 users 문서가 없어
+            //  이후 온라인 복구 시 재조회로 자연히 온보딩이 이어진다.)
+            Log.w("Auth", "refreshOnboardingStatus 조회 실패 — 상태 유지", e)
+        }
     }
 
     private fun isValidEmail(email: String): Boolean =

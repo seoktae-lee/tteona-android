@@ -21,6 +21,7 @@
     <string name="settings_appInfo">About</string>
     <string name="settings_version">Version</string>
     <string name="settings_push">Push Notifications</string>
+    <string name="settings_groupNotif">Group activity notifications</string>
     <string name="settings_language">Language</string>
     <string name="settings_language_footer">Choose the language to use in the app.</string>
     <string name="settings_privacy">Privacy Policy</string>
@@ -310,6 +311,10 @@
     <string name="chat_react">React</string>
     <string name="chat_reply">Reply</string>
     <string name="chat_copy">Copy</string>
+    <string name="chat_resend">Resend</string>
+    <string name="chat_loadOlder">Load earlier messages</string>
+    <string name="chat_blocked_title">This message can\'t be sent</string>
+    <string name="chat_blocked_message">Your message wasn\'t sent because it contains inappropriate language.</string>
     <string name="feed_here">here</string>
     <string name="feed_tripStart">🚀 %1$s started the trip: %2$s</string>
     <string name="feed_tripEnd">✅ %1$s finished the trip: %2$s</string>
@@ -621,4 +626,11 @@
     <string name="profile_blocked">Blocked</string>
     <string name="profile_myCourses">My Courses</string>
     <string name="profile_myCourses_hint">Tap the camera to set a pretty course thumbnail</string>
+    <string name="network_offline">No internet connection</string>
+    <string name="paywall_bestValue">MOST POPULAR</string>
+    <string name="paywall_noPaymentNow">No payment due now</string>
+    <string name="room_membersTitle">Members</string>
+    <string name="room_changeImage">Change group photo</string>
+    <string name="room_creator">Host</string>
+    <string name="room_imageUploadFailed">Failed to upload the image. Please try again later.</string>
 </resources>

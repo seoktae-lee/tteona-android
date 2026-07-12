@@ -10,6 +10,7 @@ class TteonaApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         com.seoktaedev.tteona.core.i18n.LocaleManager.init(this)
+        com.seoktaedev.tteona.core.services.NetworkMonitor.start(this)
         KakaoSdk.init(this, getString(R.string.kakao_native_app_key))
         com.seoktaedev.tteona.core.services.ActiveSessionStore.initialize(this)
         com.seoktaedev.tteona.core.services.ImpromptuSessionStore.initialize(this)

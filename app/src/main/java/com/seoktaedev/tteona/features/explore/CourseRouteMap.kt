@@ -46,6 +46,7 @@ import com.google.maps.android.compose.rememberUpdatedMarkerState
 import androidx.compose.ui.res.stringResource
 import com.seoktaedev.tteona.R
 import com.seoktaedev.tteona.core.model.Course
+import com.seoktaedev.tteona.ui.theme.BadgeNumberTextStyle
 import com.seoktaedev.tteona.ui.theme.TteOrange
 
 /**
@@ -165,7 +166,7 @@ private fun RouteMapContent(course: Course, interactive: Boolean) {
                         .clip(CircleShape)
                         .background(TteOrange),
                 ) {
-                    Text("${idx + 1}", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                    Text("${idx + 1}", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White, style = BadgeNumberTextStyle)
                 }
             }
         }

@@ -89,6 +89,7 @@ import com.seoktaedev.tteona.core.services.SessionForegroundService
 import com.seoktaedev.tteona.core.services.StatsService
 import com.seoktaedev.tteona.core.services.UserService
 import com.seoktaedev.tteona.core.model.StatsEvent
+import com.seoktaedev.tteona.ui.theme.BadgeNumberTextStyle
 import com.seoktaedev.tteona.ui.theme.TteDarkGray
 import com.seoktaedev.tteona.ui.theme.TteFieldBackground
 import com.seoktaedev.tteona.ui.theme.TteMediumGray
@@ -504,7 +505,7 @@ fun ActiveSessionScreen(
                                     .clip(CircleShape)
                                     .background(TteOrange),
                             ) {
-                                Text("${place.order}", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                Text("${place.order}", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White, style = BadgeNumberTextStyle)
                             }
                             Text(place.placeName, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = TteDarkGray, maxLines = 1)
                         }
@@ -820,7 +821,7 @@ fun ActiveSessionScreen(
                             when {
                                 isVisited -> Icon(Icons.Filled.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
                                 isSkipped -> Icon(Icons.Filled.SkipNext, contentDescription = null, tint = Color.White.copy(alpha = 0.7f), modifier = Modifier.size(14.dp))
-                                else -> Text("${index + 1}", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = if (isCurrent) Color.White else TteDarkGray)
+                                else -> Text("${index + 1}", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = if (isCurrent) Color.White else TteDarkGray, style = BadgeNumberTextStyle)
                             }
                         }
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
@@ -929,7 +930,7 @@ private fun SessionPlacePin(order: Int, isVisited: Boolean, isCurrent: Boolean) 
         if (isVisited) {
             Icon(Icons.Filled.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
         } else {
-            Text("$order", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color.White)
+            Text("$order", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color.White, style = BadgeNumberTextStyle)
         }
     }
 }

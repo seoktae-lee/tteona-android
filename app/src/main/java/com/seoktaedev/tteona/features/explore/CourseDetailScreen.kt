@@ -77,6 +77,7 @@ import com.seoktaedev.tteona.core.model.RouteInfo
 import com.seoktaedev.tteona.core.model.WeatherInfo
 import com.seoktaedev.tteona.core.model.regionLabelRes
 import com.seoktaedev.tteona.core.services.PlacesPhotoService
+import com.seoktaedev.tteona.ui.theme.BadgeNumberTextStyle
 import com.seoktaedev.tteona.ui.theme.TteDarkGray
 import com.seoktaedev.tteona.ui.theme.TteFieldBackground
 import com.seoktaedev.tteona.ui.theme.TteMediumGray
@@ -553,7 +554,7 @@ private fun PlaceCardRow(index: Int, place: Place) {
                         .clip(CircleShape)
                         .background(TteOrange),
                 ) {
-                    Text("${index + 1}", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                    Text("${index + 1}", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White, style = BadgeNumberTextStyle)
                 }
                 category?.let {
                     Text(

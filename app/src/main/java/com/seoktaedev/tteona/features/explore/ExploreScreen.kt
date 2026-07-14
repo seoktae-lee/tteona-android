@@ -57,6 +57,7 @@ import com.seoktaedev.tteona.core.model.CreatorRank
 import com.seoktaedev.tteona.core.model.regionLabelRes
 import com.seoktaedev.tteona.core.services.PlacesPhotoService
 import com.seoktaedev.tteona.core.util.pressableCard
+import com.seoktaedev.tteona.ui.theme.BadgeNumberTextStyle
 import com.seoktaedev.tteona.ui.theme.TteFieldBackground
 import com.seoktaedev.tteona.ui.theme.TteMediumGray
 import com.seoktaedev.tteona.ui.theme.TteOrange
@@ -244,6 +245,7 @@ private fun CreatorRankingStrip(ranking: List<CreatorRank>) {
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Black,
                                 color = Color.White,
+                                style = BadgeNumberTextStyle,
                             )
                         }
                     }

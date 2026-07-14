@@ -91,6 +91,7 @@ import com.seoktaedev.tteona.core.services.SessionForegroundService
 import com.seoktaedev.tteona.core.services.UserService
 import com.seoktaedev.tteona.core.services.VlogClips
 import com.seoktaedev.tteona.core.util.Haptics
+import com.seoktaedev.tteona.ui.theme.BadgeNumberTextStyle
 import com.seoktaedev.tteona.ui.theme.Pretendard
 import com.seoktaedev.tteona.ui.theme.TteDarkGray
 import com.seoktaedev.tteona.ui.theme.TteFieldBackground
@@ -355,7 +356,7 @@ fun ImpromptuSessionScreen(
                             .clip(CircleShape)
                             .background(TteOrange),
                     ) {
-                        Text("${place.order}", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                        Text("${place.order}", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color.White, style = BadgeNumberTextStyle)
                     }
                 }
             }
@@ -480,7 +481,7 @@ fun ImpromptuSessionScreen(
                                 contentAlignment = Alignment.Center,
                                 modifier = Modifier.size(20.dp).clip(CircleShape).background(TteOrange),
                             ) {
-                                Text("${place.order}", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                Text("${place.order}", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White, style = BadgeNumberTextStyle)
                             }
                             Text(place.placeName, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = TteDarkGray, maxLines = 1)
                             Icon(

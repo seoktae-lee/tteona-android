@@ -30,12 +30,17 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.material.icons.filled.DragIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -43,6 +48,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
@@ -91,8 +100,7 @@ import kotlinx.coroutines.launch
 
 /**
  * 코스 진행 세션 — iOS Features/ActiveSession/ActiveSessionView.swift의 이식본.
- * 위치 추적/도착 감지/그룹 실시간 위치 공유/피드 기록/당일 이어하기.
- * TODO: 장소 영상 촬영(CameraX)·Vlog 생성(Media3)은 별도 단계 — 현재는 방문 체크로 기록.
+ * 위치 추적/도착 감지/그룹 실시간 위치 공유/피드 기록/당일 이어하기/장소 촬영·Vlog 생성.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -168,6 +176,16 @@ fun ActiveSessionScreen(
             o !in visitedPlaces && o !in skippedPlaces
         }
         if (next != null) currentPlaceIndex = next
+    }
+
+    // 드래그 재정렬 확정 — 배열 순서 기준으로 order 재번호 + 방문/건너뜀 집합을 새 order로 재매핑 (iOS onMove)
+    fun commitReorder() {
+        val orderMap = orderedPlaces.mapIndexed { i, p -> p.order to i + 1 }.toMap()
+        orderedPlaces = orderedPlaces.mapIndexed { i, p -> p.copy(order = i + 1) }
+        visitedPlaces = visitedPlaces.mapNotNull { orderMap[it] }.toSet()
+        skippedPlaces = skippedPlaces.mapNotNull { orderMap[it] }.toSet()
+        moveToNextPending()
+        saveSession()
     }
 
     fun startNewSession() {
@@ -739,12 +757,18 @@ fun ActiveSessionScreen(
         }
     }
 
-    // 코스 편집 시트 (건너뛰기/취소 — iOS PlaceEditorSheet의 스킵 기능. 드래그 재정렬은 추후)
+    // 코스 편집 시트 — 건너뛰기/취소 + 드래그 재정렬 (iOS PlaceEditorSheet)
     if (showPlaceEditor) {
         ModalBottomSheet(onDismissRequest = {
             showPlaceEditor = false
             saveSession()
         }) {
+            // 드래그 재정렬 상태 — 드래그 중에는 리스트 순서만 바꾸고(order·id 불변 → key 안정),
+            // 손을 떼는 순간 commitReorder()로 order 재번호·집합 재매핑을 확정한다 (iOS .onMove 대응)
+            var draggingId by remember { mutableStateOf<String?>(null) }
+            var dragOffset by remember { mutableFloatStateOf(0f) }
+            val rowHeights = remember { mutableStateMapOf<String, Float>() }
+
             Column(Modifier.padding(bottom = 32.dp)) {
                 Text(
                     stringResource(R.string.session_editCourse),
@@ -757,15 +781,26 @@ fun ActiveSessionScreen(
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                 )
                 orderedPlaces.forEachIndexed { index, place ->
+                    key(place.id) {
                     val isVisited = place.order in visitedPlaces
                     val isSkipped = place.order in skippedPlaces
                     val isCurrent = index == currentPlaceIndex && !isVisited && !isSkipped
+                    val isDragging = draggingId == place.id
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(14.dp),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .background(if (isCurrent) TteOrange.copy(alpha = 0.06f) else Color.Transparent)
+                            .zIndex(if (isDragging) 1f else 0f)
+                            .graphicsLayer { translationY = if (isDragging) dragOffset else 0f }
+                            .onSizeChanged { rowHeights[place.id] = it.height.toFloat() }
+                            .background(
+                                when {
+                                    isDragging -> TteFieldBackground
+                                    isCurrent -> TteOrange.copy(alpha = 0.06f)
+                                    else -> Color.Transparent
+                                }
+                            )
                             .padding(horizontal = 20.dp, vertical = 10.dp),
                     ) {
                         Box(
@@ -819,6 +854,55 @@ fun ActiveSessionScreen(
                                     .padding(horizontal = 10.dp, vertical = 5.dp),
                             )
                         }
+                        // 드래그 핸들 — 위/아래로 끌어 방문 순서 변경 (iOS 편집 모드 재정렬 핸들)
+                        Icon(
+                            Icons.Filled.DragIndicator,
+                            contentDescription = stringResource(R.string.session_editCourse),
+                            tint = TteMediumGray,
+                            modifier = Modifier
+                                .size(22.dp)
+                                .pointerInput(Unit) {
+                                    detectDragGestures(
+                                        onDragStart = {
+                                            draggingId = place.id
+                                            dragOffset = 0f
+                                        },
+                                        onDragEnd = {
+                                            draggingId = null
+                                            dragOffset = 0f
+                                            commitReorder()
+                                        },
+                                        onDragCancel = {
+                                            draggingId = null
+                                            dragOffset = 0f
+                                            commitReorder()
+                                        },
+                                    ) { change, dragAmount ->
+                                        change.consume()
+                                        dragOffset += dragAmount.y
+                                        val id = draggingId ?: return@detectDragGestures
+                                        // 이웃 행 높이의 절반을 넘어가면 자리 교환 — 교환한 만큼
+                                        // 오프셋을 되돌려 손가락 위치와 행 위치를 계속 맞춘다
+                                        while (true) {
+                                            val idx = orderedPlaces.indexOfFirst { it.id == id }
+                                            if (idx < 0) break
+                                            val neighbor = when {
+                                                dragOffset > 0 -> orderedPlaces.getOrNull(idx + 1)
+                                                dragOffset < 0 -> orderedPlaces.getOrNull(idx - 1)
+                                                else -> null
+                                            } ?: break
+                                            val h = rowHeights[neighbor.id] ?: break
+                                            if (kotlin.math.abs(dragOffset) <= h / 2) break
+                                            val list = orderedPlaces.toMutableList()
+                                            val to = if (dragOffset > 0) idx + 1 else idx - 1
+                                            list[idx] = list[to].also { list[to] = list[idx] }
+                                            orderedPlaces = list
+                                            dragOffset += if (dragOffset > 0) -h else h
+                                        }
+                                    }
+                                },
+                        )
+                    }
                     }
                 }
             }

@@ -211,6 +211,8 @@
     <string name="impromptu_saveAndVlog">保存してVlogを作成</string>
     <string name="impromptu_saveAsCourse">コースとして保存</string>
     <string name="impromptu_myToday_name">私の今日</string>
+    <string name="impromptu_reminder_title">今日の記録をVlogにしませんか？🎬</string>
+    <string name="impromptu_reminder_body">今日訪れた%dか所で思い出の動画を作ってみましょう</string>
     <string name="impromptu_startRecord">記録開始</string>
     <string name="impromptu_myTodayDated">私の今日 %s</string>
     <string name="region_other">その他</string>

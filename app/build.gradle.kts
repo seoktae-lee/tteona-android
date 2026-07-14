@@ -36,6 +36,13 @@ android {
         // local.properties에 MAPS_API_KEY=... 형태로 저장 (VCS 제외 대상)
         manifestPlaceholders["MAPS_API_KEY"] = localProps.getProperty("MAPS_API_KEY") ?: ""
 
+        // Google Places API (New) 직접 호출 키 (iOS GOOGLE_PLACES_API_KEY 대응).
+        // 별도 키 미지정 시 Maps 키 재사용 — 같은 키에 Places API (New)가 활성화되어 있어야 한다.
+        buildConfigField(
+            "String", "GOOGLE_PLACES_API_KEY",
+            "\"${localProps.getProperty("GOOGLE_PLACES_API_KEY") ?: localProps.getProperty("MAPS_API_KEY") ?: ""}\"",
+        )
+
         // RevenueCat Google Play 공개 SDK 키(goog_...) — 미설정 시 무료 모드 (iOS REVENUECAT_API_KEY 대응)
         buildConfigField(
             "String", "REVENUECAT_API_KEY",

@@ -71,7 +71,7 @@ private const val SESSION_WINDOW_MS = 18L * 3600 * 1000
 
 /**
  * 즉흥 '나의 오늘' 세션 저장 — iOS SavedImpromptuSession.swift(ImpromptuSessionStore)의 이식본.
- * TODO: iOS의 오후 8시 미종료 리마인더 알림은 AlarmManager 이식 시 추가.
+ * 저장 시 오후 8시 미종료 리마인더를 예약하고 종료 시 취소한다 (ImpromptuReminder).
  */
 @Serializable
 data class SavedImpromptuSession(
@@ -103,6 +103,7 @@ object ImpromptuSessionStore {
             appContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
                 .edit().putString(KEY, json.encodeToString(SavedImpromptuSession.serializer(), session)).apply()
             _hasTodaySession.value = true
+            ImpromptuReminder.scheduleIfNeeded(appContext, places.size)
         }
     }
 
@@ -121,5 +122,6 @@ object ImpromptuSessionStore {
     fun clear() {
         appContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove(KEY).apply()
         _hasTodaySession.value = false
+        ImpromptuReminder.cancel(appContext)
     }
 }

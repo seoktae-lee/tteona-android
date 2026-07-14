@@ -122,6 +122,18 @@ fun MainTabScreen(initialTab: Int = 0, previewFootprintDemo: Boolean = false) {
         }
     }
 
+    // 오후 8시 리마인더 알림 탭 → '나의 오늘' 세션 열기 (iOS shouldOpenTodaySession → handleImpromptuTap)
+    val shouldOpenTodaySession by AppNotificationManager.shouldOpenTodaySession.collectAsState()
+    LaunchedEffect(shouldOpenTodaySession) {
+        if (shouldOpenTodaySession) {
+            AppNotificationManager.clearShouldOpenTodaySession()
+            selectedTab = 0
+            ImpromptuSessionStore.loadTodaySession()?.let { saved ->
+                impromptuRoomIds = saved.roomIds.toSet()
+            }
+        }
+    }
+
     // Vlog 완성 알림 탭 → 완성본 재생. 완성본은 인증 없는 공개 정적 URL이라 시스템
     // 비디오 플레이어로 연다(안드로이드엔 iOS VlogPreviewView 같은 앱 내 재생 화면이 없다).
     val pendingVlogUrl by AppNotificationManager.pendingVlogUrl.collectAsState()

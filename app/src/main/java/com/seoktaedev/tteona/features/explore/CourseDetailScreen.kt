@@ -85,8 +85,7 @@ import kotlinx.coroutines.launch
 
 /**
  * 코스 상세 — iOS Features/Explore/ExploreDetailView.swift의 이식본.
- * TODO: 동선 미니 지도는 MAPS_API_KEY 설정 후 Google Maps Compose로 교체.
- * TODO: "이 코스 따라가기"는 RoomService/ActiveSession(그룹·실시간 위치 공유) 이식 후 연결 — 현재는 안내만 표시.
+ * 동선 미니 지도(CourseRouteMap) + "이 코스 따라가기"(RoomSelectSheet → 세션 시작) 연결 완료.
  */
 @Composable
 fun CourseDetailScreen(

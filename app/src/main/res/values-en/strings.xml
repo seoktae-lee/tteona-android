@@ -211,6 +211,8 @@
     <string name="impromptu_saveAndVlog">Save &amp; Create Vlog</string>
     <string name="impromptu_saveAsCourse">Save as Course</string>
     <string name="impromptu_myToday_name">My Today</string>
+    <string name="impromptu_reminder_title">Turn today into a Vlog? 🎬</string>
+    <string name="impromptu_reminder_body">Make a memory video from the %d place(s) you visited today</string>
     <string name="impromptu_startRecord">Start recording</string>
     <string name="impromptu_myTodayDated">My Today %s</string>
     <string name="region_other">Other</string>

@@ -46,6 +46,14 @@ object AppNotificationManager {
         _shouldOpenProfile.value = false
     }
 
+    // 오후 8시 리마인더 알림 탭 → '나의 오늘' 세션 열기 (iOS shouldOpenTodaySession)
+    private val _shouldOpenTodaySession = MutableStateFlow(false)
+    val shouldOpenTodaySession: StateFlow<Boolean> = _shouldOpenTodaySession
+
+    fun clearShouldOpenTodaySession() {
+        _shouldOpenTodaySession.value = false
+    }
+
     // 현재 보고 있는 채팅방 — 이 방의 알림은 포그라운드에서 표시하지 않음 (iOS activeChatRoom)
     @Volatile
     var activeChatRoomId: String? = null
@@ -61,6 +69,11 @@ object AppNotificationManager {
         // 도착 알림 (iOS action == "openCamera")
         if (extras.getString("action") == "openCamera") {
             extras.getString("placeName")?.let { _pendingPlaceName.value = it }
+            return
+        }
+        // 오후 8시 리마인더 (iOS action == "openTodaySession")
+        if (extras.getString("action") == "openTodaySession") {
+            _shouldOpenTodaySession.value = true
             return
         }
         val type = extras.getString("type") ?: return

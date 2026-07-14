@@ -55,6 +55,7 @@ import com.seoktaedev.tteona.R
 import com.seoktaedev.tteona.core.model.Course
 import com.seoktaedev.tteona.core.model.CreatorRank
 import com.seoktaedev.tteona.core.model.regionLabelRes
+import com.seoktaedev.tteona.core.services.PlacesPhotoService
 import com.seoktaedev.tteona.core.util.pressableCard
 import com.seoktaedev.tteona.ui.theme.TteFieldBackground
 import com.seoktaedev.tteona.ui.theme.TteMediumGray
@@ -287,6 +288,15 @@ private fun RankInitial(nickname: String) {
 // MARK: - 그리드 셀 (iOS GridCell) — 3:4 세로 카드, 하단 그라디언트 + 코스명/지역·태그
 @Composable
 private fun GridCell(course: Course, thumbnailUrl: String?, translatedTitle: String? = null, onClick: () -> Unit) {
+    // 커스텀 썸네일이 없는 코스는 대표 장소 사진을 대체 썸네일로 사용 (iOS placePhotoURL)
+    var placePhotoUrl by remember(course.courseId) { mutableStateOf<String?>(null) }
+    LaunchedEffect(course.courseId, thumbnailUrl) {
+        // 커스텀 썸네일이 있으면 장소 사진을 굳이 조회하지 않음 (불필요한 API 호출 방지)
+        if (thumbnailUrl != null || placePhotoUrl != null) return@LaunchedEffect
+        val main = course.mainPlace ?: return@LaunchedEffect
+        placePhotoUrl = PlacesPhotoService.photoUrl(main.placeName, main.latitude, main.longitude)
+    }
+
     Box(
         modifier = Modifier
             .aspectRatio(3f / 4f)
@@ -294,11 +304,11 @@ private fun GridCell(course: Course, thumbnailUrl: String?, translatedTitle: Str
             .background(TteFieldBackground)
             .pressableCard(onClick),
     ) {
-        // 커스텀 썸네일 우선, 실패/부재 시 기본 썸네일
-        // TODO: 장소 사진 폴백(PlacesPhotoService)은 해당 서비스 이식 후 연결
-        if (thumbnailUrl != null) {
+        // 커스텀 썸네일 → 대표 장소 사진 → 기본 썸네일 순 폴백 (iOS와 동일)
+        val model = thumbnailUrl ?: placePhotoUrl
+        if (model != null) {
             SubcomposeAsyncImage(
-                model = thumbnailUrl,
+                model = model,
                 contentDescription = course.courseName,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),

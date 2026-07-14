@@ -2,6 +2,7 @@ package com.seoktaedev.tteona.core.services
 
 import android.util.Log
 import com.google.firebase.Timestamp
+import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.seoktaedev.tteona.core.network.ApiClient
 import com.seoktaedev.tteona.core.network.PlaceCachePayload
@@ -10,6 +11,9 @@ import com.seoktaedev.tteona.core.network.PlaceCacheSaveRequest
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -33,10 +37,7 @@ data class GooglePlaceReview(
 
 /**
  * 장소 상세(사진·평점·구글리뷰) — iOS Core/Services/PlaceDetailService.swift의 이식본.
- * 캐시 체인: 메모리 → WAS PostgreSQL → Firestore.
- * (iOS 4순위인 Google Places 직접 호출은 안드로이드 키 미설정으로 생략 —
- *  iOS 사용자가 조회한 장소는 WAS/Firestore 캐시에 이미 적재되어 있어 대부분 커버된다.
- *  TODO: GOOGLE_PLACES_API_KEY 설정 후 직접 호출 경로 추가.)
+ * 캐시 체인: 메모리 → WAS PostgreSQL → Firestore → Google Places (New) 직접 호출.
  */
 object PlaceDetailService {
     private val db get() = FirebaseFirestore.getInstance()
@@ -58,6 +59,15 @@ object PlaceDetailService {
 
         fetchFromFirestore(key)?.let { detail ->
             mutex.withLock { memoryCache[key] = detail }
+            ioScope.launch { saveToWas(detail, key) }
+            return detail
+        }
+
+        // 4순위: Google Places 직접 호출 — 아무도 방문 안 한 새 장소 커버 (iOS와 동일).
+        // 결과는 Firestore·WAS에 적재해 다른 사용자·플랫폼이 재사용하게 한다.
+        fetchFromGoogle(placeName, key, latitude, longitude)?.let { detail ->
+            mutex.withLock { memoryCache[key] = detail }
+            ioScope.launch { saveToFirestore(detail, key) }
             ioScope.launch { saveToWas(detail, key) }
             return detail
         }
@@ -126,6 +136,64 @@ object PlaceDetailService {
             val stars = (r["rating"] as? Number)?.toInt() ?: return@mapNotNull null
             val text = r["text"] as? String ?: return@mapNotNull null
             GooglePlaceReview(author, stars, text, r["publishTime"] as? String ?: "")
+        } ?: emptyList()
+
+        return PlaceDetail(key, photos, rating, reviewCount, reviews)
+    }
+
+    private suspend fun saveToFirestore(detail: PlaceDetail, key: String) {
+        val data = mutableMapOf<String, Any>(
+            "photos" to detail.photos,
+            "reviewCount" to detail.reviewCount,
+            "reviews" to detail.reviews.map {
+                mapOf("authorName" to it.authorName, "rating" to it.rating,
+                    "text" to it.text, "publishTime" to it.publishTime)
+            },
+            "cachedAt" to FieldValue.serverTimestamp(),
+        )
+        detail.rating?.let { data["rating"] = it }
+        runCatching { db.collection("placeCache").document(key).set(data).await() }
+            .onFailure { Log.w("PlaceDetail", "Firestore 캐시 저장 실패", it) }
+    }
+
+    // ── Google Places (New) 직접 호출 ──────────────────────────────────
+
+    private suspend fun fetchFromGoogle(
+        placeName: String, key: String, latitude: Double?, longitude: Double?,
+    ): PlaceDetail? {
+        val place = GooglePlacesService.searchTextFirstPlace(
+            placeName,
+            "places.photos,places.types,places.rating,places.userRatingCount,places.reviews",
+            latitude, longitude,
+        ) ?: return null
+
+        // 사진 URL 최대 5장 병렬 fetch (iOS withTaskGroup 대응)
+        val photoNames = place.optJSONArray("photos")?.let { arr ->
+            (0 until minOf(arr.length(), 5)).mapNotNull { i ->
+                arr.optJSONObject(i)?.optString("name")?.takeIf { it.isNotEmpty() }
+            }
+        } ?: emptyList()
+        val photos = coroutineScope {
+            photoNames.map { name -> async { GooglePlacesService.photoUri(name) } }
+                .awaitAll().filterNotNull()
+        }
+
+        val rating = place.optDouble("rating").takeIf { !it.isNaN() }
+        val reviewCount = place.optInt("userRatingCount", 0)
+
+        val reviews = place.optJSONArray("reviews")?.let { arr ->
+            (0 until arr.length()).mapNotNull { i ->
+                val r = arr.optJSONObject(i) ?: return@mapNotNull null
+                val author = r.optJSONObject("authorAttribution")?.optString("displayName")
+                    ?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+                if (!r.has("rating")) return@mapNotNull null
+                GooglePlaceReview(
+                    authorName = author,
+                    rating = r.optInt("rating"),
+                    text = r.optJSONObject("text")?.optString("text") ?: "",
+                    publishTime = r.optString("relativePublishTimeDescription"),
+                )
+            }
         } ?: emptyList()
 
         return PlaceDetail(key, photos, rating, reviewCount, reviews)

@@ -43,6 +43,11 @@
             android:exported="false"
             android:foregroundServiceType="location" />
 
+        <!-- 즉흥세션 오후 8시 미종료 리마인더 (iOS UNCalendarNotificationTrigger 대응) -->
+        <receiver
+            android:name=".core.services.ImpromptuReminderReceiver"
+            android:exported="false" />
+
         <!-- Vlog 완성본 공유 (iOS ShareSheet 대응) -->
         <provider
             android:name="androidx.core.content.FileProvider"

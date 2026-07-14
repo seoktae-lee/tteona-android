@@ -211,6 +211,8 @@
     <string name="impromptu_saveAndVlog">저장하고 Vlog 만들기</string>
     <string name="impromptu_saveAsCourse">코스로 저장</string>
     <string name="impromptu_myToday_name">나의 오늘</string>
+    <string name="impromptu_reminder_title">오늘 기록, Vlog로 남겨볼까요? 🎬</string>
+    <string name="impromptu_reminder_body">오늘 방문한 %d곳으로 추억 영상을 만들어보세요</string>
     <string name="impromptu_startRecord">기록 시작</string>
     <string name="impromptu_myTodayDated">나의 오늘 %s</string>
     <string name="region_other">기타</string>

@@ -36,9 +36,9 @@ object CourseThumbnailService {
 }
 
 /**
- * iOS PlacesPhotoService.swift의 축약 이식본.
- * TourAPI(WAS 경유, 키 불필요) 경로만 우선 구현 — 대부분의 국내 관광지는 이걸로 커버된다.
- * TODO: GOOGLE_PLACES_API_KEY 설정 후 Google Places 폴백(iOS 2순위 경로) 추가.
+ * iOS PlacesPhotoService.swift의 이식본.
+ * 1순위: 관광공사 TourAPI(WAS 경유, 키 불필요) — 좌표 기반 큐레이션 사진.
+ * 2순위: Google Places (New) 직접 폴백 — 캐시에 없는 새 장소 커버 (iOS와 동일).
  */
 object PlacesPhotoService {
     private data class Info(val photoUrl: String?, val category: String?)
@@ -56,11 +56,26 @@ object PlacesPhotoService {
 
     private suspend fun ensureFetched(placeName: String, latitude: Double?, longitude: Double?) {
         if (cache.containsKey(placeName)) return
-        // 네트워크 실패(result == null)는 캐시하지 않는다 — 일시적 실패가 영구 빈칸으로 굳는 것을 방지.
-        // 호출은 성공했으나 사진이 없는 경우(url == null)는 정상 결과이므로 캐시한다.
-        val result = runCatching { ApiClient.api.getTourPhoto(placeName, latitude, longitude) }.getOrNull()
-            ?: return
-        cache[placeName] = Info(result.url?.takeIf { it.isNotEmpty() }, result.category)
+        // TourAPI 네트워크 실패(tour == null)와 "사진 없음"을 구분 — 사진이 없으면 Google 폴백 시도.
+        val tour = runCatching { ApiClient.api.getTourPhoto(placeName, latitude, longitude) }.getOrNull()
+        val tourUrl = tour?.url?.takeIf { it.isNotEmpty() }
+        if (tourUrl != null) {
+            cache[placeName] = Info(tourUrl, tour.category)
+            return
+        }
+
+        // 2순위: Google Places 폴백 (iOS fetchAndCache와 동일 — 사진 1장 + 카테고리)
+        val place = GooglePlacesService.searchTextFirstPlace(placeName, "places.photos,places.types")
+        if (place != null) {
+            val photoName = place.optJSONArray("photos")?.optJSONObject(0)?.optString("name")
+            val photoUrl = photoName?.takeIf { it.isNotEmpty() }?.let { GooglePlacesService.photoUri(it) }
+            val types = place.optJSONArray("types")
+                ?.let { arr -> (0 until arr.length()).map(arr::getString) } ?: emptyList()
+            cache[placeName] = Info(photoUrl, GooglePlacesService.categoryText(types) ?: tour?.category)
+        } else if (tour != null) {
+            // TourAPI는 성공(사진 없음), Google은 실패/미설정 — 일시 실패가 아니므로 결과를 캐시
+            cache[placeName] = Info(null, tour.category)
+        }
     }
 }
 

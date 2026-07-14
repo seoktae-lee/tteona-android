@@ -14,6 +14,7 @@ class TteonaApplication : Application() {
         KakaoSdk.init(this, getString(R.string.kakao_native_app_key))
         com.seoktaedev.tteona.core.services.ActiveSessionStore.initialize(this)
         com.seoktaedev.tteona.core.services.ImpromptuSessionStore.initialize(this)
+        com.seoktaedev.tteona.core.services.GooglePlacesService.init(this)
         if (FirebaseApp.initializeApp(this) == null) {
             Log.w("Tteona", "Firebase 미초기화: app/google-services.json을 추가하세요")
             // 초기화하지 않으면 AuthService.isInitializing이 계속 true라 스플래시가 무한 로딩된다.

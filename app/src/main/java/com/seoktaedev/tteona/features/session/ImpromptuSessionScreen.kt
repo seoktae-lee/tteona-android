@@ -635,6 +635,7 @@ fun ImpromptuSessionScreen(
                 course = course,
                 sessionId = sessionId,
                 thumbnailCourseId = if (courseSavedToFirestore) course.courseId else null,
+                shareRoomIds = activeRoomIds,
                 onDismissToHome = onClose,
                 // 포맷/BGM 선택·에러에서 닫기 = 즉흥 세션 화면 복귀 (촬영 기록 보존)
                 onBack = { showVlog = false },

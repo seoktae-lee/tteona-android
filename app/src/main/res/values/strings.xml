@@ -136,6 +136,8 @@
     <string name="roomselect_subtitle">선택한 그룹에 오늘의 기록이 공유돼요</string>
     <string name="roomselect_members">멤버 %d명</string>
     <string name="roomselect_startWithoutSharing">공유 없이 시작</string>
+    <string name="roomselect_shareVlog">완성된 브이로그도 공유</string>
+    <string name="roomselect_shareVlogHint">영상이 완성되면 선택한 방 채팅에 자동으로 올라가요</string>
     <string name="roomselect_start">시작하기</string>
     <string name="region_title">지역 검색</string>
     <string name="common_close">닫기</string>

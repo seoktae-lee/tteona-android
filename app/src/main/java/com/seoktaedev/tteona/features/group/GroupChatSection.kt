@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
@@ -36,6 +37,8 @@ import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material.icons.filled.Movie
+import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -96,6 +99,14 @@ private sealed class TimelineEntry(val key: String, val date: Long) {
     class System(val feed: FeedItem) : TimelineEntry("s_${feed.feedId}", feed.createdAt)
 }
 
+// 그룹핑 계산 결과 — 같은 발신자 연속 묶음의 첫 메시지에만 닉네임을,
+// 같은 발신자·같은 분(分) 연속 묶음의 마지막 메시지에만 시간을 찍는다 (카톡식, iOS TimelineRow 대응)
+private class TimelineRow(
+    val entry: TimelineEntry,
+    val showNickname: Boolean = false,
+    val showTime: Boolean = false,
+)
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun GroupChatSection(room: Room, modifier: Modifier = Modifier) {
@@ -136,6 +147,44 @@ fun GroupChatSection(room: Room, modifier: Modifier = Modifier) {
             feedItems.filter { it.type in chatVisibleFeedTypes && it.userId !in blocked }
                 .map { TimelineEntry.System(it) }
         all.sortedBy { it.date }
+    }
+
+    // 닉네임·시간 그룹핑 플래그 계산 (iOS rows 대응)
+    val rows = remember(entries) {
+        entries.mapIndexed { i, e ->
+            if (e !is TimelineEntry.Message) return@mapIndexed TimelineRow(e)
+            val m = e.message
+            val prev = (entries.getOrNull(i - 1) as? TimelineEntry.Message)?.message
+            val next = (entries.getOrNull(i + 1) as? TimelineEntry.Message)?.message
+            TimelineRow(
+                entry = e,
+                showNickname = prev?.userId != m.userId,
+                showTime = next == null || next.userId != m.userId ||
+                    next.createdAt / 60_000 != m.createdAt / 60_000,
+            )
+        }
+    }
+
+    // 읽음 커서 + 라이브 멤버 목록 — 메시지별 안읽음 수(발신자 제외) 계산의 근거
+    val readCursors by chat.readCursors.collectAsState()
+    val myRooms by RoomService.myRooms.collectAsState()
+    val memberIds = myRooms.firstOrNull { it.roomId == room.roomId }?.memberIds ?: room.memberIds
+
+    // 백그라운드에서 수신한 메시지는 읽음 처리하지 않는다 — 복귀 시점에 한 번에 처리
+    val lifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner, room.roomId) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            when (event) {
+                androidx.lifecycle.Lifecycle.Event.ON_RESUME -> {
+                    chat.viewerActive = true
+                    chat.markRead()
+                }
+                androidx.lifecycle.Lifecycle.Event.ON_PAUSE -> chat.viewerActive = false
+                else -> {}
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     // 새 메시지가 바닥에 추가될 때만 맨 아래로 스크롤한다.
@@ -179,13 +228,18 @@ fun GroupChatSection(room: Room, modifier: Modifier = Modifier) {
             contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 14.dp, vertical = 12.dp),
             modifier = Modifier.weight(1f),
         ) {
-            items(entries, key = { it.key }) { entry ->
-                when (entry) {
+            items(rows, key = { it.entry.key }) { row ->
+                when (val entry = row.entry) {
                     is TimelineEntry.Message -> ChatBubbleRow(
                         message = entry.message,
                         isMine = entry.message.userId == uid,
                         myUserId = uid,
                         highlighted = highlightedId == entry.message.id,
+                        showNickname = row.showNickname,
+                        showTime = row.showTime,
+                        unreadCount = memberIds.count {
+                            it != entry.message.userId && (readCursors[it] ?: 0L) < entry.message.createdAt
+                        },
                         onReply = { replyingTo = entry.message },
                         onReact = { emoji -> chat.toggleReaction(entry.message.id, emoji) },
                         onCopy = { copyToClipboard(context, entry.message.text) },
@@ -318,6 +372,9 @@ private fun ChatBubbleRow(
     isMine: Boolean,
     myUserId: String,
     highlighted: Boolean,
+    showNickname: Boolean,  // 같은 발신자 연속 묶음의 첫 메시지에만
+    showTime: Boolean,      // 같은 발신자·같은 분(分) 묶음의 마지막 메시지에만
+    unreadCount: Int,       // 아직 안 읽은 멤버 수 (발신자 제외, 0이면 숨김)
     onReply: () -> Unit,
     onReact: (String) -> Unit,
     onCopy: () -> Unit,
@@ -325,11 +382,12 @@ private fun ChatBubbleRow(
     onQuoteTap: () -> Unit,
 ) {
     var showMenu by remember { mutableStateOf(false) }
+    var showPlayer by remember { mutableStateOf(false) }   // 브이로그 첨부 전체화면 재생
 
     Row(Modifier.fillMaxWidth()) {
         if (isMine) Spacer(Modifier.weight(1f, fill = true))
         Column(horizontalAlignment = if (isMine) Alignment.End else Alignment.Start) {
-            if (!isMine) {
+            if (!isMine && showNickname) {
                 Text(
                     message.nickname,
                     fontSize = 11.sp,
@@ -349,7 +407,7 @@ private fun ChatBubbleRow(
                             .clickable(onClick = onResend),
                     )
                 } else if (isMine) {
-                    TimeLabel(message.createdAt)
+                    MetaColumn(unreadCount, showTime, message.createdAt, isMine = true)
                 }
                 Box {
                     Column(
@@ -396,11 +454,15 @@ private fun ChatBubbleRow(
                             }
                             Spacer(Modifier.height(4.dp))
                         }
-                        Text(
-                            message.text,
-                            fontSize = 15.sp,
-                            color = if (isMine) Color.White else TteDarkGray,
-                        )
+                        if (message.kind == "vlog") {
+                            VlogAttachment(message, isMine) { showPlayer = true }
+                        } else {
+                            Text(
+                                message.text,
+                                fontSize = 15.sp,
+                                color = if (isMine) Color.White else TteDarkGray,
+                            )
+                        }
                     }
 
                     // 길게 눌러 반응/답장/복사 (iOS contextMenu 대응)
@@ -435,7 +497,14 @@ private fun ChatBubbleRow(
                         )
                     }
                 }
-                if (!isMine) TimeLabel(message.createdAt)
+                if (!isMine) MetaColumn(unreadCount, showTime, message.createdAt, isMine = false)
+            }
+
+            // 브이로그 첨부 전체화면 재생
+            if (showPlayer) {
+                message.attachmentUrl?.let { url ->
+                    VlogChatPlayerDialog(url) { showPlayer = false }
+                }
             }
 
             // 이모지 반응 칩
@@ -478,6 +547,100 @@ private fun ChatBubbleRow(
 @Composable
 private fun TimeLabel(millis: Long) {
     Text(timeText(millis), fontSize = 10.sp, color = TteMediumGray.copy(alpha = 0.7f))
+}
+
+// 브이로그 첨부 (서버 자동 공유, kind == "vlog") — 썸네일 탭 → 전체화면 재생.
+// 완성본은 서버 보존 기간(7일) 이후 만료된다 — 썸네일 로드 실패 시 플레이스홀더 표시.
+@Composable
+private fun VlogAttachment(message: ChatMessage, isMine: Boolean, onPlay: () -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier
+                .width(168.dp)
+                .height(224.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(Color.Black.copy(alpha = 0.15f))
+                .clickable(onClick = onPlay),
+        ) {
+            if (message.thumbUrl != null) {
+                coil3.compose.AsyncImage(
+                    model = message.thumbUrl,
+                    contentDescription = null,
+                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                    modifier = Modifier.matchParentSize(),
+                )
+            } else {
+                Icon(
+                    Icons.Filled.Movie,
+                    contentDescription = null,
+                    tint = if (isMine) Color.White.copy(alpha = 0.7f) else TteMediumGray,
+                    modifier = Modifier.size(30.dp),
+                )
+            }
+            Icon(
+                Icons.Filled.PlayCircle,
+                contentDescription = null,
+                tint = Color.White.copy(alpha = 0.92f),
+                modifier = Modifier.size(46.dp),
+            )
+        }
+        Text(
+            message.text,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Medium,
+            color = if (isMine) Color.White else TteDarkGray,
+        )
+    }
+}
+
+// 채팅방에서 공유된 브이로그 전체화면 재생 (iOS VlogChatPlayerView 대응)
+@Composable
+private fun VlogChatPlayerDialog(url: String, onDismiss: () -> Unit) {
+    androidx.compose.ui.window.Dialog(
+        onDismissRequest = onDismiss,
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(Color.Black)
+        ) {
+            androidx.compose.ui.viewinterop.AndroidView(
+                factory = { ctx ->
+                    android.widget.VideoView(ctx).apply {
+                        setVideoURI(android.net.Uri.parse(url))
+                        setMediaController(android.widget.MediaController(ctx).also { it.setAnchorView(this) })
+                        setOnPreparedListener { it.start() }
+                        // 만료(7일 경과)·네트워크 오류 — 크래시 대신 시스템 오류 다이얼로그 억제
+                        setOnErrorListener { _, _, _ -> true }
+                    }
+                },
+                modifier = Modifier.fillMaxSize(),
+            )
+            Icon(
+                Icons.Filled.Cancel,
+                contentDescription = stringResource(R.string.common_cancel),
+                tint = Color.White.copy(alpha = 0.85f),
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(16.dp)
+                    .size(30.dp)
+                    .clickable(onClick = onDismiss),
+            )
+        }
+    }
+}
+
+// 말풍선 바깥 메타 — 카톡처럼 안읽음 숫자(시그니처 컬러)를 시간 위에 세로로 쌓는다
+@Composable
+private fun MetaColumn(unreadCount: Int, showTime: Boolean, millis: Long, isMine: Boolean) {
+    Column(horizontalAlignment = if (isMine) Alignment.End else Alignment.Start) {
+        if (unreadCount > 0) {
+            Text("$unreadCount", fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = TteOrange)
+        }
+        if (showTime) TimeLabel(millis)
+    }
 }
 
 // MARK: - 시스템(활동) 메시지 (iOS SystemMessageRow)

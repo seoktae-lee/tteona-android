@@ -112,6 +112,8 @@ fun VlogGenerationScreen(
     course: Course,
     sessionId: String,
     thumbnailCourseId: String? = null,
+    // 세션 시작 때 위치를 공유한 방들 — 공유 설정이 켜져 있으면 완성본이 이 방들에 자동 공유된다
+    shareRoomIds: Set<String> = emptySet(),
     // 완료 후 "홈으로" — 세션을 정리하고 세션 화면까지 닫는다.
     onDismissToHome: () -> Unit,
     // 포맷/BGM 선택·에러 화면에서 닫기 — 세션 화면으로 되돌아가 기록을 보존한다.
@@ -249,6 +251,9 @@ fun VlogGenerationScreen(
                     VlogServerService.ErrorKind.DEFINITIVE,
                 )
             }
+            // 방 선택 시트의 "완성된 브이로그도 공유" 토글과 같은 프리퍼런스를 본다
+            val shareVlogPref = context.getSharedPreferences("tteona_prefs", android.content.Context.MODE_PRIVATE)
+                .getBoolean("vlog.shareToRooms", true)
             val result = VlogServerService.generate(
                 context = context,
                 course = course,
@@ -258,6 +263,7 @@ fun VlogGenerationScreen(
                 bgm = selectedBgm,
                 watermark = !isPro,
                 priority = isPro,
+                shareRoomIds = if (shareVlogPref) shareRoomIds.toList() else emptyList(),
                 onProgress = { p, stage ->
                     withContext(Dispatchers.Main) {
                         progress = p

@@ -55,6 +55,12 @@ fun RoomSelectSheet(
     val myRooms by RoomService.myRooms.collectAsState()
     var selectedRoomIds by remember { mutableStateOf<Set<String>>(emptySet()) }
 
+    // 완성된 브이로그를 선택한 방 채팅에 자동 공유할지 — 위치 공유와 별개의 동의라 토글로 분리.
+    // 설정은 기억된다 (VlogGenerationScreen이 같은 키를 읽어 잡 생성 시 서버에 전달).
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val prefs = remember { context.getSharedPreferences("tteona_prefs", android.content.Context.MODE_PRIVATE) }
+    var shareVlog by remember { mutableStateOf(prefs.getBoolean("vlog.shareToRooms", true)) }
+
     LaunchedEffect(Unit) {
         AuthService.currentUser.value?.uid?.let { RoomService.startListeningMyRooms(it) }
     }
@@ -107,6 +113,30 @@ fun RoomSelectSheet(
                             Text(stringResource(R.string.roomselect_members, room.memberIds.size), fontSize = 13.sp, color = TteMediumGray)
                         }
                     }
+                }
+            }
+
+            // 브이로그 자동 공유 토글 — 방을 하나라도 골랐을 때만 의미가 있다 (iOS RoomSelectView 대응)
+            if (selectedRoomIds.isNotEmpty()) {
+                Spacer(Modifier.height(16.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp),
+                ) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(stringResource(R.string.roomselect_shareVlog), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = TteDarkGray)
+                        Text(stringResource(R.string.roomselect_shareVlogHint), fontSize = 12.sp, color = TteMediumGray)
+                    }
+                    androidx.compose.material3.Switch(
+                        checked = shareVlog,
+                        onCheckedChange = {
+                            shareVlog = it
+                            prefs.edit().putBoolean("vlog.shareToRooms", it).apply()
+                        },
+                        colors = androidx.compose.material3.SwitchDefaults.colors(checkedTrackColor = TteOrange),
+                    )
                 }
             }
 

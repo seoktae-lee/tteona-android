@@ -136,6 +136,8 @@
     <string name="roomselect_subtitle">選択したグループに今日の記録がシェアされます</string>
     <string name="roomselect_members">メンバー%d人</string>
     <string name="roomselect_startWithoutSharing">シェアせずに開始</string>
+    <string name="roomselect_shareVlog">完成したVlogもシェア</string>
+    <string name="roomselect_shareVlogHint">動画が完成すると選択したルームに自動で投稿されます</string>
     <string name="roomselect_start">開始する</string>
     <string name="region_title">地域検索</string>
     <string name="common_close">閉じる</string>

@@ -80,7 +80,17 @@ data class TranslateResponse(val translations: List<String> = emptyList(), val t
 
 // 채팅 히스토리 (서버 PostgreSQL 컬럼명 그대로 snake_case)
 @Serializable
-data class ChatHistoryResponse(val messages: List<ChatHistoryRow> = emptyList())
+data class ChatHistoryResponse(
+    val messages: List<ChatHistoryRow> = emptyList(),
+    // 멤버별 읽음 커서 — 카톡식 안읽음 카운트 초기값 (실시간 read 브로드캐스트 전)
+    val reads: List<ChatReadRow> = emptyList(),
+)
+
+@Serializable
+data class ChatReadRow(
+    @kotlinx.serialization.SerialName("user_id") val userId: String? = null,
+    @kotlinx.serialization.SerialName("last_read_at") val lastReadAt: String? = null,
+)
 
 @Serializable
 data class ChatHistoryRow(
@@ -92,6 +102,10 @@ data class ChatHistoryRow(
     @kotlinx.serialization.SerialName("created_at") val createdAt: String? = null,
     @kotlinx.serialization.SerialName("reply_to_nickname") val replyToNickname: String? = null,
     @kotlinx.serialization.SerialName("reply_to_text") val replyToText: String? = null,
+    // 첨부 메시지 (브이로그 자동 공유) — kind='text'(기본)|'vlog'
+    val kind: String? = null,
+    @kotlinx.serialization.SerialName("attachment_url") val attachmentUrl: String? = null,
+    @kotlinx.serialization.SerialName("thumb_url") val thumbUrl: String? = null,
     val reactions: List<ChatReactionRow>? = null,
 )
 

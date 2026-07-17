@@ -136,6 +136,8 @@
     <string name="roomselect_subtitle">Today\'s records will be shared with the selected groups</string>
     <string name="roomselect_members">%d members</string>
     <string name="roomselect_startWithoutSharing">Start without sharing</string>
+    <string name="roomselect_shareVlog">Also share finished vlog</string>
+    <string name="roomselect_shareVlogHint">When your video is ready, it\'s posted to the selected rooms</string>
     <string name="roomselect_start">Start</string>
     <string name="region_title">Search Region</string>
     <string name="common_close">Close</string>

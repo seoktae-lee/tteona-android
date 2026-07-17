@@ -40,6 +40,9 @@ data class ChatMessage(
     val createdAt: Long,
     val replyToNickname: String? = null,
     val replyToText: String? = null,
+    val kind: String = "text",           // "text" | "vlog"(브이로그 자동 공유 — 서버만 생성)
+    val attachmentUrl: String? = null,   // kind != text일 때 재생 URL (?st= 공유토큰 포함)
+    val thumbUrl: String? = null,        // 첨부 썸네일 URL
     val reactions: Map<String, Set<String>> = emptyMap(), // 이모지 → 반응한 userId 집합
     val pending: Boolean = false, // 서버 확정 전 낙관적 표시
     val failed: Boolean = false,  // 전송 실패(타임아웃) — 재전송 가능
@@ -73,6 +76,15 @@ class ChatSocketService {
     private val _isLoadingOlder = MutableStateFlow(false)
     val isLoadingOlder: StateFlow<Boolean> = _isLoadingOlder
 
+    /** 멤버별 읽음 커서 (userId → 마지막으로 읽은 시각 millis) — 카톡식 안읽음 카운트의 근거.
+     *  어떤 메시지의 안읽음 수 = 커서가 메시지 시각보다 이전인 멤버 수(발신자 제외). */
+    private val _readCursors = MutableStateFlow<Map<String, Long>>(emptyMap())
+    val readCursors: StateFlow<Map<String, Long>> = _readCursors
+
+    /** 화면이 실제로 보이는 상태인가 — 백그라운드 수신 메시지를 읽음 처리하지 않기 위한 게이트.
+     *  GroupChatSection이 라이프사이클(ON_RESUME/ON_PAUSE)에 맞춰 갱신한다. */
+    var viewerActive = true
+
     private var webSocket: WebSocket? = null
     private var roomId: String? = null
     private var userId: String? = null
@@ -105,9 +117,18 @@ class ChatSocketService {
     }
 
     private suspend fun loadHistory(roomId: String) {
-        val rows = runCatching { ApiClient.api.getChatHistory(roomId, historyLimit).messages }.getOrNull() ?: return
+        val res = runCatching { ApiClient.api.getChatHistory(roomId, historyLimit) }.getOrNull() ?: return
+        val rows = res.messages
         _messages.value = rows.mapNotNull { it.toChatMessage() }
         _canLoadOlder.value = rows.size >= historyLimit // 꽉 찼으면 더 있을 수 있음
+        // 멤버별 읽음 커서 — 실시간 read 브로드캐스트가 오기 전의 초기값
+        val cursors = _readCursors.value.toMutableMap()
+        for (r in res.reads) {
+            val uid = r.userId ?: continue
+            val ts = parseDate(r.lastReadAt) ?: continue
+            cursors[uid] = maxOf(cursors[uid] ?: 0L, ts)
+        }
+        _readCursors.value = cursors
     }
 
     /** 위로 스크롤해 더 이전 메시지를 불러온다 (서버 before 커서 페이지네이션). */
@@ -293,6 +314,17 @@ class ChatSocketService {
                 joined = true
                 _isConnected.value = true
                 flushOutbox()
+                markRead() // 입장 시점까지의 메시지를 읽음 처리
+            }
+
+            // 다른 멤버의 읽음 커서 갱신 — 메시지별 안읽음 숫자가 깎인다
+            "read" -> {
+                val uid = json.optString("userId").ifEmpty { return }
+                val ts = json.optLong("ts")
+                if (ts <= 0L) return
+                val cursors = _readCursors.value.toMutableMap()
+                cursors[uid] = maxOf(cursors[uid] ?: 0L, ts)
+                _readCursors.value = cursors
             }
 
             // 인증/멤버십 검증 실패 — 연결 끊김으로 처리 (서버가 곧 close 4001/4003)
@@ -354,9 +386,27 @@ class ChatSocketService {
                     id = messageId, userId = uid, nickname = nick, text = text, createdAt = ts,
                     replyToNickname = json.optString("replyToNickname").takeIf { it.isNotEmpty() },
                     replyToText = json.optString("replyToText").takeIf { it.isNotEmpty() },
+                    kind = json.optString("kind").ifEmpty { "text" },
+                    attachmentUrl = json.optString("attachmentUrl").takeIf { it.isNotEmpty() },
+                    thumbUrl = json.optString("thumbUrl").takeIf { it.isNotEmpty() },
                 )
+                // 화면을 보고 있으면 방금 받은 메시지를 바로 읽음 처리 (백그라운드면 보류)
+                if (viewerActive) markRead()
             }
         }
+    }
+
+    // MARK: - 읽음 처리
+
+    /** 서버에 읽음 커서 갱신을 알린다. 입장 직후·새 메시지 수신·포그라운드 복귀 시 호출.
+     *  내 커서는 낙관적으로 즉시 올려 서버 에코를 기다리지 않고 화면에 반영한다. */
+    fun markRead() {
+        val uid = userId ?: return
+        if (!joined) return
+        val cursors = _readCursors.value.toMutableMap()
+        cursors[uid] = maxOf(cursors[uid] ?: 0L, System.currentTimeMillis())
+        _readCursors.value = cursors
+        sendJson(JSONObject().put("type", "read"))
     }
 
     // MARK: - 재연결 (3초 후, iOS와 동일) — 재조인 후 outbox flush로 미확정 메시지 재전송
@@ -394,6 +444,9 @@ class ChatSocketService {
             createdAt = parseDate(createdAt) ?: System.currentTimeMillis(),
             replyToNickname = replyToNickname,
             replyToText = replyToText,
+            kind = kind ?: "text",
+            attachmentUrl = attachmentUrl,
+            thumbUrl = thumbUrl,
             reactions = rx,
         )
     }

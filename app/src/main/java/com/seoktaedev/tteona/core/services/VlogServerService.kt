@@ -150,6 +150,7 @@ object VlogServerService {
         bgm: String = "auto",
         watermark: Boolean = true,
         priority: Boolean = false,
+        shareRoomIds: List<String> = emptyList(),   // 완성 시 서버가 이 방들의 채팅에 자동 공유
         onProgress: suspend (Double, String) -> Unit,
     ): GeneratedVlog = withContext(Dispatchers.IO) {
         // 로컬에 실제 존재하는 클립만 수집
@@ -213,7 +214,7 @@ object VlogServerService {
                     )
                 }
             )
-            jobId = createJob(userId, course, formats, bgm, watermark, priority, placesPayload)
+            jobId = createJob(userId, course, formats, bgm, watermark, priority, shareRoomIds, placesPayload)
             uploadedOrders = mutableSetOf()
             alreadyStarted = false
             savePending(context, sessionId, PendingJob(jobId, course.courseId, emptyList(), false, System.currentTimeMillis()))
@@ -335,6 +336,7 @@ object VlogServerService {
         bgm: String,
         watermark: Boolean,
         priority: Boolean,
+        shareRoomIds: List<String>,
         placesPayload: JsonArray,
     ): Int = retrying(3) {
         val body = JsonObject(
@@ -347,6 +349,7 @@ object VlogServerService {
                 "bgm" to JsonPrimitive(bgm),
                 "watermark" to JsonPrimitive(watermark),
                 "priority" to JsonPrimitive(priority),
+                "shareRoomIds" to JsonArray(shareRoomIds.map { JsonPrimitive(it) }),
                 "places" to placesPayload,
             )
         ).toString().toRequestBody("application/json".toMediaType())

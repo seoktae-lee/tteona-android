@@ -639,6 +639,7 @@ fun ActiveSessionScreen(
         com.seoktaedev.tteona.features.vlog.VlogGenerationScreen(
             course = reorderedCourse,
             sessionId = course.courseId,
+            shareRoomIds = roomIds,
             onDismissToHome = {
                 showVlog = false
                 ActiveSessionStore.clear()

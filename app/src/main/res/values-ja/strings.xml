@@ -132,6 +132,16 @@
     <string name="navguide_step5_message">あとは地図で最初のコースを選んで\n出発するだけです</string>
     <string name="navguide_letsGo">出発しましょう！</string>
     <string name="navguide_next">次へ %d/%d</string>
+    <string name="tutorial_myToday_text">旅のハイライト、Vlogを一緒に作りましょう！\n「私の今日」をタップしてスタート</string>
+    <string name="tutorial_capture_text">「ここで撮影」をタップして、この瞬間を5秒の動画に！\n無料でも6か所まで残せます</string>
+    <string name="tutorial_endToday_text">最初の場所チップができました！「今日を終了」をタップして\nVlogにしてみましょう</string>
+    <string name="tutorial_vlogOnly_hint">「Vlogだけ作成」をタップ！</string>
+    <string name="tutorial_format_text">撮影の向きに合ったフォーマットを選んでおきました。\nこのまま作ってみましょう？</string>
+    <string name="tutorial_bgm_text">最後です！「自動おすすめ」が旅の雰囲気に合う\n音楽を選んでくれます。さっそく作りましょう！</string>
+    <string name="tutorial_done_title">初めてのVlog完成！</string>
+    <string name="tutorial_done_message">今回は1か所だけでしたが、無料でも「私の今日」1回で最大6か所を5秒ずつ残せます。次の旅はもっと豊かに作ってみましょう！</string>
+    <string name="tutorial_done_button">わかりました！</string>
+    <string name="tutorial_skip">チュートリアルを閉じる</string>
     <string name="roomselect_title">どこにシェアしますか？</string>
     <string name="roomselect_subtitle">選択したグループに今日の記録がシェアされます</string>
     <string name="roomselect_members">メンバー%d人</string>

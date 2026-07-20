@@ -95,6 +95,10 @@ import com.seoktaedev.tteona.core.services.ProManager
 import com.seoktaedev.tteona.core.services.VlogClips
 import com.seoktaedev.tteona.core.services.VlogServerService
 import com.seoktaedev.tteona.core.util.Haptics
+import com.seoktaedev.tteona.features.tutorial.TutorialBubble
+import com.seoktaedev.tteona.features.tutorial.TutorialCelebrateOverlay
+import com.seoktaedev.tteona.features.tutorial.VlogTutorial
+import com.seoktaedev.tteona.features.tutorial.tutorialGlow
 import com.seoktaedev.tteona.ui.theme.TteOrange
 import com.seoktaedev.tteona.ui.theme.glowCircle
 import kotlinx.coroutines.CancellationException
@@ -193,8 +197,14 @@ fun VlogGenerationScreen(
         }
     }
 
+    // 브이로그 화면을 완성 전에 나가면 튜토리얼을 '오늘 종료' 단계로 되돌린다 (칩은 남아 있음)
+    fun exitVlog() {
+        VlogTutorial.handleVlogExit()
+        onBack()
+    }
+
     // 포맷 선택 단계에서 뒤로가기 = 세션 화면 복귀(기록 보존). 그 외 단계는 뒤로가기를 막는다.
-    BackHandler { if (phase == Phase.CHOOSE_FORMAT) onBack() }
+    BackHandler { if (phase == Phase.CHOOSE_FORMAT) exitVlog() }
 
     when (phase) {
         Phase.CHOOSE_FORMAT -> ChooseFormatView(
@@ -205,8 +215,11 @@ fun VlogGenerationScreen(
                 if (locked) showProNotice = true
                 else selectedFormats = if (key in selectedFormats) selectedFormats - key else selectedFormats + key
             },
-            onNext = { phase = Phase.CHOOSE_BGM },
-            onClose = onBack,
+            onNext = {
+                VlogTutorial.advance(VlogTutorial.Step.CHOOSE_BGM)
+                phase = Phase.CHOOSE_BGM
+            },
+            onClose = { exitVlog() },
         )
         Phase.CHOOSE_BGM -> ChooseBgmView(
             courseTagLabel = stringResource(course.tag.labelRes),
@@ -230,7 +243,7 @@ fun VlogGenerationScreen(
             canResume = canResume,
             onRetry = { attempt++; phase = Phase.GENERATING },
             // 실패 후 돌아가기 = 세션 화면 복귀(클립 보존 → 재시도·재촬영 가능, iOS와 동일)
-            onDismiss = onBack,
+            onDismiss = { exitVlog() },
         )
     }
 
@@ -286,6 +299,8 @@ fun VlogGenerationScreen(
                 )
             }
             phase = Phase.PREVIEW
+            // 튜토리얼: 첫 브이로그 완성 → 축하 카드
+            VlogTutorial.advance(VlogTutorial.Step.CELEBRATE)
         } catch (e: CancellationException) {
             throw e   // 화면 이탈 등 정상 취소 — 에러 화면을 띄우지 않는다
         } catch (e: Exception) {
@@ -318,6 +333,7 @@ private fun ChooseFormatView(
     onNext: () -> Unit,
     onClose: () -> Unit,
 ) {
+    val tutStep by VlogTutorial.step.collectAsState()
     Box(Modifier.fillMaxSize()) {
         VlogAuroraBackground()
         Column(
@@ -363,6 +379,15 @@ private fun ChooseFormatView(
 
             Spacer(Modifier.weight(1f))
 
+            // 튜토리얼: 기본 포맷 그대로 다음 단계로 유도
+            if (tutStep == VlogTutorial.Step.CHOOSE_FORMAT) {
+                TutorialBubble(
+                    text = stringResource(R.string.tutorial_format_text),
+                    mascotRes = R.drawable.tteoni_travel,
+                ) { VlogTutorial.finish() }
+                Spacer(Modifier.height(8.dp))
+            }
+
             Box(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier
@@ -371,6 +396,7 @@ private fun ChooseFormatView(
                     .height(56.dp)
                     .clip(RoundedCornerShape(16.dp))
                     .background(TteOrange)
+                    .tutorialGlow(tutStep == VlogTutorial.Step.CHOOSE_FORMAT, cornerRadius = 16)
                     .clickable(onClick = onNext),
             ) {
                 Text(
@@ -416,19 +442,27 @@ private fun FormatRow(
         Icon(icon, contentDescription = null, tint = if (isOn) TteOrange else Color.White.copy(alpha = 0.5f), modifier = Modifier.width(30.dp).size(22.dp))
         Column(verticalArrangement = Arrangement.spacedBy(2.dp), modifier = Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(title, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+                // 제목은 남는 폭 안에서만 차지하고, 좁으면 말줄임 — 뱃지가 눌려 세로로 뭉치지 않게 한다
+                Text(
+                    title, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Color.White,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
                 Text(
                     ratio, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = TteOrange,
+                    maxLines = 1, softWrap = false,
                     modifier = Modifier
-                        .clip(CircleShape)
+                        .clip(RoundedCornerShape(50))
                         .background(TteOrange.copy(alpha = 0.18f))
                         .padding(horizontal = 7.dp, vertical = 2.dp),
                 )
                 when {
+                    // 라운드 pill + 단일 줄 — 긴 문구(영어)에서도 원형 blob으로 뭉치지 않는다
                     badge != null -> Text(
                         "✨ $badge", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White,
+                        maxLines = 1, softWrap = false,
                         modifier = Modifier
-                            .clip(CircleShape)
+                            .clip(RoundedCornerShape(50))
                             .background(TteOrange)
                             .padding(horizontal = 8.dp, vertical = 3.dp),
                     )
@@ -478,6 +512,7 @@ private fun ChooseBgmView(
     onNext: () -> Unit,
     onBack: () -> Unit,
 ) {
+    val tutStep by VlogTutorial.step.collectAsState()
     var tracks by remember { mutableStateOf<List<VlogServerService.BgmTrack>>(emptyList()) }
     var playingTrackId by remember { mutableStateOf<String?>(null) }
     val player = remember { MediaPlayer() }
@@ -558,6 +593,15 @@ private fun ChooseBgmView(
                 }
             }
 
+            // 튜토리얼: 자동 추천 BGM 그대로 생성 유도
+            if (tutStep == VlogTutorial.Step.CHOOSE_BGM) {
+                TutorialBubble(
+                    text = stringResource(R.string.tutorial_bgm_text),
+                    mascotRes = R.drawable.tteoni_wink,
+                ) { VlogTutorial.finish() }
+                Spacer(Modifier.height(8.dp))
+            }
+
             Box(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier
@@ -566,6 +610,7 @@ private fun ChooseBgmView(
                     .height(56.dp)
                     .clip(RoundedCornerShape(16.dp))
                     .background(TteOrange)
+                    .tutorialGlow(tutStep == VlogTutorial.Step.CHOOSE_BGM, cornerRadius = 16)
                     .clickable {
                         stopPreview()
                         onNext()
@@ -699,6 +744,7 @@ private fun VlogPreviewView(
     onDismiss: () -> Unit,
 ) {
     val context = LocalContext.current
+    val tutStep by VlogTutorial.step.collectAsState()
     var thumbState by remember { mutableStateOf(ThumbState.IDLE) }
 
     val thumbPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
@@ -873,6 +919,11 @@ private fun VlogPreviewView(
                 Spacer(Modifier.weight(1f))
             }
         }
+        }
+
+        // 튜토리얼 완주 — 축하 + 무료 한도(6곳×5초) 안내
+        if (tutStep == VlogTutorial.Step.CELEBRATE) {
+            TutorialCelebrateOverlay { VlogTutorial.finish() }
         }
     }
 }

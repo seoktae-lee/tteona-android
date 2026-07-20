@@ -132,6 +132,16 @@
     <string name="navguide_step5_message">Now just pick your first course\non the map and set off</string>
     <string name="navguide_letsGo">Let\'s go!</string>
     <string name="navguide_next">Next %d/%d</string>
+    <string name="tutorial_myToday_text">Let\'s make your first travel vlog together!\nTap \'My Today\' to begin</string>
+    <string name="tutorial_capture_text">Tap \'Capture here\' to record this moment in 5 seconds!\nFree plan fits up to 6 places</string>
+    <string name="tutorial_endToday_text">Your first place chip is in! Now tap \'End today\'\nto turn it into a vlog</string>
+    <string name="tutorial_vlogOnly_hint">Tap \'Create vlog only\'!</string>
+    <string name="tutorial_format_text">We pre-picked the format that matches how you filmed.\nShall we go with it?</string>
+    <string name="tutorial_bgm_text">Last step! \'Auto pick\' chooses music that fits\nyour trip\'s mood. Let\'s make it!</string>
+    <string name="tutorial_done_title">First vlog complete!</string>
+    <string name="tutorial_done_message">You captured one place this time — but even on the free plan, a single \'My Today\' can hold up to 6 places, 5 seconds each. Make your next trip even richer!</string>
+    <string name="tutorial_done_button">Got it!</string>
+    <string name="tutorial_skip">Dismiss tutorial</string>
     <string name="roomselect_title">Where should we share?</string>
     <string name="roomselect_subtitle">Today\'s records will be shared with the selected groups</string>
     <string name="roomselect_members">%d members</string>
@@ -245,8 +255,8 @@
     <string name="vlog_format_insta">Instagram · Square</string>
     <string name="vlog_format_included">Included · matches filming orientation</string>
     <string name="vlog_format_blurConvert">Converted with blurred background</string>
-    <string name="vlog_format_portraitBadge">Best for portrait footage</string>
-    <string name="vlog_format_landscapeBadge">Best for landscape footage</string>
+    <string name="vlog_format_portraitBadge">For portrait</string>
+    <string name="vlog_format_landscapeBadge">For landscape</string>
     <string name="vlog_format_squareCrop">Cropped to fill without margins</string>
     <string name="vlog_makeVersions">Create %d versions</string>
     <string name="vlog_bgmSheet_title">Which music should we add?</string>

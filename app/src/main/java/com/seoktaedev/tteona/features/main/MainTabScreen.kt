@@ -30,6 +30,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -54,6 +55,7 @@ import com.seoktaedev.tteona.features.explore.ExploreScreen
 import com.seoktaedev.tteona.features.group.GroupListScreen
 import com.seoktaedev.tteona.features.home.HomeScreen
 import com.seoktaedev.tteona.features.session.ActiveSessionScreen
+import kotlinx.coroutines.launch
 
 // iOS MainTabView와 동일한 4탭 구성: 홈(지도) / 탐색 / 채팅(그룹) / 프로필
 private data class TabItem(val labelRes: Int, val icon: ImageVector)
@@ -302,16 +304,22 @@ fun MainTabScreen(initialTab: Int = 0, previewFootprintDemo: Boolean = false) {
         }
 
         // 첫 진입 나루 내비게이션 가이드 — 계정별 1회 (iOS hasSeenNavGuide, 딥링크 진입 시 방해 안 함)
+        val tutorialScope = rememberCoroutineScope()
         var showNavGuide by remember { mutableStateOf(false) }
         LaunchedEffect(authUser?.uid) {
             val uid = authUser?.uid ?: return@LaunchedEffect
+            // 딥링크로 진입한 경우엔 코치마크·튜토리얼로 방해하지 않는다
+            if (DeepLinkHandler.pendingCourseId.value != null ||
+                DeepLinkHandler.pendingRoomCode.value != null
+            ) return@LaunchedEffect
             val prefs = context.getSharedPreferences("tteona", android.content.Context.MODE_PRIVATE)
-            if (!prefs.getBoolean("hasSeenNavGuide_$uid", false) &&
-                DeepLinkHandler.pendingCourseId.value == null &&
-                DeepLinkHandler.pendingRoomCode.value == null
-            ) {
+            if (!prefs.getBoolean("hasSeenNavGuide_$uid", false)) {
                 kotlinx.coroutines.delay(800)
                 showNavGuide = true
+            } else {
+                // 내비 가이드를 이미 본 계정(기존 유저 포함) — 진입 1.2초 후 첫 브이로그 튜토리얼 1회 노출
+                kotlinx.coroutines.delay(1200)
+                com.seoktaedev.tteona.features.tutorial.VlogTutorial.beginIfNeeded(context, uid)
             }
         }
         if (showNavGuide) {
@@ -322,6 +330,11 @@ fun MainTabScreen(initialTab: Int = 0, previewFootprintDemo: Boolean = false) {
                     authUser?.uid?.let { uid ->
                         context.getSharedPreferences("tteona", android.content.Context.MODE_PRIVATE)
                             .edit().putBoolean("hasSeenNavGuide_$uid", true).apply()
+                        // 내비 가이드 종료 0.6초 후 첫 브이로그 튜토리얼 시작 (iOS onFinish 후 0.6s)
+                        tutorialScope.launch {
+                            kotlinx.coroutines.delay(600)
+                            com.seoktaedev.tteona.features.tutorial.VlogTutorial.beginIfNeeded(context, uid)
+                        }
                     }
                     showNavGuide = false
                 },

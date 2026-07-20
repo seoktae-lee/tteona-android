@@ -91,6 +91,10 @@ import com.seoktaedev.tteona.core.services.SessionForegroundService
 import com.seoktaedev.tteona.core.services.UserService
 import com.seoktaedev.tteona.core.services.VlogClips
 import com.seoktaedev.tteona.core.util.Haptics
+import com.seoktaedev.tteona.features.tutorial.TutorialBubble
+import com.seoktaedev.tteona.features.tutorial.TutorialHintChip
+import com.seoktaedev.tteona.features.tutorial.VlogTutorial
+import com.seoktaedev.tteona.features.tutorial.tutorialGlow
 import com.seoktaedev.tteona.ui.theme.BadgeNumberTextStyle
 import com.seoktaedev.tteona.ui.theme.Pretendard
 import com.seoktaedev.tteona.ui.theme.TteDarkGray
@@ -155,6 +159,9 @@ fun ImpromptuSessionScreen(
     var showPaywall by remember { mutableStateOf(false) }
     var didStart by remember { mutableStateOf(false) }
 
+    // 첫 브이로그 튜토리얼 — 세션 화면의 각 단계에서 실제 버튼을 누르도록 안내한다 (iOS와 동일)
+    val tutStep by VlogTutorial.step.collectAsState()
+
     // 세션 누적 촬영 길이(초) — 진행률 바용. 장소 변경·카메라 복귀 시 클립 파일 기준 재집계 (iOS recordedSeconds)
     var recordedSeconds by remember { mutableStateOf(0.0) }
     val budgetSeconds = com.seoktaedev.tteona.core.services.ProManager.vlogBudgetSeconds
@@ -196,6 +203,8 @@ fun ImpromptuSessionScreen(
         if (validated.size < saved.places.size) showIntegrityAlert = true
         capturedPlaces = validated
         reorderPlaces()
+        // 튜토리얼: 이전 세션에 이미 칩이 있으면 촬영 단계는 건너뛴다
+        if (validated.isNotEmpty()) VlogTutorial.advance(VlogTutorial.Step.END_TODAY)
         if (saved.roomIds.isNotEmpty()) activeRoomIds = saved.roomIds.toSet()
     }
 
@@ -229,6 +238,8 @@ fun ImpromptuSessionScreen(
     LaunchedEffect(Unit) {
         if (didStart) return@LaunchedEffect
         didStart = true
+        // 튜토리얼: '나의 오늘' 진입 확인 → 촬영 유도 단계로
+        VlogTutorial.advance(VlogTutorial.Step.CAPTURE_HERE)
         val saved = ImpromptuSessionStore.loadTodaySession()
         if (saved != null && saved.places.isNotEmpty()) {
             showResumeSheet = true
@@ -305,6 +316,8 @@ fun ImpromptuSessionScreen(
         val place = pendingPlace ?: return
         Haptics.success(view)
         capturedPlaces = capturedPlaces + place
+        // 튜토리얼: 첫 장소 칩 확인 → '오늘 종료' 유도 단계로
+        if (capturedPlaces.size == 1) VlogTutorial.advance(VlogTutorial.Step.END_TODAY)
         reorderPlaces()
         ImpromptuSessionStore.save(capturedPlaces, activeRoomIds.toList())
         if (uid.isNotEmpty()) {
@@ -330,11 +343,22 @@ fun ImpromptuSessionScreen(
         VlogClips.deleteClip(context, place, sessionId)
         capturedPlaces = capturedPlaces.filter { it.order != place.order }
         reorderPlaces()
-        if (capturedPlaces.isEmpty()) ImpromptuSessionStore.clear()
-        else ImpromptuSessionStore.save(capturedPlaces)
+        if (capturedPlaces.isEmpty()) {
+            ImpromptuSessionStore.clear()
+            // 튜토리얼: 칩이 다 사라지면 촬영 유도 단계로 복귀
+            VlogTutorial.regress(VlogTutorial.Step.CAPTURE_HERE)
+        } else {
+            ImpromptuSessionStore.save(capturedPlaces)
+        }
     }
 
-    BackHandler { onClose() }
+    // 세션을 브이로그 완성 전에 나가면 튜토리얼을 처음 단계로 되돌린다 (완주/종료 후엔 no-op)
+    fun exitSession() {
+        VlogTutorial.handleSessionExit()
+        onClose()
+    }
+
+    BackHandler { exitSession() }
 
     Box(Modifier.fillMaxSize()) {
         // 지도
@@ -409,7 +433,7 @@ fun ImpromptuSessionScreen(
                     .size(40.dp)
                     .clip(CircleShape)
                     .background(Color.Black.copy(alpha = 0.5f))
-                    .clickable(onClick = onClose),
+                    .clickable { exitSession() },
             ) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.common_close), tint = Color.White, modifier = Modifier.size(18.dp))
             }
@@ -448,15 +472,42 @@ fun ImpromptuSessionScreen(
                     .clip(CircleShape)
                     .background(TteOrange),
             ) {
-                Text(stringResource(R.string.main_placeCount, capturedPlaces.size), fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                // 원 안에는 장소 개수만 — "N places" 같은 긴 문자열은 원 밖으로 넘쳐 화면 오른쪽이 잘린다 (전 언어 공통)
+                Text(
+                    "${capturedPlaces.size}",
+                    fontSize = 17.sp, fontWeight = FontWeight.Bold, color = Color.White,
+                    maxLines = 1, style = BadgeNumberTextStyle,
+                )
             }
         }
 
-        // 하단 패널 (iOS bottomPanel)
+        // 하단 패널 (iOS bottomPanel) — 카드 위에 튜토리얼 말풍선(촬영/종료)을 얹는다
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth(),
+        ) {
+            when (tutStep) {
+                VlogTutorial.Step.CAPTURE_HERE -> {
+                    TutorialBubble(
+                        text = stringResource(R.string.tutorial_capture_text),
+                        mascotRes = R.drawable.tteoni_travel,
+                    ) { VlogTutorial.finish() }
+                    Spacer(Modifier.height(6.dp))
+                }
+                VlogTutorial.Step.END_TODAY -> {
+                    TutorialBubble(
+                        text = stringResource(R.string.tutorial_endToday_text),
+                        mascotRes = R.drawable.tteoni_wink,
+                    ) { VlogTutorial.finish() }
+                    Spacer(Modifier.height(6.dp))
+                }
+                else -> {}
+            }
         Column(
             verticalArrangement = Arrangement.spacedBy(12.dp),
             modifier = Modifier
-                .align(Alignment.BottomCenter)
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
                 .background(MaterialTheme.colorScheme.background)
@@ -540,6 +591,7 @@ fun ImpromptuSessionScreen(
                         .height(54.dp)
                         .clip(RoundedCornerShape(14.dp))
                         .background(if (budgetFull) TteMediumGray else TteOrange)
+                        .tutorialGlow(tutStep == VlogTutorial.Step.CAPTURE_HERE, cornerRadius = 14)
                         .clickable(enabled = !isResolvingLocation && !budgetFull) { startCapture() },
                 ) {
                     Spacer(Modifier.weight(1f))
@@ -562,6 +614,7 @@ fun ImpromptuSessionScreen(
                             .height(54.dp)
                             .clip(RoundedCornerShape(14.dp))
                             .border(1.5.dp, TteOrange, RoundedCornerShape(14.dp))
+                            .tutorialGlow(tutStep == VlogTutorial.Step.END_TODAY, cornerRadius = 14)
                             .clickable { showEndSheet = true }
                             .padding(horizontal = 20.dp),
                     ) {
@@ -570,6 +623,12 @@ fun ImpromptuSessionScreen(
                 }
             }
         }
+        }
+    }
+
+    // 오늘 종료 시트가 열리면 튜토리얼을 '브이로그만 생성하기' 단계로 (iOS endSheet onAppear)
+    LaunchedEffect(showEndSheet) {
+        if (showEndSheet) VlogTutorial.advance(VlogTutorial.Step.CHOOSE_VLOG_ONLY)
     }
 
     // 1단계: 장소 선택 (iOS PlacePickerView 시트)
@@ -738,6 +797,12 @@ fun ImpromptuSessionScreen(
                     modifier = Modifier.padding(top = 6.dp, bottom = 28.dp),
                 )
 
+                // 튜토리얼: '브이로그만 생성하기'를 누르도록 유도하는 힌트 칩
+                if (tutStep == VlogTutorial.Step.CHOOSE_VLOG_ONLY) {
+                    TutorialHintChip(text = stringResource(R.string.tutorial_vlogOnly_hint))
+                    Spacer(Modifier.height(10.dp))
+                }
+
                 // 두 가지 마무리 방식 — 좌우 정사각형 카드로 한눈에 비교 (iOS endChoiceCard)
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     EndChoiceCard(
@@ -745,8 +810,11 @@ fun ImpromptuSessionScreen(
                         title = stringResource(R.string.impromptu_vlogOnly_title),
                         subtitle = stringResource(R.string.impromptu_vlogOnly_subtitle),
                         isPrimary = true,
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier
+                            .weight(1f)
+                            .tutorialGlow(tutStep == VlogTutorial.Step.CHOOSE_VLOG_ONLY, cornerRadius = 20),
                     ) {
+                        VlogTutorial.advance(VlogTutorial.Step.CHOOSE_FORMAT)
                         buildCourseAndEnd(saveToFirestore = false, courseName = "", tag = CourseTag.FRIENDS)
                         showEndSheet = false
                         showVlog = true
@@ -855,6 +923,7 @@ fun ImpromptuSessionScreen(
                         .clip(RoundedCornerShape(14.dp))
                         .background(if (nameValid) TteOrange else Color.Gray.copy(alpha = 0.4f))
                         .clickable(enabled = nameValid) {
+                            VlogTutorial.advance(VlogTutorial.Step.CHOOSE_FORMAT)
                             buildCourseAndEnd(saveToFirestore = true, courseName = courseName, tag = selectedTag)
                             showSaveCourse = false
                             showVlog = true

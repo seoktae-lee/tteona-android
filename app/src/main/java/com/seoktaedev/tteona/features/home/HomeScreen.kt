@@ -86,6 +86,7 @@ import com.google.maps.android.compose.MarkerComposable
 import com.google.maps.android.compose.rememberCameraPositionState
 import com.google.maps.android.compose.rememberUpdatedMarkerState
 import com.seoktaedev.tteona.R
+import com.seoktaedev.tteona.features.tutorial.tutorialGlow
 import com.seoktaedev.tteona.core.auth.AuthService
 import com.seoktaedev.tteona.core.model.Course
 import com.seoktaedev.tteona.core.model.CourseTag
@@ -466,19 +467,36 @@ fun HomeScreen(
                     .padding(bottom = 24.dp),
             ) {
                 // 나의 오늘 — 하단 정중앙 고정 CTA (iOS createCourseButton)
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .shadow(12.dp, CircleShape, spotColor = TteOrange)
-                        .clip(CircleShape)
-                        .background(TteOrange)
-                        .clickable(onClick = onImpromptuTap)
-                        .padding(horizontal = 32.dp, vertical = 16.dp),
+                // 첫 브이로그 튜토리얼 1단계 — 말풍선 안내 + 버튼 글로우/반짝임으로 '나의 오늘'을 누르도록 유도
+                val tutorialStep by com.seoktaedev.tteona.features.tutorial.VlogTutorial.step.collectAsState()
+                val tutOnMyToday = tutorialStep == com.seoktaedev.tteona.features.tutorial.VlogTutorial.Step.TAP_MY_TODAY
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.align(Alignment.BottomCenter),
                 ) {
-                    Icon(Icons.AutoMirrored.Filled.DirectionsWalk, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
-                    Text(stringResource(R.string.main_myToday), fontSize = 17.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                    if (tutOnMyToday) {
+                        com.seoktaedev.tteona.features.tutorial.TutorialBubble(
+                            text = stringResource(R.string.tutorial_myToday_text),
+                        ) { com.seoktaedev.tteona.features.tutorial.VlogTutorial.finish() }
+                        Spacer(Modifier.height(8.dp))
+                    }
+                    Box(contentAlignment = Alignment.Center) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier
+                                .shadow(12.dp, CircleShape, spotColor = TteOrange)
+                                .clip(CircleShape)
+                                .background(TteOrange)
+                                .clickable(onClick = onImpromptuTap)
+                                .tutorialGlow(tutOnMyToday, cornerRadius = 27)
+                                .padding(horizontal = 32.dp, vertical = 16.dp),
+                        ) {
+                            Icon(Icons.AutoMirrored.Filled.DirectionsWalk, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+                            Text(stringResource(R.string.main_myToday), fontSize = 17.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                        }
+                        if (tutOnMyToday) com.seoktaedev.tteona.features.tutorial.TutorialSparkles(Modifier.matchParentSize())
+                    }
                 }
 
                 // 좌측 — 이어하기 도크 (세로 스택 → 중앙 CTA와 겹침 방지, iOS miniDockButton)

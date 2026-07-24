@@ -44,3 +44,13 @@
 -dontwarn org.conscrypt.**
 -dontwarn org.bouncycastle.**
 -dontwarn org.openjsse.**
+
+# ── Kakao SDK (R8 full-mode 대응) ──────────────────────────────────────
+# Kakao SDK는 응답/에러 모델의 enum 상수와 필드를 "원래 이름"으로 리플렉션 조회한다
+# (예: AccessTokenInterceptor가 ClientError 생성 시 ClientErrorCause.TokenNotFound 를
+#  Class.getField("TokenNotFound") 로 찾음). R8이 필드/상수 이름을 난독화하면
+#  java.lang.NoSuchFieldException 으로 앱이 실행 직후 크래시한다 → 모델 필드명 보존 필수.
+# 카카오 공식 권장 규칙: https://developers.kakao.com/docs/latest/ko/android/getting-started
+-keep class com.kakao.sdk.**.model.* { <fields>; }
+-keep class * extends com.google.gson.TypeAdapter
+-dontwarn com.kakao.sdk.**

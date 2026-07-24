@@ -30,7 +30,7 @@ android {
         applicationId = "com.seoktaedev.tteona"
         minSdk = 26
         targetSdk = 36
-        versionCode = 21
+        versionCode = 22
         versionName = "1.3"
 
         // local.properties에 MAPS_API_KEY=... 형태로 저장 (VCS 제외 대상)

@@ -36,6 +36,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
@@ -79,6 +80,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -106,6 +109,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /**
  * Vlog 생성 — iOS Features/Vlog/VlogGenerationView.swift의 이식본.
@@ -138,6 +144,10 @@ fun VlogGenerationScreen(
     var selectedFormats by remember { mutableStateOf<Set<String>>(emptySet()) }
     var shotPortrait by remember { mutableStateOf<Boolean?>(null) }
     var selectedBgm by remember { mutableStateOf("auto") }
+    // 장소 자막 서체·크기 — 다음 생성에도 기억된다 (tteona_prefs, iOS @AppStorage와 동일 키)
+    val prefs = remember { context.getSharedPreferences("tteona_prefs", android.content.Context.MODE_PRIVATE) }
+    var selectedFont by remember { mutableStateOf(prefs.getString("vlog.font", "gowun") ?: "gowun") }
+    var selectedFontScale by remember { mutableStateOf(prefs.getString("vlog.fontScale", "medium") ?: "medium") }
     var showProNotice by remember { mutableStateOf(false) }
     // 서버가 아직 이 잡을 렌더링 중이라 "이어받기"가 가능한 상태인가
     var canResume by remember { mutableStateOf(false) }
@@ -226,8 +236,26 @@ fun VlogGenerationScreen(
             selectedBgm = selectedBgm,
             isPro = isPro,
             onSelect = { id, locked -> if (locked) showProNotice = true else selectedBgm = id },
-            onNext = { phase = Phase.GENERATING },
+            onNext = { phase = Phase.CHOOSE_TEXT },
             onBack = { phase = Phase.CHOOSE_FORMAT },
+        )
+        Phase.CHOOSE_TEXT -> ChooseTextView(
+            previewPlaceName = course.places.firstOrNull()?.placeName
+                ?: stringResource(R.string.vlog_font_sampleName),
+            selectedFont = selectedFont,
+            selectedFontScale = selectedFontScale,
+            onSelectFont = {
+                selectedFont = it
+                prefs.edit().putString("vlog.font", it).apply()
+                Haptics.light(view)
+            },
+            onSelectScale = {
+                selectedFontScale = it
+                prefs.edit().putString("vlog.fontScale", it).apply()
+                Haptics.light(view)
+            },
+            onNext = { phase = Phase.GENERATING },
+            onBack = { phase = Phase.CHOOSE_BGM },
         )
         Phase.GENERATING -> GeneratingView(progress = progress, stageText = stageText, courseName = course.courseName)
         Phase.PREVIEW -> vlogFile?.let { file ->
@@ -277,6 +305,8 @@ fun VlogGenerationScreen(
                 watermark = !isPro,
                 priority = isPro,
                 shareRoomIds = if (shareVlogPref) shareRoomIds.toList() else emptyList(),
+                font = selectedFont,
+                fontScale = selectedFontScale,
                 onProgress = { p, stage ->
                     withContext(Dispatchers.Main) {
                         progress = p
@@ -320,7 +350,7 @@ fun VlogGenerationScreen(
     }
 }
 
-private enum class Phase { CHOOSE_FORMAT, CHOOSE_BGM, GENERATING, PREVIEW, ERROR }
+private enum class Phase { CHOOSE_FORMAT, CHOOSE_BGM, CHOOSE_TEXT, GENERATING, PREVIEW, ERROR }
 
 // ── 포맷 선택 (iOS chooseFormatView) ────────────────────────────────────
 
@@ -628,6 +658,159 @@ private fun ChooseBgmView(
                         stopPreview()
                         onBack()
                     },
+            )
+        }
+    }
+}
+
+// ── 글씨 스타일 선택 (iOS chooseTextView) ────────────────────────────────
+
+@Composable
+private fun ChooseTextView(
+    previewPlaceName: String,
+    selectedFont: String,
+    selectedFontScale: String,
+    onSelectFont: (String) -> Unit,
+    onSelectScale: (String) -> Unit,
+    onNext: () -> Unit,
+    onBack: () -> Unit,
+) {
+    val font = VlogFont.from(selectedFont)
+    val scale = VlogFontScale.from(selectedFontScale)
+    val previewDate = remember {
+        SimpleDateFormat("yyyy.MM.dd  HH:mm", Locale.KOREA).format(Date())
+    }
+
+    Box(Modifier.fillMaxSize()) {
+        VlogAuroraBackground()
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.fillMaxSize().navigationBarsPadding(),
+        ) {
+            Spacer(Modifier.height(48.dp))
+            Text(stringResource(R.string.vlog_textSheet_title), fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color.White)
+            Text(
+                stringResource(R.string.vlog_textSheet_subtitle),
+                fontSize = 13.sp,
+                color = Color.White.copy(alpha = 0.65f),
+                modifier = Modifier.padding(top = 6.dp),
+            )
+
+            // 실제 자막이 얹히는 모습 미리보기 (영상 프레임 흉내)
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .padding(horizontal = 24.dp)
+                    .padding(top = 24.dp)
+                    .fillMaxWidth()
+                    .height(150.dp)
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(
+                        Brush.linearGradient(
+                            listOf(Color(0xFF2E1A0D), Color(0xFF4D2914)),
+                        ),
+                    ),
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        previewPlaceName,
+                        fontFamily = font.family,
+                        fontSize = (30 * scale.multiplier).sp,
+                        color = TteOrange,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        previewDate,
+                        fontFamily = font.family,
+                        fontSize = (30 * scale.multiplier * 0.62f).sp,
+                        color = Color.White,
+                        modifier = Modifier.padding(top = 6.dp),
+                    )
+                }
+            }
+
+            Column(
+                verticalArrangement = Arrangement.spacedBy(18.dp),
+                modifier = Modifier
+                    .weight(1f)
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 24.dp)
+                    .padding(top = 22.dp, bottom = 12.dp),
+            ) {
+                // 서체
+                Text(stringResource(R.string.vlog_textSheet_fontLabel), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Color.White.copy(alpha = 0.75f))
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                ) {
+                    VlogFont.entries.forEach { f ->
+                        val isOn = f.key == selectedFont
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier
+                                .height(46.dp)
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(Color.White.copy(alpha = if (isOn) 0.14f else 0.06f))
+                                .then(if (isOn) Modifier.border(1.5.dp, TteOrange, RoundedCornerShape(14.dp)) else Modifier)
+                                .clickable { onSelectFont(f.key) }
+                                .padding(horizontal = 16.dp),
+                        ) {
+                            Text(
+                                stringResource(f.labelRes),
+                                fontFamily = f.family,
+                                fontSize = 17.sp,
+                                color = if (isOn) Color.White else Color.White.copy(alpha = 0.7f),
+                            )
+                        }
+                    }
+                }
+
+                // 크기
+                Text(stringResource(R.string.vlog_textSheet_sizeLabel), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Color.White.copy(alpha = 0.75f))
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                    VlogFontScale.entries.forEach { s ->
+                        val isOn = s.key == selectedFontScale
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(48.dp)
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(Color.White.copy(alpha = if (isOn) 0.14f else 0.06f))
+                                .then(if (isOn) Modifier.border(1.5.dp, TteOrange, RoundedCornerShape(14.dp)) else Modifier)
+                                .clickable { onSelectScale(s.key) },
+                        ) {
+                            Text(
+                                stringResource(s.labelRes),
+                                fontSize = 15.sp,
+                                fontWeight = if (isOn) FontWeight.Bold else FontWeight.Normal,
+                                color = if (isOn) Color.White else Color.White.copy(alpha = 0.7f),
+                            )
+                        }
+                    }
+                }
+            }
+
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .padding(horizontal = 24.dp)
+                    .fillMaxWidth()
+                    .height(56.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(TteOrange)
+                    .clickable { onNext() },
+            ) {
+                Text(stringResource(R.string.session_makeVlog), fontSize = 17.sp, fontWeight = FontWeight.Bold, color = Color.White)
+            }
+            Text(
+                stringResource(R.string.vlog_back),
+                fontSize = 14.sp,
+                color = Color.White.copy(alpha = 0.6f),
+                modifier = Modifier
+                    .padding(top = 14.dp, bottom = 36.dp)
+                    .clickable { onBack() },
             )
         }
     }

@@ -151,6 +151,8 @@ object VlogServerService {
         watermark: Boolean = true,
         priority: Boolean = false,
         shareRoomIds: List<String> = emptyList(),   // 완성 시 서버가 이 방들의 채팅에 자동 공유
+        font: String = "gowun",        // 장소 자막 서체 키 (VlogTextStyle)
+        fontScale: String = "medium",  // 장소 자막 크기 (small/medium/large)
         onProgress: suspend (Double, String) -> Unit,
     ): GeneratedVlog = withContext(Dispatchers.IO) {
         // 로컬에 실제 존재하는 클립만 수집
@@ -214,7 +216,7 @@ object VlogServerService {
                     )
                 }
             )
-            jobId = createJob(userId, course, formats, bgm, watermark, priority, shareRoomIds, placesPayload)
+            jobId = createJob(userId, course, formats, bgm, watermark, priority, shareRoomIds, font, fontScale, placesPayload)
             uploadedOrders = mutableSetOf()
             alreadyStarted = false
             savePending(context, sessionId, PendingJob(jobId, course.courseId, emptyList(), false, System.currentTimeMillis()))
@@ -337,6 +339,8 @@ object VlogServerService {
         watermark: Boolean,
         priority: Boolean,
         shareRoomIds: List<String>,
+        font: String,
+        fontScale: String,
         placesPayload: JsonArray,
     ): Int = retrying(3) {
         val body = JsonObject(
@@ -350,6 +354,8 @@ object VlogServerService {
                 "watermark" to JsonPrimitive(watermark),
                 "priority" to JsonPrimitive(priority),
                 "shareRoomIds" to JsonArray(shareRoomIds.map { JsonPrimitive(it) }),
+                "font" to JsonPrimitive(font),
+                "fontScale" to JsonPrimitive(fontScale),
                 "places" to placesPayload,
             )
         ).toString().toRequestBody("application/json".toMediaType())

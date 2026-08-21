@@ -14,6 +14,7 @@ import com.google.firebase.Firebase
 import com.google.firebase.FirebaseNetworkException
 import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuthException
+import com.google.firebase.auth.FirebaseAuthUserCollisionException
 import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.auth.auth
 import com.google.firebase.firestore.FieldValue
@@ -56,13 +57,48 @@ object AuthService {
     private val _onboardingComplete = MutableStateFlow(false)
     val onboardingComplete: StateFlow<Boolean> = _onboardingComplete
 
-    val isLoggedIn: Boolean get() = _currentUser.value != null
+    /** 익명(게스트)으로 앱을 쓰는 중 — 서버에 쓸 신원은 있지만 계정은 없다 */
+    private val _isGuest = MutableStateFlow(false)
+    val isGuest: StateFlow<Boolean> = _isGuest
+
+    /**
+     * **로컬 저장 경로에 쓰는 신원 uid.** 화면 게이팅과는 다른 질문에 답한다.
+     *
+     * `isLoggedIn`은 "진짜 계정인가"를 묻고, 이 값은 "지금 이 기기에서 찍고 있는 사람이
+     * 누구인가"를 묻는다. 둘을 하나로 쓰면 과도기에 저장 경로가 통째로 바뀐다 —
+     * 이메일 가입 직후 인증 대기 상태에서 currentUser를 비우면 세션 경로가
+     * `free_{uid}`에서 `free_`로 미끄러져 그날 찍은 클립을 잃는다.
+     * 익명이든 인증 대기든 Firebase 유저가 있으면 유지한다.
+     */
+    private val _identityUid = MutableStateFlow("")
+    val identityUid: StateFlow<String> = _identityUid
+
+    /**
+     * **진짜 계정**으로 로그인했는가. 익명은 false.
+     *
+     * 익명 인증을 켜면 `auth.currentUser`가 항상 채워져, 예전 정의(`!= null`)는
+     * 언제나 true가 된다 — 탭 게이팅도 결제 게이트도 통째로 열린다. 아무것도 안 깨지고
+     * 조용히 열리기 때문에 특히 위험하다.
+     * 이름을 그대로 두고 정의만 좁혀, 이 값을 보고 있던 곳들이 자동으로 옳게 동작하게 한다.
+     */
+    val isLoggedIn: Boolean get() = _currentUser.value != null && !_isGuest.value
+
+    /**
+     * 게스트 신원을 새로 만들어도 되는 시점인지. 앱 시작과 명시적 로그아웃에서만 켠다.
+     *
+     * 리스너가 null을 볼 때마다 무조건 만들면, 화면 안에서 상태를 정리하려고 부른 signOut까지
+     * 새 게스트 계정을 낳는다. 그러면 uid가 바뀌며 찍어둔 클립이 끊기고, 사용자는 가입도
+     * 로그인도 아닌 상태로 튕긴다.
+     */
+    private var wantsGuestIdentity = true
 
     // 현지화 에러 메시지용 앱 컨텍스트 — initialize/abortInitialization에서 주입
     private lateinit var appContext: Context
 
     fun initialize(context: Context) {
         appContext = context.applicationContext
+        GuestVlogQuota.initialize(appContext)
+        GuestTermsConsent.initialize(appContext)
         // 앱 재설치 시 남은 Firebase 토큰 제거 (iOS의 Keychain 잔존 토큰 처리와 동일)
         val prefs = context.getSharedPreferences("tteona", Context.MODE_PRIVATE)
         if (!prefs.getBoolean("app_installed", false)) {
@@ -73,7 +109,21 @@ object AuthService {
         auth.addAuthStateListener { firebaseAuth ->
             val user = firebaseAuth.currentUser
             scope.launch {
+                // 저장 경로용 신원은 게이팅과 별개로 유지한다 (익명·인증 대기 포함)
+                _identityUid.value = user?.uid ?: ""
                 if (user != null) {
+                    // 게스트 — Firestore는 규칙상 익명을 막으므로 조회를 시도조차 하지 않는다.
+                    // uid는 채워 둔다: 세션 폴더·서버 브이로그가 이걸 신원으로 쓴다.
+                    if (user.isAnonymous) {
+                        _isGuest.value = true
+                        _currentUser.value = AppUser(uid = user.uid, email = "")
+                        _onboardingComplete.value = false
+                        _isInitializing.value = false
+                        // 신원이 정해졌다 — 지난 게스트 세션 폴더를 치운다
+                        SessionFileHousekeeping.purgeOrphanedGuestSessions(appContext, user.uid)
+                        return@launch
+                    }
+                    _isGuest.value = false
                     // Android providerData에는 집계용 "firebase" 항목이 포함되므로 제외.
                     // 카카오(커스텀 토큰) 계정은 실제 provider가 없어 이메일 인증 대상이 아님
                     // (iOS의 allSatisfy 함정 처리와 동일한 의도).
@@ -81,7 +131,12 @@ object AuthService {
                     val isEmailPassword = providerIds.contains("password") && providerIds.all { it == "password" }
                     val needsVerification = isEmailPassword && !user.isEmailVerified
                     if (needsVerification) {
-                        // 미인증 이메일 계정 → currentUser 설정하지 않음
+                        // 미인증 이메일 계정 → currentUser 설정하지 않음.
+                        // 익명 계정을 승격시킨 직후라면 currentUser에 게스트 신원이 남아 있다.
+                        // 그대로 두면 isGuest=false + currentUser≠null이 되어 인증도 안 한 계정이
+                        // 로그인으로 잡힌다 — 명시적으로 비운다. (uid는 link로 보존되므로
+                        // 인증을 마치면 같은 uid로 돌아온다)
+                        _currentUser.value = null
                         _isInitializing.value = false
                         return@launch
                     }
@@ -92,13 +147,83 @@ object AuthService {
                     com.seoktaedev.tteona.core.services.TteonaMessagingService.registerCurrentToken(user.uid)
                     // PRO 구독 계정 동기화 (iOS ProManager.logIn 대응)
                     com.seoktaedev.tteona.core.services.ProManager.logIn(user.uid)
+                    SessionFileHousekeeping.purgeOrphanedGuestSessions(appContext, user.uid)
                 } else {
                     _currentUser.value = null
+                    _isGuest.value = false
                     _onboardingComplete.value = false
                     com.seoktaedev.tteona.core.services.ProManager.logOut()
+
+                    // 로그인 상태가 없으면 게스트 신원을 만든다.
+                    //
+                    // 여기서 isInitializing을 내리면 uid가 빈 채로 화면이 잠깐 뜨고,
+                    // 그 사이 세션 폴더가 `free_`로 잡혔다가 익명 uid를 받으면 `free_{uid}`로
+                    // 바뀐다 — 그 순간 찍어둔 클립이 어긋난다. 신원이 정해질 때까지 기다린다.
+                    if (auth.currentUser == null && wantsGuestIdentity) {
+                        signInAnonymously()
+                        return@launch   // 성공하면 리스너가 다시 불려 위 게스트 분기로 이어진다
+                    }
                 }
                 _isInitializing.value = false
             }
+        }
+    }
+
+    /** 게스트 신원 발급. 화면도 팝업도 없다 — 사용자는 이런 게 있는지 모른다. */
+    private suspend fun signInAnonymously() {
+        try {
+            auth.signInAnonymously().await()
+        } catch (e: Exception) {
+            // 오프라인 첫 실행 등. 신원이 없어도 촬영·로컬 합성은 되어야 하므로
+            // 여기서 막으면 스플래시에 갇힌다 — 신원 없이 진행시킨다.
+            Log.w("Auth", "익명 로그인 실패(신원 없이 진행)", e)
+            _isInitializing.value = false
+        }
+    }
+
+    /**
+     * 자격증명으로 계정에 들어간다. **게스트라면 갈아타지 않고 승격시킨다.**
+     *
+     * `signInWithCredential`은 "이 사람으로 갈아타라"는 명령이라 현재 익명 세션을 통째로
+     * 버린다. 그러면 uid가 바뀌면서 게스트가 찍어둔 클립(`Sessions/free_{uid}`)과 브이로그
+     * 쿼터가 함께 사라진다. `linkWithCredential`은 같은 uid에 로그인 수단만 붙이므로
+     * 전부 그대로 이어진다.
+     *
+     * 이미 그 자격증명을 쓰는 계정이 있으면 link는 실패한다. 그때는 기존 계정으로 들어가야
+     * 하므로 signIn으로 물러나고, 익명 계정은 버려진다 — 찍어둔 영상은 파일 이관으로 살린다.
+     * (카카오는 커스텀 토큰이라 애초에 이 경로를 못 탄다)
+     */
+    private suspend fun signInOrLink(credential: com.google.firebase.auth.AuthCredential): com.google.firebase.auth.AuthResult {
+        val user = auth.currentUser
+        if (user == null || !user.isAnonymous) {
+            return auth.signInWithCredential(credential).await()
+        }
+        val guestUid = user.uid
+        return try {
+            val result = user.linkWithCredential(credential).await()
+            // link는 uid를 바꾸지 않아 **상태 리스너가 불리지 않는다**
+            // (리스너는 로그인/로그아웃·uid 변경에만 반응한다).
+            // 직접 내려주지 않으면 승격했는데도 isGuest가 true로 남아, 앱이 계속 게스트로
+            // 취급한다 — 화면이 안 넘어가던 원인이었다.
+            _isGuest.value = false
+            _identityUid.value = result.user?.uid ?: guestUid
+            GuestVlogQuota.reset()   // 계정이 생겼으니 게스트 제한은 사라진다
+            result
+        } catch (e: Exception) {
+            val code = (e as? FirebaseAuthException)?.errorCode
+            val alreadyInUse = e is FirebaseAuthUserCollisionException ||
+                code == "ERROR_CREDENTIAL_ALREADY_IN_USE" ||
+                code == "ERROR_EMAIL_ALREADY_IN_USE" ||
+                code == "ERROR_PROVIDER_ALREADY_LINKED"
+            if (!alreadyInUse) throw e
+            // 이미 쓰이는 자격증명 — Firebase가 로그인에 쓸 최신 credential을 실어 준다
+            val fallback = (e as? FirebaseAuthUserCollisionException)?.updatedCredential
+            Log.d("Auth", "익명 승격 불가 — 기존 계정으로 로그인")
+            val result = auth.signInWithCredential(fallback ?: credential).await()
+            // uid가 바뀌었다 — 게스트로 찍어둔 영상을 새 계정 폴더로 옮겨 준다
+            result.user?.uid?.let { SessionFileHousekeeping.migrateGuestSession(appContext, guestUid, it) }
+            GuestVlogQuota.reset()
+            result
         }
     }
 
@@ -110,7 +235,9 @@ object AuthService {
             if (!isValidEmail(email)) { _errorMessage.value = LocaleManager.string(appContext, R.string.auth_error_invalidEmail); return }
             if (password.length < 6) { _errorMessage.value = LocaleManager.string(appContext, R.string.auth_error_shortPassword); return }
 
-            val result = auth.signInWithEmailAndPassword(email, password).await()
+            val result = signInOrLink(
+                com.google.firebase.auth.EmailAuthProvider.getCredential(email, password)
+            )
             val user = result.user ?: return
             if (!user.isEmailVerified) {
                 _verificationEmailSent.value = true
@@ -135,7 +262,22 @@ object AuthService {
             if (!isValidEmail(email)) { _errorMessage.value = LocaleManager.string(appContext, R.string.auth_error_invalidEmail); return }
             if (password.length < 6) { _errorMessage.value = LocaleManager.string(appContext, R.string.auth_error_shortPassword); return }
 
-            val result = auth.createUserWithEmailAndPassword(email, password).await()
+            // 게스트가 가입하는 중이면 새 계정을 만들지 않고 익명 계정에 이메일을 붙인다
+            val guest = auth.currentUser?.takeIf { it.isAnonymous }
+            val result = if (guest != null) {
+                val linked = guest.linkWithCredential(
+                    com.google.firebase.auth.EmailAuthProvider.getCredential(email, password)
+                ).await()
+                // link는 uid를 바꾸지 않아 리스너가 불리지 않는다. 게스트 상태를 내리되,
+                // 이메일은 인증 전까지 로그인으로 치지 않으므로 currentUser는 비워 둔다.
+                _isGuest.value = false
+                _identityUid.value = linked.user?.uid ?: ""
+                GuestVlogQuota.reset()
+                _currentUser.value = null
+                linked
+            } else {
+                auth.createUserWithEmailAndPassword(email, password).await()
+            }
             result.user?.sendEmailVerification()?.await()
             _verificationEmailSent.value = true
         } catch (e: FirebaseAuthException) {
@@ -148,8 +290,17 @@ object AuthService {
                         runCatching { user.sendEmailVerification().await() }
                         _verificationEmailSent.value = true
                         _errorMessage.value = null
+                    } else if (user != null) {
+                        // 로그인은 이미 성공했다. 예전엔 여기서 로그아웃하고 "이미 쓰는 이메일"이라
+                        // 안내했는데, 익명 인증이 켜진 지금은 그 로그아웃이 새 게스트 계정을 낳아
+                        // 가입도 로그인도 아닌 상태로 튕긴다. 원하던 계정에 들어온 것이니 그대로 둔다.
+                        _verificationEmailSent.value = false
+                        _isGuest.value = false
+                        _identityUid.value = user.uid
+                        _currentUser.value = AppUser(uid = user.uid, email = user.email ?: "")
+                        refreshOnboardingStatus(user.uid)
+                        _errorMessage.value = null
                     } else {
-                        auth.signOut()
                         _errorMessage.value = LocaleManager.string(appContext, R.string.auth_error_emailInUse)
                     }
                 } catch (_: Exception) {
@@ -273,7 +424,7 @@ object AuthService {
             ) {
                 val idToken = GoogleIdTokenCredential.createFrom(credential.data).idToken
                 val firebaseCredential = GoogleAuthProvider.getCredential(idToken, null)
-                val authResult = auth.signInWithCredential(firebaseCredential).await()
+                val authResult = signInOrLink(firebaseCredential)
                 val user = authResult.user ?: return
                 _verificationEmailSent.value = false
                 _currentUser.value = AppUser(uid = user.uid, email = user.email ?: "")
@@ -312,9 +463,19 @@ object AuthService {
                 return
             }
 
+            // 카카오는 uid가 kakao_{id}로 고정된 커스텀 토큰이라 link 자체가 불가능하다.
+            // 익명 계정은 버려지므로, 그 전에 찍어둔 영상을 옮길 수 있게 uid를 붙잡아 둔다.
+            val guestUid = auth.currentUser?.takeIf { it.isAnonymous }?.uid
+
             val authResult = auth.signInWithCustomToken(customToken).await()
             val user = authResult.user ?: return
+            if (guestUid != null) {
+                SessionFileHousekeeping.migrateGuestSession(appContext, guestUid, user.uid)
+                GuestVlogQuota.reset()
+            }
             _verificationEmailSent.value = false
+            _isGuest.value = false
+            _identityUid.value = user.uid
             _currentUser.value = AppUser(uid = user.uid, email = user.email ?: "")
             refreshOnboardingStatus(user.uid)
         } catch (e: Exception) {
@@ -407,6 +568,7 @@ object AuthService {
 
     // MARK: - 로그아웃
     fun signOut() {
+        wantsGuestIdentity = true   // 명시적 로그아웃 — 게스트로 돌아간다
         // iOS RootView의 onChange(isLoggedIn) → clearUserData 대응
         com.seoktaedev.tteona.core.services.CourseService.clearUserData()
         com.seoktaedev.tteona.core.services.UserService.clear()
@@ -419,6 +581,12 @@ object AuthService {
     // 서버(Cloud Function)가 코스·그룹·계정을 일괄 삭제하고, 클라이언트는 세션 정리만 담당.
     suspend fun deleteAccount(context: Context): Boolean {
         _isLoading.value = true
+        // 탈퇴가 끝날 때까지는 게스트 신원을 자동으로 만들지 않는다.
+        //
+        // 서버가 Auth 계정을 지우는 순간 로그아웃이 한 번 감지되고, 아래 signOut()에서 또
+        // 한 번 감지된다. 그때마다 익명 계정이 새로 발급돼 **탈퇴 한 번에 두 개**가 생긴다.
+        // 정리가 다 끝난 뒤 아래에서 딱 하나만 만든다.
+        wantsGuestIdentity = false
         return try {
             // 1) WAS 측 개인정보(푸시토큰·통계·아바타·채팅닉네임·Vlog파일) 삭제 —
             //    Auth 계정이 지워지기 전, 토큰이 유효할 때 먼저 호출 (iOS와 동일)
@@ -444,12 +612,22 @@ object AuthService {
                     .clearCredentialState(androidx.credentials.ClearCredentialStateRequest())
             }
             auth.signOut()
+            // 게스트 기록도 함께 지운다 — 탈퇴한 사람이 새 게스트로 시작할 때
+            // 옛 브이로그 쿼터가 남아 있으면 첫 브이로그부터 막힌다.
+            GuestVlogQuota.reset()
+
+            // 정리가 끝났다 — 게스트로 돌아간다.
+            // 플래그를 먼저 되돌리면, signOut으로 대기 중이던 리스너 콜백이 그 값을 보고
+            // 하나를 더 만든다(같은 초에 두 개가 생긴다). 여기서는 직접 하나만 발급하고,
+            // 플래그는 finally에서 되돌린다.
+            signInAnonymously()
             true
         } catch (e: Exception) {
             Log.w("Auth", "회원탈퇴 실패", e)
             _errorMessage.value = LocaleManager.string(appContext, R.string.settings_deleteFailed_message)
             false
         } finally {
+            wantsGuestIdentity = true
             _isLoading.value = false
         }
     }

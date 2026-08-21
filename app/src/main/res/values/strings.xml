@@ -663,4 +663,19 @@
     <string name="room_changeImage">대표 이미지 변경</string>
     <string name="room_creator">방장</string>
     <string name="room_imageUploadFailed">이미지 업로드에 실패했어요. 잠시 후 다시 시도해주세요.</string>
+
+    <!-- 게스트 모드 (iOS guest.* / guestTerms.*) -->
+    <string name="guest_captureStillFree">촬영과 첫 브이로그는 회원가입 없이도 만들 수 있어요</string>
+    <string name="guest_chat_message">회원가입하면 그룹을 만들어 오늘의 기록을\n친구·가족과 나눌 수 있어요.</string>
+    <string name="guest_chat_title">친구와 함께 기록해요</string>
+    <string name="guest_discover_message">회원가입하면 전 세계 여행 코스를 지도와 탐색으로\n둘러보고 따라 떠날 수 있어요.</string>
+    <string name="guest_discover_title">다른 사람들의 코스를 만나보세요</string>
+    <string name="guest_profile_message">지금 기록은 이 기기에만 있어요.\n회원가입하면 발자취 지도와 여행 통계가 쌓입니다.</string>
+    <string name="guest_profile_title">기기를 바꿔도 남게 하세요</string>
+    <string name="guest_signUp">회원가입하고 시작하기</string>
+    <string name="guestTerms_badge">회원가입 없이 첫 브이로그</string>
+    <string name="guestTerms_consentNote">시작 전에 이것만 확인해주세요</string>
+    <string name="guestTerms_start">동의하고 시작하기</string>
+    <string name="guestTerms_subtitle">오늘 하루를 브이로그로 만들어보세요.\n마음에 들면 그때 회원가입하셔도 돼요.</string>
+    <string name="guestTerms_title">떠나에 오신 걸\n환영해요!</string>
 </resources>

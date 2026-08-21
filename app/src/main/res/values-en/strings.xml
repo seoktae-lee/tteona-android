@@ -663,4 +663,19 @@
     <string name="room_changeImage">Change group photo</string>
     <string name="room_creator">Host</string>
     <string name="room_imageUploadFailed">Failed to upload the image. Please try again later.</string>
+
+    <!-- 게스트 모드 (iOS guest.* / guestTerms.*) -->
+    <string name="guest_captureStillFree">Recording and your first vlog work without an account</string>
+    <string name="guest_chat_message">Sign up to create groups and share\ntoday’s moments with friends and family.</string>
+    <string name="guest_chat_title">Record together with friends</string>
+    <string name="guest_discover_message">Sign up to browse travel courses worldwide on the map and in Explore, then follow them.</string>
+    <string name="guest_discover_title">Discover courses from others</string>
+    <string name="guest_profile_message">Your records live only on this device.\nSign up to build your footprint map and stats.</string>
+    <string name="guest_profile_title">Keep your records safe</string>
+    <string name="guest_signUp">Sign up to continue</string>
+    <string name="guestTerms_badge">First vlog, no account</string>
+    <string name="guestTerms_consentNote">Just one thing before we start.</string>
+    <string name="guestTerms_start">Agree and start</string>
+    <string name="guestTerms_subtitle">Turn today into a vlog.\nSign up later only if you like it.</string>
+    <string name="guestTerms_title">Welcome to tteona!</string>
 </resources>

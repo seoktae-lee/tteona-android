@@ -159,13 +159,17 @@ fun MainTabScreen(initialTab: Int = 0, previewFootprintDemo: Boolean = false) {
 
     // 채팅 탭 안읽음 배지 갱신 (iOS refreshUnreadStatus)
     val authUser by com.seoktaedev.tteona.core.auth.AuthService.currentUser.collectAsState()
+    val isGuest by com.seoktaedev.tteona.core.auth.AuthService.isGuest.collectAsState()
     val myRooms by com.seoktaedev.tteona.core.services.RoomService.myRooms.collectAsState()
     val unreadRoomIds by com.seoktaedev.tteona.core.services.RoomService.unreadRoomIds.collectAsState()
-    LaunchedEffect(authUser?.uid) {
-        authUser?.uid?.let { com.seoktaedev.tteona.core.services.RoomService.startListeningMyRooms(it) }
+    // 게스트는 uid가 있어도 계정이 아니다 — Firestore 규칙이 익명을 막으므로 실시간 룸
+    // 리스너는 권한 거부만 쌓으며 재시도를 돈다. 진짜 계정일 때만 켠다.
+    val accountUid = authUser?.uid?.takeIf { !isGuest }
+    LaunchedEffect(accountUid) {
+        accountUid?.let { com.seoktaedev.tteona.core.services.RoomService.startListeningMyRooms(it) }
     }
     LaunchedEffect(myRooms, selectedTab) {
-        authUser?.uid?.let { com.seoktaedev.tteona.core.services.RoomService.refreshUnreadStatus(it) }
+        accountUid?.let { com.seoktaedev.tteona.core.services.RoomService.refreshUnreadStatus(it) }
     }
 
     // 코스 공유 딥링크 → 코스 상세 오픈 (iOS deepLinkedCourse)

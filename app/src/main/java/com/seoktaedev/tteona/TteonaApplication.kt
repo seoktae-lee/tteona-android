@@ -15,6 +15,10 @@ class TteonaApplication : Application() {
         com.seoktaedev.tteona.core.services.ActiveSessionStore.initialize(this)
         com.seoktaedev.tteona.core.services.ImpromptuSessionStore.initialize(this)
         com.seoktaedev.tteona.core.services.GooglePlacesService.init(this)
+        // 게스트 기록(약관 동의·브이로그 쿼터)은 Firebase 초기화 실패와 무관하게 읽힌다 —
+        // AppRoot가 첫 프레임에서 약관 동의 여부를 묻기 때문에 여기서 먼저 준비한다.
+        com.seoktaedev.tteona.core.auth.GuestVlogQuota.initialize(this)
+        com.seoktaedev.tteona.core.auth.GuestTermsConsent.initialize(this)
         if (FirebaseApp.initializeApp(this) == null) {
             Log.w("Tteona", "Firebase 미초기화: app/google-services.json을 추가하세요")
             // 초기화하지 않으면 AuthService.isInitializing이 계속 true라 스플래시가 무한 로딩된다.
@@ -23,9 +27,12 @@ class TteonaApplication : Application() {
         }
         AuthService.initialize(this)
         // PRO 구독 상태 동기화 (iOS tteonaApp의 ProManager.configure 대응)
+        // 게스트(익명)에게는 결제 신원을 붙이지 않는다 — 익명 상태로 결제가 이뤄지면
+        // 기기를 바꿨을 때 복원되지 않는다. 가입하면 AuthService가 logIn으로 붙여 준다.
         com.seoktaedev.tteona.core.services.ProManager.configure(
             this,
-            com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid,
+            com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
+                ?.takeIf { !it.isAnonymous }?.uid,
         )
     }
 }

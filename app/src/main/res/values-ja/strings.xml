@@ -663,4 +663,19 @@
     <string name="room_changeImage">グループ画像を変更</string>
     <string name="room_creator">ホスト</string>
     <string name="room_imageUploadFailed">画像のアップロードに失敗しました。しばらくしてからもう一度お試しください。</string>
+
+    <!-- 게스트 모드 (iOS guest.* / guestTerms.*) -->
+    <string name="guest_captureStillFree">撮影と最初のブイログはアカウントなしで作れます</string>
+    <string name="guest_chat_message">登録するとグループを作って今日の記録を\n友だちや家族と共有できます。</string>
+    <string name="guest_chat_title">友だちと一緒に記録しよう</string>
+    <string name="guest_discover_message">登録すると、世界の旅コースを地図と探索で見て、\nそのまま出かけられます。</string>
+    <string name="guest_discover_title">ほかの人のコースを見てみよう</string>
+    <string name="guest_profile_message">今の記録はこの端末にだけあります。\n登録すると足あと地図と統計が貯まります。</string>
+    <string name="guest_profile_title">機種を変えても残しましょう</string>
+    <string name="guest_signUp">登録して始める</string>
+    <string name="guestTerms_badge">登録なしで最初のブイログ</string>
+    <string name="guestTerms_consentNote">はじめる前に、ひとつだけ確認してください。</string>
+    <string name="guestTerms_start">同意して始める</string>
+    <string name="guestTerms_subtitle">今日一日をブイログにしてみましょう。\n気に入ったら、そのとき登録すればOKです。</string>
+    <string name="guestTerms_title">tteonaへようこそ！</string>
 </resources>

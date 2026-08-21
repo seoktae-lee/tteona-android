@@ -15,6 +15,7 @@ class TteonaApplication : Application() {
         com.seoktaedev.tteona.core.services.ActiveSessionStore.initialize(this)
         com.seoktaedev.tteona.core.services.ImpromptuSessionStore.initialize(this)
         com.seoktaedev.tteona.core.services.GooglePlacesService.init(this)
+        com.seoktaedev.tteona.core.services.ProManager.initClipLength(this)
         // 게스트 기록(약관 동의·브이로그 쿼터)은 Firebase 초기화 실패와 무관하게 읽힌다 —
         // AppRoot가 첫 프레임에서 약관 동의 여부를 묻기 때문에 여기서 먼저 준비한다.
         com.seoktaedev.tteona.core.auth.GuestVlogQuota.initialize(this)

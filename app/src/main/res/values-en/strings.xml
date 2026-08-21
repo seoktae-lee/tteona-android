@@ -100,7 +100,7 @@
     <string name="onboarding_permission_notification">Notifications</string>
     <string name="onboarding_permission_notification_desc">Sends you a reminder to record when you arrive</string>
     <string name="onboarding_permission_camera">Camera</string>
-    <string name="onboarding_permission_camera_desc">Records a 5-second video at each place</string>
+    <string name="onboarding_permission_camera_desc">Records a short clip at each place</string>
     <string name="onboarding_permission_photos">Photo Library</string>
     <string name="onboarding_permission_photos_desc">Saves your recorded videos to your album</string>
     <string name="onboarding_permission_granted">Granted</string>
@@ -111,10 +111,12 @@
     <string name="onboarding_terms_privacy">Agree to Privacy Policy</string>
     <string name="onboarding_terms_required">Required</string>
     <string name="onboarding_letsGo">Let\'s Go</string>
-    <string name="onboarding_slide1_title">Discover courses on the map</string>
-    <string name="onboarding_slide1_subtitle">See travel courses worldwide at a glance.\nPick one you love and set off right away</string>
-    <string name="onboarding_slide2_title">Arrive, then film just 5 seconds</string>
-    <string name="onboarding_slide2_subtitle">Naru lets you know when you arrive.\nJust 5 seconds each captures your whole day</string>
+    <string name="onboarding_slide1_title">Open and shoot</string>
+    <string name="onboarding_slide1_subtitle">The camera is right there when you open the app.
+Tap the shutter — it records and stops on its own.</string>
+    <string name="onboarding_slide2_title">A few seconds, many places</string>
+    <string name="onboarding_slide2_subtitle">Pick 2, 3, or 5 seconds per place.
+A few seconds each is enough to keep the day.</string>
     <string name="onboarding_slide3_title">Your vlog, auto-created</string>
     <string name="onboarding_slide3_subtitle">When your trip ends, we stitch your clips\ninto a beautiful vlog for you</string>
     <string name="onboarding_slide4_title">Better together</string>
@@ -122,24 +124,30 @@
     <string name="common_skip">Skip</string>
     <string name="navguide_step1_title">Hi, I\'m Naru!</string>
     <string name="navguide_step1_message">Want a 30-second tour of tteona?\nI\'ll show you around</string>
-    <string name="navguide_step2_title">Home — Set off from the map</string>
-    <string name="navguide_step2_message">Pick a course you like on the map\nand tap \'Go\' to start your trip</string>
-    <string name="navguide_step3_title">Explore — Browse courses</string>
-    <string name="navguide_step3_message">Swipe through courses from around\nthe world and find popular ones</string>
-    <string name="navguide_step4_title">Chats — Travel together</string>
+    <string name="navguide_step2_title">Find courses</string>
+    <string name="navguide_step2_message">See nearby courses on the map,
+then switch to Explore for popular ones.</string>
+    <string name="navguide_step3_title">Keep today</string>
+    <string name="navguide_step3_message">Tap the shutter — it records and stops on its own.
+Your vlog is made without any editing.</string>
+    <string name="navguide_step4_title">Travel together</string>
     <string name="navguide_step4_message">Create a group to share courses\nand your day with friends and family</string>
     <string name="navguide_step5_title">All set!</string>
-    <string name="navguide_step5_message">Now just pick your first course\non the map and set off</string>
+    <string name="navguide_step5_message">Go anywhere today and just tap the shutter.
+Your day becomes a vlog.</string>
     <string name="navguide_letsGo">Let\'s go!</string>
     <string name="navguide_next">Next %d/%d</string>
-    <string name="tutorial_myToday_text">Let\'s make your first travel vlog together!\nTap \'My Today\' to begin</string>
-    <string name="tutorial_capture_text">Tap \'Capture here\' to record this moment in 5 seconds!\nFree plan fits up to 6 places</string>
-    <string name="tutorial_endToday_text">Your first place chip is in! Now tap \'End today\'\nto turn it into a vlog</string>
-    <string name="tutorial_vlogOnly_hint">Tap \'Create vlog only\'!</string>
+    <string name="tutorial_myToday_text">Let\'s make your first vlog together!
+Just tap the shutter on the Capture tab.</string>
+    <string name="tutorial_capture_text">Tap the shutter to capture this moment!
+Free accounts can record up to 30 seconds a day.</string>
+    <string name="tutorial_endToday_text">Your first place is captured!
+Tap ✓ at the top right to turn it into a vlog.</string>
+    <string name="tutorial_vlogOnly_hint">Tap \"Vlog only\"!</string>
     <string name="tutorial_format_text">We pre-picked the format that matches how you filmed.\nShall we go with it?</string>
     <string name="tutorial_bgm_text">Last step! \'Auto pick\' chooses music that fits\nyour trip\'s mood. Let\'s make it!</string>
     <string name="tutorial_done_title">First vlog complete!</string>
-    <string name="tutorial_done_message">You captured one place this time — but even on the free plan, a single \'My Today\' can hold up to 6 places, 5 seconds each. Make your next trip even richer!</string>
+    <string name="tutorial_done_message">You captured one place this time. Free accounts get 30 seconds a day — pick 2, 3, or 5 seconds and capture more places!</string>
     <string name="tutorial_done_button">Got it!</string>
     <string name="tutorial_skip">Dismiss tutorial</string>
     <string name="roomselect_title">Where should we share?</string>
@@ -268,7 +276,7 @@
     <string name="vlog_back">Back</string>
     <string name="vlog_next">Next</string>
     <string name="vlog_textSheet_title">Text Style</string>
-    <string name="vlog_textSheet_subtitle">Pick the font and size for place captions</string>
+    <string name="vlog_textSheet_subtitle">Applied to the whole vlog</string>
     <string name="vlog_textSheet_fontLabel">Font</string>
     <string name="vlog_textSheet_sizeLabel">Size</string>
     <string name="vlog_font_gowun">Gowun Batang</string>
@@ -307,12 +315,12 @@
     <string name="camera_tip">💡 Tap to start/stop · film portrait or landscape</string>
     <string name="camera_recordingHint">Recording · tap to stop</string>
     <string name="camera_saveSuccess">Video saved!</string>
-    <string name="camera_hintAuto">Tap to auto-record 5s</string>
+    <string name="camera_hintAuto">Tap to record %ds automatically</string>
     <string name="camera_recordingHintAuto">Auto-recording · saves when done</string>
     <string name="camera_tipAuto">💡 One tap = 5s auto clip · portrait or landscape</string>
     <string name="camera_budgetCaptionFree">%1$ds per spot · %2$ds total today</string>
     <string name="camera_budgetCaptionPro">Unlimited · %1$s total today</string>
-    <string name="camera_clipHintFree">This spot · up to 5s</string>
+    <string name="camera_clipHintFree">This place · up to %ds</string>
     <string name="camera_clipHintPro">This spot · film freely</string>
     <string name="camera_clipElapsed">%1$s / %2$ds</string>
     <string name="camera_budgetToastFree">%1$ds per spot · up to %2$ds per vlog</string>
@@ -452,8 +460,9 @@
     <string name="report_action">Report</string>
     <string name="vloglimit_title">You\'ve reached the limit</string>
     <string name="vloglimit_durationMsg">Vlogs can be up to 5 minutes long.\nWe\'ll make a great video from the moments you\'ve captured so far.</string>
-    <string name="vloglimit_freeMsg">The free plan allows 5 seconds per place, 30 seconds total.</string>
-    <string name="vloglimit_proFeature">No per-place limit, up to 5 minutes total</string>
+    <string name="vloglimit_freeMsg">You’ve used all 30 seconds for today.
+Turn what you’ve captured into a vlog.</string>
+    <string name="vloglimit_proFeature">Up to 20s per place · 5 min a day</string>
     <string name="vloglimit_learnPro">Learn about tteona PRO</string>
     <string name="paywall_tagline">Longer, freer travel moments</string>
     <string name="paywall_feature_watermark">Remove Watermark</string>
@@ -462,8 +471,8 @@
     <string name="paywall_feature_multiformat_sub">Reels, YouTube, and Instagram versions at once</string>
     <string name="paywall_feature_bgm">Full BGM Library</string>
     <string name="paywall_feature_bgm_sub">Pick any track you like</string>
-    <string name="paywall_feature_duration">Videos up to 5 minutes</string>
-    <string name="paywall_feature_duration_sub">No 5s/place or 30s total limit — up to 5 minutes</string>
+    <string name="paywall_feature_duration">5 minutes a day</string>
+    <string name="paywall_feature_duration_sub">30s → 5 min, plus 10s / 15s / 20s clip lengths</string>
     <string name="paywall_feature_priority">Priority Rendering</string>
     <string name="paywall_feature_priority_sub">Your videos are rendered first, no waiting</string>
     <string name="paywall_loadFailed">Couldn\'t load plans</string>
@@ -678,4 +687,36 @@
     <string name="guestTerms_start">Agree and start</string>
     <string name="guestTerms_subtitle">Turn today into a vlog.\nSign up later only if you like it.</string>
     <string name="guestTerms_title">Welcome to tteona!</string>
+
+    <!-- 촬영 탭 (iOS capture.* / camera.clipLength.*) -->
+    <string name="camera_clipLength_more">Longer</string>
+    <string name="camera_clipLength_seconds">%ds</string>
+    <string name="camera_exposure">Exposure</string>
+    <string name="camera_grid">Grid</string>
+    <string name="capture_finish">Create vlog</string>
+    <string name="capture_list_budget">%1$d / %2$d sec used</string>
+    <string name="capture_list_count">%1$d places</string>
+    <string name="capture_list_deleteMessage">The clip from %1$s will be removed and its seconds returned to your budget.</string>
+    <string name="capture_list_deleteTitle">Delete this clip?</string>
+    <string name="capture_list_discardAllMessage">All clips recorded today will be deleted and your budget will reset.</string>
+    <string name="capture_list_empty">Nothing captured yet</string>
+    <string name="capture_list_keepShooting">Keep shooting</string>
+    <string name="capture_list_seconds">%1$s sec</string>
+    <string name="capture_list_title">Today\'s captures</string>
+    <string name="capture_progress">%1$d places · %2$d/%3$ds</string>
+    <string name="capture_recordingCount">%d places recorded</string>
+    <string name="capture_saved">Saved ‘%1$s’ · %2$d places</string>
+    <string name="common_retry">Retry</string>
+    <string name="impromptu_discardToday">Discard today</string>
+    <string name="impromptu_discardToday_message">Today’s clips and places will be deleted and your recording budget resets. This cannot be undone.</string>
+    <string name="impromptu_locating">Finding your location…</string>
+    <string name="impromptu_locationDenied">Location access is off.\nTurn it on in Settings to record places.</string>
+    <string name="impromptu_locationFailed">Couldn\'t get your location.\nPlease try again.</string>
+    <string name="tab_capture">Capture</string>
+    <string name="tab_discover">Discover</string>
+    <string name="tutorial_pickPlace_text">Pick where you are from the list!\nNot there? Tap \"Enter manually\" to type it in.</string>
+
+    <!-- 발견 탭 지도/목록 토글 -->
+    <string name="discover_mode_map">Map</string>
+    <string name="discover_mode_grid">Explore</string>
 </resources>

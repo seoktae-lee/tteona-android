@@ -126,6 +126,17 @@ fun HomeScreen(
     onResumeCourse: () -> Unit = {},
     onImpromptuTap: () -> Unit = {},
     onResumeImpromptu: () -> Unit = {},
+    /**
+     * 하단 정중앙 '나의 오늘' CTA를 보일지.
+     * 촬영 탭이 생기면서 이 버튼이 할 일을 탭 자체가 하게 됐고, 그 빈 자리는
+     * 발견 탭의 지도/목록 토글이 쓴다. 발견 탭에서는 꺼서 겹치지 않게 한다.
+     */
+    showImpromptuCta: Boolean = true,
+    /**
+     * 미리보기 카드가 떠 있는지 바깥에 알린다.
+     * 발견 탭의 지도/목록 토글이 이 카드와 같은 자리를 쓰므로, 카드가 뜨면 토글을 접어야 한다.
+     */
+    onPreviewCardVisibilityChanged: (Boolean) -> Unit = {},
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -139,6 +150,7 @@ fun HomeScreen(
     var searchText by remember { mutableStateOf("") }
     var filter by remember { mutableStateOf(CourseFilter.ALL) }
     var previewCourse by remember { mutableStateOf<Course?>(null) }
+    LaunchedEffect(previewCourse) { onPreviewCardVisibilityChanged(previewCourse != null) }
     var thumbnails by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     var locationGranted by remember { mutableStateOf(false) }
     var didMoveToUser by remember { mutableStateOf(false) }
@@ -469,8 +481,9 @@ fun HomeScreen(
                 // 나의 오늘 — 하단 정중앙 고정 CTA (iOS createCourseButton)
                 // 첫 브이로그 튜토리얼 1단계 — 말풍선 안내 + 버튼 글로우/반짝임으로 '나의 오늘'을 누르도록 유도
                 val tutorialStep by com.seoktaedev.tteona.features.tutorial.VlogTutorial.step.collectAsState()
-                val tutOnMyToday = tutorialStep == com.seoktaedev.tteona.features.tutorial.VlogTutorial.Step.TAP_MY_TODAY
-                Column(
+                val tutOnMyToday = showImpromptuCta &&
+                    tutorialStep == com.seoktaedev.tteona.features.tutorial.VlogTutorial.Step.TAP_MY_TODAY
+                if (showImpromptuCta) Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     modifier = Modifier.align(Alignment.BottomCenter),
                 ) {

@@ -40,6 +40,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -47,6 +48,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Cameraswitch
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ZoomIn
+import androidx.compose.material.icons.filled.WbSunny
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Grid3x3
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -54,9 +59,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableDoubleStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -64,6 +71,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.input.pointer.pointerInput
@@ -82,11 +90,13 @@ import com.seoktaedev.tteona.R
 import com.seoktaedev.tteona.core.i18n.LocaleManager
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.seoktaedev.tteona.core.model.Place
+import com.seoktaedev.tteona.core.model.VlogClipLength
 import com.seoktaedev.tteona.core.services.ProManager
 import com.seoktaedev.tteona.core.services.VlogClips
 import com.seoktaedev.tteona.core.util.Haptics
 import com.seoktaedev.tteona.ui.theme.TteOrange
 import kotlinx.coroutines.delay
+import java.io.File
 import java.util.concurrent.Executor
 
 /**
@@ -96,12 +106,26 @@ import java.util.concurrent.Executor
  */
 @Composable
 fun CameraScreen(
-    place: Place,
     sessionId: String,
     onSaved: () -> Unit,
     onClose: () -> Unit,
+    /** 코스·재촬영 경로 — 파일명과 상단 장소 칩에 쓴다 */
+    place: Place? = null,
+    /**
+     * 촬영 탭 경로 — 저장 경로를 직접 받는다.
+     * 촬영 시작 시점에 장소가 아직 없기 때문이다('나의 오늘'은 먼저 찍고 장소를 나중에 붙인다).
+     */
+    clipFile: File? = null,
+    /** 촬영 탭에 임베드된 상태 — 닫기·장소 칩을 숨기고 길이 칩·노출·격자를 보여준다 */
+    embedded: Boolean = false,
+    /** 값이 바뀌면 예산을 다시 센다 — 클립 삭제·세션 비우기가 바깥에서 일어난다 */
+    budgetRefreshToken: Int = 0,
+    onRecordingChanged: (Boolean) -> Unit = {},
+    onUsedSecondsChanged: (Double) -> Unit = {},
     onBudgetExhausted: (() -> Unit)? = null,
+    onRequestPaywall: (() -> Unit)? = null,
 ) {
+    require(place != null || clipFile != null) { "place 또는 clipFile 중 하나는 있어야 한다" }
     val context = LocalContext.current
     val view = LocalView.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -138,17 +162,34 @@ fun CameraScreen(
     var showTip by remember { mutableStateOf(true) }
     // 탭 초점 인디케이터 위치 (px) — 잠시 표시 후 사라짐
     var focusIndicator by remember { mutableStateOf<Offset?>(null) }
+    // 구도 보조 격자 — 촬영 중에도 유지한다
+    var showGrid by rememberSaveable { mutableStateOf(false) }
+    // 노출 보정(EV) — 역광에서 얼굴이 어둡게 나오는 걸 유저가 직접 잡는다.
+    // 기기가 보고한 범위로 클램프해야 한다: 고정 범위를 쓰면 미지원 기기에서 조용히 무시된다.
+    var exposureFraction by remember { mutableStateOf(0.5f) }
+    val clipLength by ProManager.clipLength.collectAsState()
+    val isPro by ProManager.isPro.collectAsState()
 
     // 촬영 예산 (iOS refreshUsedSeconds) — 세션 폴더 클립 합계, 재촬영이면 이 장소 클립만큼 돌려받음
     var usedSeconds by remember { mutableDoubleStateOf(0.0) }
     var currentPlaceClipSeconds by remember { mutableDoubleStateOf(0.0) }
     val budgetSeconds = ProManager.vlogBudgetSeconds
 
+    // 촬영 탭은 촬영할 때마다 새 파일명을 쓰므로 '재촬영으로 예산 환급'이 없다.
+    // 코스·재촬영 경로에서만 이 장소의 기존 클립 길이를 돌려받는다.
+    val targetFile = clipFile ?: VlogClips.clipFile(context, place!!, sessionId)
+
     fun refreshUsedSeconds() {
         usedSeconds = VlogClips.totalSeconds(context, sessionId)
-        currentPlaceClipSeconds = VlogClips.clipSeconds(VlogClips.clipFile(context, place, sessionId))
+        currentPlaceClipSeconds =
+            if (clipFile != null) 0.0 else VlogClips.clipSeconds(targetFile)
+        onUsedSecondsChanged(usedSeconds)
     }
     LaunchedEffect(Unit) { refreshUsedSeconds() }
+    // 바깥에서 클립을 지우거나 세션을 비우면 예산을 다시 센다 —
+    // 그러지 않으면 예산이 찬 것으로 알고 셔터가 잠긴 채 남는다.
+    LaunchedEffect(budgetRefreshToken) { if (budgetRefreshToken > 0) refreshUsedSeconds() }
+    LaunchedEffect(isRecording) { onRecordingChanged(isRecording) }
     LaunchedEffect(Unit) {
         delay(3000)
         showTip = false
@@ -209,6 +250,14 @@ fun CameraScreen(
         selectedZoom = 1.0f
     }
 
+    LaunchedEffect(camera, exposureFraction) {
+        val cam = camera ?: return@LaunchedEffect
+        val range = cam.cameraInfo.exposureState.exposureCompensationRange
+        if (!cam.cameraInfo.exposureState.isExposureCompensationSupported) return@LaunchedEffect
+        val index = (range.lower + (range.upper - range.lower) * exposureFraction).toInt()
+        runCatching { cam.cameraControl.setExposureCompensationIndex(index) }
+    }
+
     DisposableEffect(Unit) {
         onDispose {
             activeRecording?.stop()
@@ -231,10 +280,11 @@ fun CameraScreen(
             onBudgetExhausted?.invoke()
             return
         }
-        val clipLimit = ProManager.vlogClipMaxSeconds?.coerceAtMost(remaining) ?: remaining
+        // 고른 길이보다 남은 예산이 짧으면 그만큼만 찍힌다 — 안내 문구도 이 값을 말한다
+        val clipLimit = (ProManager.vlogClipMaxSeconds ?: remaining).coerceAtMost(remaining)
         clipLimitSeconds = clipLimit
 
-        val file = VlogClips.clipFile(context, place, sessionId)
+        val file = targetFile
         file.parentFile?.mkdirs()
         file.delete()
 
@@ -334,6 +384,19 @@ fun CameraScreen(
             )
         }
 
+        // 구도 보조 격자 — 촬영 중에도 유지한다(구도를 잡는 게 목적이다)
+        if (showGrid) {
+            Canvas(Modifier.fillMaxSize()) {
+                val line = Color.White.copy(alpha = 0.35f)
+                for (i in 1..2) {
+                    val x = size.width * i / 3f
+                    val y = size.height * i / 3f
+                    drawLine(line, Offset(x, 0f), Offset(x, size.height), strokeWidth = 1f)
+                    drawLine(line, Offset(0f, y), Offset(size.width, y), strokeWidth = 1f)
+                }
+            }
+        }
+
         // 탭 초점 인디케이터 (주황 박스, 잠시 후 사라짐)
         focusIndicator?.let { p ->
             LaunchedEffect(p) {
@@ -348,7 +411,9 @@ fun CameraScreen(
             )
         }
 
-        // 상단: 닫기 / 장소명 / 렌즈 전환
+        // 상단: 닫기 / 장소명 / 렌즈 전환.
+        // 임베드일 때는 닫기와 장소 칩이 없다 — 탭 자체가 화면이라 닫을 대상이 없고,
+        // 장소는 촬영이 끝난 뒤에 붙으므로 아직 이름이 없다. 세션 칩은 촬영 탭이 그린다.
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
@@ -357,27 +422,31 @@ fun CameraScreen(
                 .padding(horizontal = 20.dp, vertical = 12.dp)
                 .fillMaxWidth(),
         ) {
-            Box(
-                contentAlignment = Alignment.Center,
-                modifier = Modifier
-                    .size(44.dp)
-                    .clip(CircleShape)
-                    .background(Color.Black.copy(alpha = 0.5f))
-                    .clickable(enabled = !isSaving, onClick = onClose),
-            ) {
-                Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.common_close), tint = Color.White, modifier = Modifier.size(20.dp))
+            if (!embedded) {
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(CircleShape)
+                        .background(Color.Black.copy(alpha = 0.5f))
+                        .clickable(enabled = !isSaving, onClick = onClose),
+                ) {
+                    Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.common_close), tint = Color.White, modifier = Modifier.size(20.dp))
+                }
             }
             Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                Text(
-                    place.placeName,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = Color.White,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(Color.Black.copy(alpha = 0.5f))
-                        .padding(horizontal = 14.dp, vertical = 8.dp),
-                )
+                if (!embedded && place != null) {
+                    Text(
+                        place.placeName,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color.White,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(Color.Black.copy(alpha = 0.5f))
+                            .padding(horizontal = 14.dp, vertical = 8.dp),
+                    )
+                }
             }
             Box(
                 contentAlignment = Alignment.Center,
@@ -394,11 +463,11 @@ fun CameraScreen(
             }
         }
 
-        // 촬영 팁 칩 (3초 후 사라짐)
-        if (showTip) {
+        // 촬영 팁 칩 (3초 후 사라짐). 임베드는 세션 칩이 예산을 상시 보여줘 필요 없다.
+        if (showTip && !embedded) {
             // 촬영 예산 안내 토스트 — 3초 뒤 사라짐. PRO는 분 단위, 무료는 장소당/총 초
             Text(
-                if (ProManager.vlogClipMaxSeconds == null) {
+                if (ProManager.isPro.value) {
                     LocaleManager.string(context, R.string.camera_budgetToastPro, (ProManager.vlogBudgetSeconds / 60).toInt())
                 } else {
                     LocaleManager.string(
@@ -428,9 +497,76 @@ fun CameraScreen(
                 .navigationBarsPadding()
                 .padding(bottom = 16.dp),
         ) {
-            val isProUser = ProManager.vlogClipMaxSeconds == null
+            val isProUser = isPro
             // 총 촬영 예산 UI(분절 링·캡션)는 카메라에서 제거 — 지도 장소칩에 이미 있고,
             // 예산 안내는 상단 토스트(showTip)로 잠깐만 노출한다. (사용자 피드백 반영)
+
+            // 클립 길이 — 총 예산을 어떻게 쪼갤지의 선택. 10초 이상은 PRO.
+            // 무료 유저에게 잠긴 길이를 셋씩 늘어놓을 이유가 없다 — 어느 걸 눌러도 같은
+            // 페이월로 가므로 '더 길게' 하나로 묶는다. 칩이 줄어 작은 기기에서도 안전하다.
+            if (embedded && !isRecording) {
+                val remainingSeconds = (budgetSeconds - usedSeconds).coerceAtLeast(0.0)
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    VlogClipLength.entries
+                        .filter { isPro || !it.requiresPro }
+                        .forEach { length ->
+                            val selected = clipLength == length ||
+                                (clipLength.requiresPro && !isPro && length == VlogClipLength.FREE_DEFAULT)
+                            // 남은 예산보다 긴 길이는 골라도 잘려서 찍힌다 — 미리 흐리게 알린다
+                            val overBudget = length.seconds > remainingSeconds
+                            Box(
+                                contentAlignment = Alignment.Center,
+                                modifier = Modifier
+                                    .height(32.dp)
+                                    .clip(CircleShape)
+                                    .background(if (selected) Color.White else Color.Black.copy(alpha = 0.45f))
+                                    .clickable {
+                                        Haptics.light(view)
+                                        ProManager.setClipLength(length)
+                                    }
+                                    .padding(horizontal = 13.dp),
+                            ) {
+                                Text(
+                                    LocaleManager.string(context, R.string.camera_clipLength_seconds, length.seconds.toInt()),
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (selected) Color.Black
+                                            else Color.White.copy(alpha = if (overBudget) 0.45f else 1f),
+                                )
+                            }
+                        }
+
+                    if (!isPro) {
+                        // 잠긴 길이를 만지는 순간이 가장 자연스러운 업셀 지점이다
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(3.dp),
+                            modifier = Modifier
+                                .height(32.dp)
+                                .clip(CircleShape)
+                                .background(Color.Black.copy(alpha = 0.45f))
+                                .clickable {
+                                    Haptics.light(view)
+                                    onRequestPaywall?.invoke()
+                                }
+                                .padding(horizontal = 12.dp),
+                        ) {
+                            Icon(
+                                Icons.Filled.Lock,
+                                contentDescription = null,
+                                tint = Color.White.copy(alpha = 0.6f),
+                                modifier = Modifier.size(11.dp),
+                            )
+                            Text(
+                                stringResource(R.string.camera_clipLength_more),
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White.copy(alpha = 0.6f),
+                            )
+                        }
+                    }
+                }
+            }
 
             // 녹화 버튼 — 바깥 링이 이번 클립(장소당 한도) 게이지 (iOS clipProgress)
             Box(
@@ -438,13 +574,11 @@ fun CameraScreen(
                 modifier = Modifier
                     .size(80.dp)
                     .clickable(enabled = !isSaving) {
-                        if (isRecording) {
-                            // 무료 유저는 5초 고정 촬영 — 중간 종료 불가 ("한 번 탭 = 한 칸" 멘탈모델).
-                            // 실수한 컷은 같은 장소에서 재촬영하면 예산을 돌려받는다. (iOS와 동일)
-                            if (isProUser) stopRecording()
-                        } else {
-                            startRecording()
-                        }
+                        // 모든 길이가 자동 종료다 — 중간 종료는 두지 않는다.
+                        // 수동 종료를 열어두면 한 장소에서 예산을 다 태우는 사고가 나고,
+                        // "짧게 툭 찍으면 알아서 브이로그가 된다"는 컨셉과도 어긋난다.
+                        // 실수한 컷은 목록에서 지우면 예산을 돌려받는다.
+                        if (!isRecording) startRecording()
                     },
             ) {
                 val clipFrac = if (isRecording) {
@@ -476,16 +610,20 @@ fun CameraScreen(
                         String.format("%.1f", elapsedSeconds.coerceAtMost(clipLimitSeconds)),
                         clipLimitSeconds.roundToInt(),
                     )
+                    embedded -> ""
                     isProUser -> stringResource(R.string.camera_clipHintPro)
-                    else -> stringResource(R.string.camera_clipHintFree)
+                    else -> LocaleManager.string(
+                        context, R.string.camera_clipHintFree,
+                        ProManager.effectiveClipLength.seconds.roundToInt(),
+                    )
                 },
                 fontSize = 12.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = Color.White.copy(alpha = 0.9f),
             )
 
-            // 줌 바 (후면일 때만, iOS zoomBar)
-            if (lensFacing == CameraSelector.LENS_FACING_BACK) {
+            // 줌 바 (후면일 때만, iOS zoomBar). 임베드는 좌측 세로 슬라이더로 대신한다.
+            if (lensFacing == CameraSelector.LENS_FACING_BACK && !embedded) {
                 val zoomState = camera?.cameraInfo?.zoomState?.value
                 val factors = buildList {
                     if ((zoomState?.minZoomRatio ?: 1f) <= 0.6f) add(0.5f)
@@ -517,16 +655,72 @@ fun CameraScreen(
                 }
             }
 
+            // 셔터 아래 안내 — **실제로 찍히게 될 시간**을 말한다.
+            // 고른 길이를 그대로 읽으면 남은 예산이 그보다 짧을 때 거짓말이 된다.
+            val remainingForHint = (budgetSeconds - usedSeconds).coerceAtLeast(0.0)
+            val effectiveSeconds = ProManager.effectiveClipLength.seconds.coerceAtMost(remainingForHint)
             Text(
                 when {
-                    isRecording && isProUser -> stringResource(R.string.camera_recordingHint)
                     isRecording -> stringResource(R.string.camera_recordingHintAuto)
-                    isProUser -> stringResource(R.string.camera_hint)
-                    else -> stringResource(R.string.camera_hintAuto)
+                    remainingForHint < 1 -> stringResource(R.string.impromptu_budgetFull)
+                    else -> LocaleManager.string(context, R.string.camera_hintAuto, effectiveSeconds.roundToInt())
                 },
                 fontSize = 13.sp,
                 color = Color.White.copy(alpha = 0.8f),
             )
+        }
+
+        // 좌: 줌 · 우: 밝기 — 세로 슬라이더. 촬영 중에도 조작할 수 있어야 한다.
+        //
+        // 검은 판을 깔면 화면 한쪽이 어두워져 뷰파인더를 가린다. 트랙만 남기고
+        // 밝은 장면에서 묻히지 않도록 아이콘 배경만 둔다.
+        if (embedded && hasPermission) {
+            val zoomState = camera?.cameraInfo?.zoomState?.value
+            VerticalCameraSlider(
+                value = zoomState?.linearZoom ?: 0f,
+                onValueChange = { camera?.cameraControl?.setLinearZoom(it) },
+                icon = Icons.Filled.ZoomIn,
+                label = stringResource(R.string.camera_switchCamera),
+                isDefault = (zoomState?.linearZoom ?: 0f) < 0.01f,
+                onReset = { camera?.cameraControl?.setLinearZoom(0f) },
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .padding(start = 14.dp, bottom = 96.dp),
+            )
+            VerticalCameraSlider(
+                value = exposureFraction,
+                onValueChange = { exposureFraction = it },
+                icon = Icons.Filled.WbSunny,
+                label = stringResource(R.string.camera_exposure),
+                isDefault = kotlin.math.abs(exposureFraction - 0.5f) < 0.01f,
+                onReset = { exposureFraction = 0.5f },
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .padding(end = 14.dp, bottom = 96.dp),
+            )
+
+            // 격자 — 셔터와 같은 높이 좌측 (전환 버튼과 좌우 대칭)
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .navigationBarsPadding()
+                    .padding(start = 24.dp, bottom = 74.dp)
+                    .size(44.dp)
+                    .clip(CircleShape)
+                    .background(Color.Black.copy(alpha = 0.5f))
+                    .clickable {
+                        Haptics.light(view)
+                        showGrid = !showGrid
+                    },
+            ) {
+                Icon(
+                    Icons.Filled.Grid3x3,
+                    contentDescription = stringResource(R.string.camera_grid),
+                    tint = if (showGrid) TteOrange else Color.White,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
         }
 
         // 저장 중/성공 오버레이 (iOS savingOverlay)
@@ -600,6 +794,61 @@ fun CameraScreen(
                 )
                 Box(Modifier.weight(1f))
             }
+        }
+    }
+}
+
+/**
+ * 세로 슬라이더 — 회전한 Slider는 레이아웃 크기가 회전 전 기준이라
+ * 바깥 Box로 실제 차지할 영역을 못박아야 다른 컨트롤과 겹치지 않는다.
+ * 아이콘을 누르면 기본값으로 되돌아간다.
+ */
+@Composable
+private fun VerticalCameraSlider(
+    value: Float,
+    onValueChange: (Float) -> Unit,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    isDefault: Boolean,
+    onReset: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = modifier,
+    ) {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier
+                .size(30.dp)
+                .clip(CircleShape)
+                .background(Color.Black.copy(alpha = 0.45f))
+                .clickable(onClick = onReset),
+        ) {
+            Icon(
+                icon,
+                contentDescription = label,
+                tint = if (isDefault) Color.White.copy(alpha = 0.85f) else TteOrange,
+                modifier = Modifier.size(15.dp),
+            )
+        }
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier.size(width = 40.dp, height = 150.dp),
+        ) {
+            androidx.compose.material3.Slider(
+                value = value,
+                onValueChange = onValueChange,
+                colors = androidx.compose.material3.SliderDefaults.colors(
+                    thumbColor = TteOrange,
+                    activeTrackColor = TteOrange,
+                    inactiveTrackColor = Color.White.copy(alpha = 0.35f),
+                ),
+                modifier = Modifier
+                    .width(150.dp)
+                    .graphicsLayer { rotationZ = -90f },
+            )
         }
     }
 }

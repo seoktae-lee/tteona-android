@@ -100,7 +100,7 @@
     <string name="onboarding_permission_notification">通知</string>
     <string name="onboarding_permission_notification_desc">場所に到着すると撮影通知をお送りします</string>
     <string name="onboarding_permission_camera">カメラ</string>
-    <string name="onboarding_permission_camera_desc">各場所で5秒間の動画を撮影します</string>
+    <string name="onboarding_permission_camera_desc">各場所で短い動画を撮影します</string>
     <string name="onboarding_permission_photos">写真ライブラリ</string>
     <string name="onboarding_permission_photos_desc">撮影した動画をアルバムに保存します</string>
     <string name="onboarding_permission_granted">許可済み</string>
@@ -111,10 +111,12 @@
     <string name="onboarding_terms_privacy">プライバシーポリシーに同意</string>
     <string name="onboarding_terms_required">必須</string>
     <string name="onboarding_letsGo">旅を始める</string>
-    <string name="onboarding_slide1_title">地図でコースを発見</string>
-    <string name="onboarding_slide1_subtitle">世界中の旅行コースを地図でひと目で。\n気に入ったコースへすぐ出発しよう</string>
-    <string name="onboarding_slide2_title">到着したら、たった5秒撮影</string>
-    <string name="onboarding_slide2_subtitle">場所に到着するとナルがお知らせ。\n5秒ずつでも一日がしっかり記録されます</string>
+    <string name="onboarding_slide1_title">開いてすぐ撮影</string>
+    <string name="onboarding_slide1_subtitle">アプリを開けばすぐカメラ。
+シャッターを押すだけで自動で撮影・停止します</string>
+    <string name="onboarding_slide2_title">短く、いくつもの場所で</string>
+    <string name="onboarding_slide2_subtitle">2・3・5秒から選んで撮影。
+数秒ずつでも一日が記録されます</string>
     <string name="onboarding_slide3_title">Vlogは自動で完成</string>
     <string name="onboarding_slide3_subtitle">旅が終わったら撮影したクリップをまとめて\nエモいVlog動画を作ります</string>
     <string name="onboarding_slide4_title">一緒だからもっと楽しい</string>
@@ -122,24 +124,30 @@
     <string name="common_skip">スキップ</string>
     <string name="navguide_step1_title">こんにちは、ナルです！</string>
     <string name="navguide_step1_message">tteonaを30秒で見て回りましょうか？\n私がご案内します</string>
-    <string name="navguide_step2_title">ホーム — 地図から出発</string>
-    <string name="navguide_step2_message">地図で気に入ったコースを選んで\n「出発」を押すと旅が始まります</string>
-    <string name="navguide_step3_title">探索 — コースを見て回る</string>
-    <string name="navguide_step3_message">世界中のコースをカードでめくって\n人気コースを見つけよう</string>
-    <string name="navguide_step4_title">チャット — 一緒に出発</string>
+    <string name="navguide_step2_title">コースを探す</string>
+    <string name="navguide_step2_message">地図で近くのコースを見て、
+「探索」に切り替えて人気コースもチェック</string>
+    <string name="navguide_step3_title">今日を残す</string>
+    <string name="navguide_step3_message">シャッターを押すだけで自動で撮影・停止。
+編集なしでブイログができます</string>
+    <string name="navguide_step4_title">一緒に出かける</string>
     <string name="navguide_step4_message">グループを作って友達や家族と\nコースと「私の今日」をシェア</string>
     <string name="navguide_step5_title">準備完了！</string>
-    <string name="navguide_step5_message">あとは地図で最初のコースを選んで\n出発するだけです</string>
+    <string name="navguide_step5_message">今日はどこへでも、シャッターを押すだけ。
+一日がブイログとして残ります</string>
     <string name="navguide_letsGo">出発しましょう！</string>
     <string name="navguide_next">次へ %d/%d</string>
-    <string name="tutorial_myToday_text">旅のハイライト、Vlogを一緒に作りましょう！\n「私の今日」をタップしてスタート</string>
-    <string name="tutorial_capture_text">「ここで撮影」をタップして、この瞬間を5秒の動画に！\n無料でも6か所まで残せます</string>
-    <string name="tutorial_endToday_text">最初の場所チップができました！「今日を終了」をタップして\nVlogにしてみましょう</string>
-    <string name="tutorial_vlogOnly_hint">「Vlogだけ作成」をタップ！</string>
+    <string name="tutorial_myToday_text">旅のハイライト、ブイログを一緒に作りましょう！
+撮影タブでシャッターを押すだけです</string>
+    <string name="tutorial_capture_text">シャッターを押してこの瞬間を残しましょう！
+無料でも1日30秒まで撮れます</string>
+    <string name="tutorial_endToday_text">最初の場所が入りました！
+右上の✓を押してブイログにしましょう</string>
+    <string name="tutorial_vlogOnly_hint">「Vlogだけ作る」を押してみましょう！</string>
     <string name="tutorial_format_text">撮影の向きに合ったフォーマットを選んでおきました。\nこのまま作ってみましょう？</string>
     <string name="tutorial_bgm_text">最後です！「自動おすすめ」が旅の雰囲気に合う\n音楽を選んでくれます。さっそく作りましょう！</string>
     <string name="tutorial_done_title">初めてのVlog完成！</string>
-    <string name="tutorial_done_message">今回は1か所だけでしたが、無料でも「私の今日」1回で最大6か所を5秒ずつ残せます。次の旅はもっと豊かに作ってみましょう！</string>
+    <string name="tutorial_done_message">今回は1か所でしたが、無料でも1日30秒まで撮れます。2・3・5秒から選んでもっと多くの場所を残してみましょう！</string>
     <string name="tutorial_done_button">わかりました！</string>
     <string name="tutorial_skip">チュートリアルを閉じる</string>
     <string name="roomselect_title">どこにシェアしますか？</string>
@@ -268,7 +276,7 @@
     <string name="vlog_back">戻る</string>
     <string name="vlog_next">次へ</string>
     <string name="vlog_textSheet_title">文字スタイル</string>
-    <string name="vlog_textSheet_subtitle">場所字幕の書体とサイズを選んでください</string>
+    <string name="vlog_textSheet_subtitle">ブイログ全体に適用されます</string>
     <string name="vlog_textSheet_fontLabel">書体</string>
     <string name="vlog_textSheet_sizeLabel">サイズ</string>
     <string name="vlog_font_gowun">コウンバタン</string>
@@ -307,12 +315,12 @@
     <string name="camera_tip">💡 ボタンで開始・終了、縦横自由に</string>
     <string name="camera_recordingHint">撮影中 · ボタンで終了</string>
     <string name="camera_saveSuccess">動画を保存しました！</string>
-    <string name="camera_hintAuto">ボタンで5秒自動撮影</string>
+    <string name="camera_hintAuto">ボタンを押すと%d秒 自動撮影</string>
     <string name="camera_recordingHintAuto">自動撮影中・完了後に自動保存</string>
     <string name="camera_tipAuto">💡 1タップで5秒自動撮影・縦横自由に</string>
     <string name="camera_budgetCaptionFree">1か所%1$d秒・本日合計%2$d秒</string>
     <string name="camera_budgetCaptionPro">無制限・本日合計%1$s</string>
-    <string name="camera_clipHintFree">この場所・最大5秒</string>
+    <string name="camera_clipHintFree">この場所 · 最大%d秒</string>
     <string name="camera_clipHintPro">この場所・自由に撮影</string>
     <string name="camera_clipElapsed">%1$s / %2$d秒</string>
     <string name="camera_budgetToastFree">1か所%1$d秒・Vlogあたり最大%2$d秒</string>
@@ -452,8 +460,9 @@
     <string name="report_action">通報する</string>
     <string name="vloglimit_title">撮影の上限に達しました</string>
     <string name="vloglimit_durationMsg">Vlog動画は最大5分まで収録できます。\nこれまでに撮った瞬間で素敵な動画を作ります。</string>
-    <string name="vloglimit_freeMsg">無料では場所ごとに5秒、合計30秒まで収録できます。</string>
-    <string name="vloglimit_proFeature">場所ごとの制限なし、最大5分まで自由に</string>
+    <string name="vloglimit_freeMsg">今日の30秒をすべて使いました。
+これまでの瞬間でブイログを作ってみましょう。</string>
+    <string name="vloglimit_proFeature">一つの場所に最大20秒 · 1日合計5分まで</string>
     <string name="vloglimit_learnPro">tteona PROを見る</string>
     <string name="paywall_tagline">旅の瞬間をもっと長く、もっと自由に</string>
     <string name="paywall_feature_watermark">ウォーターマーク削除</string>
@@ -462,8 +471,8 @@
     <string name="paywall_feature_multiformat_sub">リール・YouTube・インスタの3バージョンを一度に</string>
     <string name="paywall_feature_bgm">BGM全ライブラリ</string>
     <string name="paywall_feature_bgm_sub">すべての音楽を自分で選べます</string>
-    <string name="paywall_feature_duration">動画の長さを5分に拡大</string>
-    <string name="paywall_feature_duration_sub">場所ごと5秒・合計30秒の制限なしで最大5分まで</string>
+    <string name="paywall_feature_duration">1日5分に拡大</string>
+    <string name="paywall_feature_duration_sub">無料30秒 → 5分 · 10/15/20秒の長さも使えます</string>
     <string name="paywall_feature_priority">優先レンダリング</string>
     <string name="paywall_feature_priority_sub">待たずにあなたの動画から先に作ります</string>
     <string name="paywall_loadFailed">プランを読み込めませんでした</string>
@@ -678,4 +687,36 @@
     <string name="guestTerms_start">同意して始める</string>
     <string name="guestTerms_subtitle">今日一日をブイログにしてみましょう。\n気に入ったら、そのとき登録すればOKです。</string>
     <string name="guestTerms_title">tteonaへようこそ！</string>
+
+    <!-- 촬영 탭 (iOS capture.* / camera.clipLength.*) -->
+    <string name="camera_clipLength_more">もっと長く</string>
+    <string name="camera_clipLength_seconds">%d秒</string>
+    <string name="camera_exposure">露出</string>
+    <string name="camera_grid">グリッド</string>
+    <string name="capture_finish">ブイログを作る</string>
+    <string name="capture_list_budget">%1$d / %2$d秒 使用</string>
+    <string name="capture_list_count">%1$d か所</string>
+    <string name="capture_list_deleteMessage">%1$s で撮影した動画が削除され、使用時間が戻ります。</string>
+    <string name="capture_list_deleteTitle">この動画を削除しますか？</string>
+    <string name="capture_list_discardAllMessage">今日撮影した動画がすべて削除され、撮影時間がリセットされます。</string>
+    <string name="capture_list_empty">まだ撮影がありません</string>
+    <string name="capture_list_keepShooting">撮影を続ける</string>
+    <string name="capture_list_seconds">%1$s秒</string>
+    <string name="capture_list_title">今日の撮影</string>
+    <string name="capture_progress">%1$d か所 · %2$d/%3$d秒</string>
+    <string name="capture_recordingCount">%d か所 記録中</string>
+    <string name="capture_saved">「%1$s」を記録しました · %2$d か所目</string>
+    <string name="common_retry">再試行</string>
+    <string name="impromptu_discardToday">今日の記録を破棄</string>
+    <string name="impromptu_discardToday_message">今日の映像と場所がすべて削除され、撮影時間もリセットされます。元に戻せません。</string>
+    <string name="impromptu_locating">現在地を確認しています</string>
+    <string name="impromptu_locationDenied">位置情報がオフです。\n設定でオンにすると場所を記録できます。</string>
+    <string name="impromptu_locationFailed">現在地を取得できませんでした。\nもう一度お試しください。</string>
+    <string name="tab_capture">撮影</string>
+    <string name="tab_discover">発見</string>
+    <string name="tutorial_pickPlace_text">今いる場所をここから選んでください！\nなければ「直接入力」で書けます。</string>
+
+    <!-- 발견 탭 지도/목록 토글 -->
+    <string name="discover_mode_map">地図</string>
+    <string name="discover_mode_grid">探索</string>
 </resources>

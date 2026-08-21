@@ -73,6 +73,12 @@ import kotlin.math.sin
 fun NavGuideOverlay(
     tabBounds: (Int) -> androidx.compose.ui.geometry.Rect? = { null },
     onSelectTab: (Int) -> Unit,
+    /**
+     * 계정이 있어야 열리는 탭(발견·채팅)까지 안내할지.
+     * 게스트에게는 잠긴 문을 소개하는 꼴이 되고, 첫 실행에 5단계 투어가 가로막아
+     * "켜자마자 찍는다"는 흐름과도 어긋난다 — 그 탭들이 실제로 열리는 가입 시점에 안내한다.
+     */
+    showsAccountTabs: Boolean = true,
     onFinish: () -> Unit,
 ) {
     val view = LocalView.current
@@ -80,14 +86,20 @@ fun NavGuideOverlay(
 
     data class GuideStep(val mascotRes: Int, val title: String, val message: String, val tabIndex: Int?)
 
-    // 언어 변경 시 액티비티가 recreate되므로 매 컴포지션 재구성해도 무방
-    val steps = listOf(
+    // 언어 변경 시 액티비티가 recreate되므로 매 컴포지션 재구성해도 무방.
+    // 순서는 탭 순서를 따른다 — 촬영이 첫 탭이 되면서 안내도 촬영부터 시작한다.
+    val allSteps = listOf(
         GuideStep(R.drawable.tteoni_guide, stringResource(R.string.navguide_step1_title), stringResource(R.string.navguide_step1_message), null),
-        GuideStep(R.drawable.tteoni_travel, stringResource(R.string.navguide_step2_title), stringResource(R.string.navguide_step2_message), 0),
-        GuideStep(R.drawable.tteoni_wink, stringResource(R.string.navguide_step3_title), stringResource(R.string.navguide_step3_message), 1),
-        GuideStep(R.drawable.tteoni_jump, stringResource(R.string.navguide_step4_title), stringResource(R.string.navguide_step4_message), 2),
+        GuideStep(R.drawable.tteoni_jump, stringResource(R.string.navguide_step3_title), stringResource(R.string.navguide_step3_message), Tab.CAPTURE),
+        // 지도·탐색이 '발견' 한 탭으로 합쳐졌다
+        GuideStep(R.drawable.tteoni_travel, stringResource(R.string.navguide_step2_title), stringResource(R.string.navguide_step2_message), Tab.DISCOVER),
+        GuideStep(R.drawable.tteoni_wink, stringResource(R.string.navguide_step4_title), stringResource(R.string.navguide_step4_message), Tab.CHAT),
         GuideStep(R.drawable.tteoni_thumbsup, stringResource(R.string.navguide_step5_title), stringResource(R.string.navguide_step5_message), null),
     )
+    // 게스트용 — 환영 + 촬영 + 마무리. 바로 셔터로 보낸다.
+    val steps = if (showsAccountTabs) allSteps
+                else listOf(allSteps[0], allSteps[1], allSteps.last())
+
     val step = steps[stepIndex]
     val isLast = stepIndex == steps.size - 1
 
@@ -99,7 +111,8 @@ fun NavGuideOverlay(
             Haptics.light(view)
             stepIndex += 1
             steps[stepIndex].tabIndex?.let(onSelectTab)
-            if (stepIndex == steps.size - 1) onSelectTab(0)
+            // 마지막 단계는 특정 탭을 가리키지 않는다 — 앱을 열었을 때의 자리(촬영)로 되돌린다
+            if (stepIndex == steps.size - 1) onSelectTab(Tab.CAPTURE)
         }
     }
 

@@ -21,9 +21,10 @@ import kotlinx.coroutines.flow.StateFlow
 object VlogTutorial {
 
     enum class Step {
-        TAP_MY_TODAY,      // 메인: '나의 오늘' 누르기
-        CAPTURE_HERE,      // 세션: '여기서 촬영' (5초 클립)
-        END_TODAY,         // 칩 1개 확인 → '오늘 종료'
+        TAP_MY_TODAY,      // (레거시) 지도의 '나의 오늘' 버튼 — 촬영 탭이 생기며 대상이 사라졌다
+        CAPTURE_HERE,      // 촬영 탭: 셔터 누르기
+        PICK_PLACE,        // 촬영 직후: 장소 선택 시트
+        END_TODAY,         // 칩 1개 확인 → 우상단 ✓
         CHOOSE_VLOG_ONLY,  // 종료 시트: '브이로그만 생성하기'
         CHOOSE_FORMAT,     // 포맷 선택
         CHOOSE_BGM,        // BGM 선택
@@ -39,7 +40,10 @@ object VlogTutorial {
         val doneKey = "vlogTutorialDone_$uid"
         if (prefs.getBoolean(doneKey, false) || _step.value != null) return
         prefs.edit().putBoolean(doneKey, true).apply()
-        _step.value = Step.TAP_MY_TODAY
+        // 예전엔 지도의 '나의 오늘' 버튼을 누르게 하는 단계로 시작했는데,
+        // 그 버튼이 사라지고 앱이 촬영 탭으로 열리게 되면서 누를 대상이 없어졌다.
+        // 이제 첫 안내는 셔터를 누르라는 말이다.
+        _step.value = Step.CAPTURE_HERE
     }
 
     /** 앞 단계로만 진행 — 뒤로 가는 신호(중복 onAppear 등)는 무시한다. */
@@ -55,7 +59,7 @@ object VlogTutorial {
     }
 
     /** 세션 화면을 브이로그 완성 전에 나감 → 처음부터 다시 안내 */
-    fun handleSessionExit() = regress(Step.TAP_MY_TODAY)
+    fun handleSessionExit() = regress(Step.CAPTURE_HERE)
 
     /** 브이로그 생성 화면을 닫음 → 칩은 남아 있으므로 '오늘 종료' 단계로 */
     fun handleVlogExit() = regress(Step.END_TODAY)

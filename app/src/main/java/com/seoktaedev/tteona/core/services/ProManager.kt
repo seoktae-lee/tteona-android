@@ -17,6 +17,7 @@ import com.revenuecat.purchases.interfaces.ReceiveCustomerInfoCallback
 import com.revenuecat.purchases.interfaces.ReceiveOfferingsCallback
 import com.revenuecat.purchases.models.StoreTransaction
 import com.seoktaedev.tteona.BuildConfig
+import com.seoktaedev.tteona.core.model.VlogClipLength
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlin.coroutines.resume
@@ -41,12 +42,44 @@ object ProManager {
     /** 브이로그 촬영 총 길이 예산 (초) — 무료 30초, PRO 5분 */
     val vlogBudgetSeconds: Double get() = if (_isPro.value) 300.0 else 30.0
 
-    /** 한 장소(클립)당 최대 촬영 길이 (초) — 무료 5초, PRO는 제한 없음(총 예산 내) */
-    val vlogClipMaxSeconds: Double? get() = if (_isPro.value) null else 5.0
+    private const val CLIP_LENGTH_KEY = "vlog.clipLength"
+    private lateinit var prefs: android.content.SharedPreferences
+
+    /** 유저가 고른 한 장소당 촬영 길이. PRO 전용을 고른 채 구독이 끝나면 무료 기본값으로 되돌린다. */
+    private val _clipLength = MutableStateFlow(VlogClipLength.FREE_DEFAULT)
+    val clipLength: StateFlow<VlogClipLength> = _clipLength
+
+    fun initClipLength(context: Context) {
+        prefs = context.getSharedPreferences("tteona_prefs", Context.MODE_PRIVATE)
+        _clipLength.value = VlogClipLength.from(prefs.getString(CLIP_LENGTH_KEY, null))
+    }
+
+    fun setClipLength(length: VlogClipLength) {
+        _clipLength.value = length
+        if (::prefs.isInitialized) prefs.edit().putString(CLIP_LENGTH_KEY, length.key).apply()
+    }
+
+    /** 실제로 적용되는 길이 — 권한 없는 선택은 무료 기본값으로 강등한다 */
+    val effectiveClipLength: VlogClipLength
+        get() = _clipLength.value.let {
+            if (it.requiresPro && !_isPro.value) VlogClipLength.FREE_DEFAULT else it
+        }
+
+    /** 이 길이를 지금 쓸 수 있는가 (칩 잠금 표시용) */
+    fun canUse(length: VlogClipLength): Boolean = _isPro.value || !length.requiresPro
 
     /**
-     * 세션 예산을 클립 단위로 나눈 칸 수 — 무료는 6칸(30÷5) 분절 링,
-     * PRO는 클립 제한이 없어 분절이 의미 없으므로 null(연속 링)을 반환한다. (iOS vlogSegmentCount)
+     * 한 장소(클립)당 최대 촬영 길이 (초).
+     *
+     * 예전에는 무료 5초 고정 / PRO는 null(무제한)이었다. 이제는 유저가 고른 길이가 곧 한도이며
+     * **PRO도 자동 종료된다** — 수동 종료를 두면 한 장소에서 예산을 다 태우는 사고가 난다.
+     * (null을 "PRO 무제한"의 신호로 읽던 곳들이 있으므로 isPro를 직접 보도록 바꿀 것)
+     */
+    val vlogClipMaxSeconds: Double? get() = effectiveClipLength.seconds
+
+    /**
+     * 세션 예산을 클립 단위로 나눈 칸 수 (iOS vlogSegmentCount).
+     * 이제는 PRO도 클립 한도가 있으므로 항상 값이 나온다 — 예: 3초 선택 시 무료는 10칸.
      */
     val vlogSegmentCount: Int?
         get() = vlogClipMaxSeconds?.takeIf { it > 0 }?.let {

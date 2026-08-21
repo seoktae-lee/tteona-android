@@ -8,6 +8,18 @@ import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
+import com.seoktaedev.tteona.ui.theme.TteDarkGray
+import com.seoktaedev.tteona.ui.theme.TteBackground
+import com.seoktaedev.tteona.features.discover.DiscoverTabScreen
+import com.seoktaedev.tteona.features.capture.CaptureTabScreen
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.Alignment
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.material.icons.filled.PhotoCamera
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -57,12 +69,23 @@ import com.seoktaedev.tteona.features.home.HomeScreen
 import com.seoktaedev.tteona.features.session.ActiveSessionScreen
 import kotlinx.coroutines.launch
 
-// iOS MainTabView와 동일한 4탭 구성: 홈(지도) / 탐색 / 채팅(그룹) / 프로필
+// iOS MainTabView와 동일한 4탭 구성: 촬영 / 발견(지도+목록) / 채팅(그룹) / 프로필
 private data class TabItem(val labelRes: Int, val icon: ImageVector)
 
+/**
+ * 탭 인덱스를 숫자로 흩어 두면 탭이 하나 늘 때마다 알림 라우팅이 조용히 어긋난다.
+ * 여기서만 정의하고 전부 이걸 참조한다.
+ */
+object Tab {
+    const val CAPTURE = 0
+    const val DISCOVER = 1
+    const val CHAT = 2
+    const val PROFILE = 3
+}
+
 private val tabs = listOf(
-    TabItem(R.string.tab_home, Icons.Filled.Map),
-    TabItem(R.string.tab_explore, Icons.Filled.GridView),
+    TabItem(R.string.tab_capture, Icons.Filled.PhotoCamera),
+    TabItem(R.string.tab_discover, Icons.Filled.Map),
     TabItem(R.string.tab_chat, Icons.AutoMirrored.Filled.Chat),
     TabItem(R.string.tab_profile, Icons.Filled.AccountCircle),
 )
@@ -78,6 +101,14 @@ fun MainTabScreen(initialTab: Int = 0, previewFootprintDemo: Boolean = false) {
     var impromptuRoomIds by remember { mutableStateOf<Set<String>?>(null) }
     var showImpromptuRoomSelect by remember { mutableStateOf(false) }
     var showCourseResumeSheet by remember { mutableStateOf(false) }
+    /** 촬영 중 여부 — 탭바를 숨기는 데 쓴다 */
+    var isRecordingClip by remember { mutableStateOf(false) }
+    /** 게스트 게이트에서 '회원가입' → 로그인 화면을 전체 화면으로 덮는다 */
+    var showAuth by remember { mutableStateOf(false) }
+    /** 게스트도 언어·약관에는 닿을 수 있어야 한다 — 프로필 게이트의 설정 통로 */
+    var showGuestSettings by remember { mutableStateOf(false) }
+    /** 잠긴 클립 길이를 만졌을 때의 업셀 */
+    var showPaywall by remember { mutableStateOf(false) }
     // 코치마크 스포트라이트용 탭 실측 위치 (기기별 해상도·내비바 높이 대응)
     val tabBounds = remember { mutableStateListOf<androidx.compose.ui.geometry.Rect?>(null, null, null, null) }
 
@@ -102,7 +133,7 @@ fun MainTabScreen(initialTab: Int = 0, previewFootprintDemo: Boolean = false) {
 
     // 채팅 푸시 탭 → 채팅 탭 자동 전환 (iOS pendingChatRoom → selectedTab = 2)
     LaunchedEffect(pendingChatRoom) {
-        if (pendingChatRoom != null) selectedTab = 2
+        if (pendingChatRoom != null) selectedTab = Tab.CHAT
     }
 
     // 좋아요·코스 따라가기 알림 탭 → 코스 상세 (딥링크와 같은 경로)
@@ -120,7 +151,7 @@ fun MainTabScreen(initialTab: Int = 0, previewFootprintDemo: Boolean = false) {
     LaunchedEffect(shouldOpenProfile) {
         if (shouldOpenProfile) {
             AppNotificationManager.clearShouldOpenProfile()
-            selectedTab = 3
+            selectedTab = Tab.PROFILE
         }
     }
 
@@ -129,7 +160,7 @@ fun MainTabScreen(initialTab: Int = 0, previewFootprintDemo: Boolean = false) {
     LaunchedEffect(shouldOpenTodaySession) {
         if (shouldOpenTodaySession) {
             AppNotificationManager.clearShouldOpenTodaySession()
-            selectedTab = 0
+            selectedTab = Tab.CAPTURE
             ImpromptuSessionStore.loadTodaySession()?.let { saved ->
                 impromptuRoomIds = saved.roomIds.toSet()
             }
@@ -154,7 +185,7 @@ fun MainTabScreen(initialTab: Int = 0, previewFootprintDemo: Boolean = false) {
 
     // 그룹 초대 딥링크 → 채팅 탭(코드 참여) 전환
     LaunchedEffect(pendingRoomCode) {
-        if (pendingRoomCode != null) selectedTab = 2
+        if (pendingRoomCode != null) selectedTab = Tab.CHAT
     }
 
     // 채팅 탭 안읽음 배지 갱신 (iOS refreshUnreadStatus)
@@ -184,7 +215,9 @@ fun MainTabScreen(initialTab: Int = 0, previewFootprintDemo: Boolean = false) {
     Box(Modifier.fillMaxSize()) {
         Scaffold(
             bottomBar = {
-                NavigationBar {
+                // 촬영 중에는 탭바를 숨긴다 — 뷰파인더를 최대한 넓게 쓰고,
+                // 찍는 도중 실수로 탭을 눌러 화면이 바뀌는 것도 막는다.
+                if (!isRecordingClip) NavigationBar {
                     tabs.forEachIndexed { index, tab ->
                         NavigationBarItem(
                             modifier = Modifier.onGloballyPositioned { tabBounds[index] = it.boundsInRoot() },
@@ -192,7 +225,7 @@ fun MainTabScreen(initialTab: Int = 0, previewFootprintDemo: Boolean = false) {
                             onClick = { selectedTab = index },
                             icon = {
                                 val label = stringResource(tab.labelRes)
-                                if (index == 2 && unreadRoomIds.isNotEmpty()) {
+                                if (index == Tab.CHAT && unreadRoomIds.isNotEmpty()) {
                                     BadgedBox(badge = { Badge { Text("${unreadRoomIds.size}") } }) {
                                         Icon(tab.icon, contentDescription = label)
                                     }
@@ -209,41 +242,82 @@ fun MainTabScreen(initialTab: Int = 0, previewFootprintDemo: Boolean = false) {
             val modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-            when (selectedTab) {
-                0 -> HomeScreen(
-                    modifier = modifier,
-                    onCourseClick = { course, thumb -> courseSelection = CourseSelection(course, thumb) },
-                    onResumeCourse = {
-                        // 코스 버튼 → 이어서/새로 시작 시트 (iOS showCourseResumeSheet)
-                        showCourseResumeSheet = true
-                    },
-                    onImpromptuTap = {
-                        // iOS handleImpromptuTap — 저장 세션이 있거나 그룹이 없으면 바로 시작, 아니면 방 선택.
-                        // 단, 방 목록 첫 스냅샷이 아직 안 왔으면(콜드 스타트 직후) '그룹 없음'으로
-                        // 오판하지 않고 시트를 띄운다 — 시트가 myRooms를 구독하므로 도착 즉시 채워진다.
-                        val saved = ImpromptuSessionStore.loadTodaySession()
-                        val hasSaved = saved?.places?.isNotEmpty() == true
-                        val knownNoRooms = com.seoktaedev.tteona.core.services.RoomService.roomsLoaded.value && myRooms.isEmpty()
-                        if (hasSaved || knownNoRooms) {
-                            impromptuRoomIds = saved?.roomIds?.toSet() ?: emptySet()
-                        } else {
-                            showImpromptuRoomSelect = true
-                        }
-                    },
-                    onResumeImpromptu = {
-                        ImpromptuSessionStore.loadTodaySession()?.let { saved ->
-                            impromptuRoomIds = saved.roomIds.toSet()
-                        }
-                    },
-                )
-                1 -> ExploreScreen(
-                    modifier = modifier,
-                    onCourseClick = { course, thumb -> courseSelection = CourseSelection(course, thumb) },
-                    onOpenGroups = { selectedTab = 2 },
-                )
-                2 -> Box(modifier) { GroupListScreen() }
-                3 -> com.seoktaedev.tteona.features.profile.ProfileTabScreen(modifier, previewFootprintDemo = previewFootprintDemo)
+            val openResumeImpromptu = {
+                ImpromptuSessionStore.loadTodaySession()?.let { saved ->
+                    impromptuRoomIds = saved.roomIds.toSet()
+                }
+                Unit
             }
+            when (selectedTab) {
+                // 앱의 1번 기능 — 켜자마자 뷰파인더가 보이도록 기본 탭으로 둔다
+                Tab.CAPTURE -> CaptureTabScreen(
+                    modifier = modifier,
+                    onRecordingChanged = { isRecordingClip = it },
+                    onFinishToday = { roomIds ->
+                        // 마무리는 기존 '나의 오늘' 화면이 그대로 받는다 —
+                        // 종료 시트·브이로그 생성이 전부 거기에 있다.
+                        impromptuRoomIds = roomIds
+                    },
+                    onRequestPaywall = { showPaywall = true },
+                )
+                // 지도 + 탐색 — 둘 다 "코스를 찾는" 화면이라 한 탭에 묶고 토글로 전환한다
+                Tab.DISCOVER -> GuestGated(isGuest, R.drawable.tteoni_travel,
+                    R.string.guest_discover_title, R.string.guest_discover_message,
+                    onSignUp = { showAuth = true }, modifier = modifier) {
+                    DiscoverTabScreen(
+                        modifier = modifier,
+                        onCourseClick = { course, thumb -> courseSelection = CourseSelection(course, thumb) },
+                        onResumeCourse = { showCourseResumeSheet = true },
+                        onResumeImpromptu = openResumeImpromptu,
+                        onOpenGroups = { selectedTab = Tab.CHAT },
+                    )
+                }
+                Tab.CHAT -> GuestGated(isGuest, R.drawable.tteoni_front,
+                    R.string.guest_chat_title, R.string.guest_chat_message,
+                    onSignUp = { showAuth = true }, modifier = modifier) {
+                    Box(modifier) { GroupListScreen() }
+                }
+                // 설정으로 가는 유일한 통로가 프로필이라, 게스트도 약관·언어에 닿게 열어 둔다
+                Tab.PROFILE -> GuestGated(isGuest, R.drawable.tteoni_thumbsup,
+                    R.string.guest_profile_title, R.string.guest_profile_message,
+                    onSignUp = { showAuth = true }, onOpenSettings = { showGuestSettings = true },
+                    modifier = modifier) {
+                    com.seoktaedev.tteona.features.profile.ProfileTabScreen(modifier, previewFootprintDemo = previewFootprintDemo)
+                }
+            }
+        }
+
+        // 게스트 게이트에서 넘어온 가입 화면 — 탭바 위를 전부 덮는다.
+        // 가입에 성공하면 AuthService가 isGuest를 내리므로 게이트가 스스로 사라진다.
+        if (showAuth) {
+            Box(Modifier.fillMaxSize().background(TteBackground)) {
+                com.seoktaedev.tteona.features.auth.LoginScreen()
+                Icon(
+                    Icons.Filled.Close,
+                    contentDescription = stringResource(R.string.common_close),
+                    tint = TteDarkGray,
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .statusBarsPadding()
+                        .padding(start = 12.dp, top = 8.dp)
+                        .size(28.dp)
+                        .clickable { showAuth = false },
+                )
+            }
+            // 게스트가 아니게 되면(가입·로그인 성공) 스스로 닫는다
+            LaunchedEffect(isGuest) { if (!isGuest) showAuth = false }
+        }
+
+        if (showGuestSettings) {
+            Box(Modifier.fillMaxSize().background(TteBackground)) {
+                com.seoktaedev.tteona.features.settings.SettingsScreen(
+                    onBack = { showGuestSettings = false },
+                )
+            }
+        }
+
+        if (showPaywall) {
+            com.seoktaedev.tteona.features.pro.ProPaywallScreen(onDismiss = { showPaywall = false })
         }
 
         // 코스 상세 — 탭바 위를 전부 덮는 풀스크린 (iOS fullScreenCover 대응)
@@ -310,14 +384,21 @@ fun MainTabScreen(initialTab: Int = 0, previewFootprintDemo: Boolean = false) {
         // 첫 진입 나루 내비게이션 가이드 — 계정별 1회 (iOS hasSeenNavGuide, 딥링크 진입 시 방해 안 함)
         val tutorialScope = rememberCoroutineScope()
         var showNavGuide by remember { mutableStateOf(false) }
-        LaunchedEffect(authUser?.uid) {
+        // 게스트용 안내와 가입 후 안내는 내용이 달라 따로 기억한다.
+        // 하나로 두면 게스트로 짧은 안내를 본 사람이 가입해도 전체 안내를 영영 못 본다
+        // (link 승계로 uid가 그대로이기 때문).
+        val navGuideKey = authUser?.uid?.let {
+            if (isGuest) "hasSeenNavGuideGuest_$it" else "hasSeenNavGuide_$it"
+        }
+        LaunchedEffect(authUser?.uid, isGuest) {
             val uid = authUser?.uid ?: return@LaunchedEffect
+            val key = navGuideKey ?: return@LaunchedEffect
             // 딥링크로 진입한 경우엔 코치마크·튜토리얼로 방해하지 않는다
             if (DeepLinkHandler.pendingCourseId.value != null ||
                 DeepLinkHandler.pendingRoomCode.value != null
             ) return@LaunchedEffect
             val prefs = context.getSharedPreferences("tteona", android.content.Context.MODE_PRIVATE)
-            if (!prefs.getBoolean("hasSeenNavGuide_$uid", false)) {
+            if (!prefs.getBoolean(key, false)) {
                 kotlinx.coroutines.delay(800)
                 showNavGuide = true
             } else {
@@ -330,10 +411,13 @@ fun MainTabScreen(initialTab: Int = 0, previewFootprintDemo: Boolean = false) {
             NavGuideOverlay(
                 tabBounds = { i -> tabBounds.getOrNull(i) },
                 onSelectTab = { selectedTab = it },
+                showsAccountTabs = !isGuest,
                 onFinish = {
                     authUser?.uid?.let { uid ->
-                        context.getSharedPreferences("tteona", android.content.Context.MODE_PRIVATE)
-                            .edit().putBoolean("hasSeenNavGuide_$uid", true).apply()
+                        navGuideKey?.let { key ->
+                            context.getSharedPreferences("tteona", android.content.Context.MODE_PRIVATE)
+                                .edit().putBoolean(key, true).apply()
+                        }
                         // 내비 가이드 종료 0.6초 후 첫 브이로그 튜토리얼 시작 (iOS onFinish 후 0.6s)
                         tutorialScope.launch {
                             kotlinx.coroutines.delay(600)
@@ -344,5 +428,36 @@ fun MainTabScreen(initialTab: Int = 0, previewFootprintDemo: Boolean = false) {
                 },
             )
         }
+    }
+}
+
+/**
+ * 게스트일 때는 게이트를, 계정일 때는 원래 화면을 그린다.
+ *
+ * 탭의 자식을 조건에 따라 서로 다른 타입으로 두면 상태가 엉키므로(iOS에서 SwiftUI
+ * 갱신 사이클이 깨진 것과 같은 계열의 문제), 분기를 이 한 곳으로 모아 둔다.
+ */
+@Composable
+private fun GuestGated(
+    isGuest: Boolean,
+    mascotRes: Int,
+    titleRes: Int,
+    messageRes: Int,
+    onSignUp: () -> Unit,
+    modifier: Modifier = Modifier,
+    onOpenSettings: (() -> Unit)? = null,
+    content: @Composable () -> Unit,
+) {
+    if (isGuest) {
+        com.seoktaedev.tteona.features.auth.GuestGateScreen(
+            mascotRes = mascotRes,
+            title = stringResource(titleRes),
+            message = stringResource(messageRes),
+            onSignUp = onSignUp,
+            onOpenSettings = onOpenSettings,
+            modifier = modifier,
+        )
+    } else {
+        content()
     }
 }

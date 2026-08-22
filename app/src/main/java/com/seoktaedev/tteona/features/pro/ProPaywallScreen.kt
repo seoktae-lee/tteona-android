@@ -265,6 +265,24 @@ fun ProPaywallScreen(onDismiss: () -> Unit) {
                         monthly?.let { MonthlyCard(it, selectedPackage, onSelect = { select(it) }) }
                     }
                 }
+
+                /*
+                 * 자동 갱신 고지 — Google Play 구독 정책이 앱 안에 명시하도록 요구한다.
+                 * (iOS 문구는 Apple 계정 기준이라 그대로 쓸 수 없어 Play 기준으로 다시 썼다)
+                 *
+                 * **스크롤 영역 안에 둔다.** 하단 고정 칸에 두면 이 세 줄이 위쪽 스크롤 칸의
+                 * 높이를 그만큼 빼앗아, 처음 열었을 때 플랜 카드의 **가격이 화면 밖으로
+                 * 밀린다** — 가격이 안 보이는 결제 화면이 된다(실측으로 확인).
+                 * 고지는 구매 화면 안에 있으면 되고, 플랜 바로 아래가 읽히기도 좋다.
+                 */
+                Text(
+                    stringResource(R.string.paywall_autoRenewNotice),
+                    fontSize = 10.5.sp,
+                    lineHeight = 15.sp,
+                    color = Color.White.copy(alpha = 0.45f),
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    modifier = Modifier.padding(horizontal = 24.dp).padding(top = 4.dp, bottom = 12.dp),
+                )
             }
 
             // CTA + 심리 안전판 + 링크
@@ -348,17 +366,6 @@ fun ProPaywallScreen(onDismiss: () -> Unit) {
                         fontSize = 12.sp, fontWeight = FontWeight.Medium, color = Color.White.copy(alpha = 0.75f),
                     )
                 }
-
-                // 자동 갱신 고지 — Google Play 구독 정책이 앱 안에 명시하도록 요구한다.
-                // iOS 문구는 Apple 계정 기준이라 그대로 쓸 수 없어 Play 기준으로 다시 썼다.
-                Text(
-                    stringResource(R.string.paywall_autoRenewNotice),
-                    fontSize = 10.5.sp,
-                    lineHeight = 15.sp,
-                    color = Color.White.copy(alpha = 0.45f),
-                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 10.dp),
-                )
 
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(16.dp),

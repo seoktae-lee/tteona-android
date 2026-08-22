@@ -23,6 +23,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -217,6 +218,11 @@ fun ActiveSessionScreen(
     LaunchedEffect(Unit) {
         if (didStart) return@LaunchedEffect
         didStart = true
+        // 퍼널 ③ 세션 시작 — 이 가드 덕에 세션당 정확히 한 번만 기록된다
+        // (화면 재진입·회전으로 중복되지 않는다)
+        com.seoktaedev.tteona.core.services.StatsService.postCourseEvent(
+            com.seoktaedev.tteona.core.services.StatsService.CourseFunnelStep.SESSION_START, course,
+        )
         val saved = ActiveSessionStore.loadTodaySession()
         if (saved != null && saved.course.courseId == course.courseId) {
             orderedPlaces = saved.orderedPlaces
@@ -557,12 +563,47 @@ fun ActiveSessionScreen(
 
             if (!allVisited && currentPlace != null) {
                 val distance = locationService.distanceTo(currentPlace)
-                if (distance != null) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                // 거리 표시 + 길찾기.
+                //
+                // 거리만 알려주고 "어떻게 가는지"는 알려주지 않으면, 사용자는 지도 앱을
+                // 따로 열어 장소명을 다시 입력해야 한다. 그 단절을 여기서 끊는다.
+                // 이동 중에 지도 앱으로 나가는 것은 손해가 아니다 — 도착하면 촬영하러 돌아온다.
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    // 거리는 위치를 알 때만 보여줄 수 있지만, **길찾기는 그렇지 않다.**
+                    // 둘을 한 조건 안에 묶어두면 실내·GPS 불안정으로 위치를 못 잡을 때
+                    // 길찾기까지 같이 사라진다 — 정작 그때가 가장 필요한 순간이다.
+                    if (distance != null) {
                         Icon(Icons.Filled.LocationOn, contentDescription = null, tint = TteOrange, modifier = Modifier.size(15.dp))
                         Text(
                             stringResource(R.string.session_distanceRemaining, currentPlace.placeName, formatDistance(distance)),
                             fontSize = 14.sp, color = TteDarkGray,
+                        )
+                    }
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(3.dp),
+                        modifier = Modifier
+                            .clip(CircleShape)
+                            .background(TteOrange.copy(alpha = 0.12f))
+                            .clickable {
+                                Haptics.light(view)
+                                com.seoktaedev.tteona.core.services.MapAppLauncher.openDirections(
+                                    context = context,
+                                    latitude = currentPlace.latitude,
+                                    longitude = currentPlace.longitude,
+                                    name = currentPlace.placeName,
+                                    distanceMeters = distance?.toDouble(),
+                                )
+                            }
+                            .padding(horizontal = 9.dp, vertical = 4.dp),
+                    ) {
+                        Icon(Icons.Filled.Navigation, contentDescription = null, tint = TteOrange, modifier = Modifier.size(11.dp))
+                        Text(
+                            stringResource(R.string.common_directions),
+                            fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = TteOrange,
                         )
                     }
                 }

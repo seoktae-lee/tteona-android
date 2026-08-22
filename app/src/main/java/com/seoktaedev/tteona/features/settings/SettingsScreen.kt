@@ -134,6 +134,8 @@ private fun SettingsMain(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val authUser by AuthService.currentUser.collectAsState()
+    // 게스트는 계정 항목이 성립하지 않는다 — 화면 여러 곳에서 쓰므로 최상단에서 읽는다
+    val isGuest by AuthService.isGuest.collectAsState()
     val profileUser by UserService.currentUser.collectAsState()
 
     var showSignOutAlert by rememberSaveable { mutableStateOf(false) }
@@ -198,8 +200,13 @@ private fun SettingsMain(
                 )
             }
 
-            // 프로필(아바타·닉네임·통계)은 프로필 탭으로 이동 — 여기는 취향 설정만 남긴다
-            SectionCard {
+            // 게스트는 계정 항목을 감춘다. 다만 설정 화면 자체는 열어 둔다 —
+            // 언어·이용약관·개인정보처리방침은 계정과 무관하고, 특히 약관·정책은
+            // 가입 안 한 사용자도 볼 수 있어야 한다(스토어 심사 요건).
+            //
+            // 취향 설정은 Firestore의 내 문서에 쓴다 → 게스트는 규칙상 쓰기가 막혀
+            // 눌러도 조용히 실패한다. 고장으로 읽히므로 아예 보여주지 않는다.
+            if (!isGuest) SectionCard {
                 TravelStyleRow(
                     currentTag = profileUser?.preferredTag,
                     onSelect = { tag ->
@@ -220,7 +227,11 @@ private fun SettingsMain(
                     horizontalArrangement = Arrangement.spacedBy(14.dp),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable(enabled = !isPro) { showPaywall = true }
+                        .clickable(enabled = !isPro) {
+                            // 게스트도 PRO가 뭔지 볼 수 있어야 한다 — 다만 결제는 계정에
+                            // 묶여야 하므로, 그 판단은 페이월의 구매 버튼이 한다.
+                            showPaywall = true
+                        }
                         .padding(14.dp),
                 ) {
                     Icon(
@@ -324,8 +335,10 @@ private fun SettingsMain(
                 }) { Chevron() }
             }
 
-            SectionHeader(stringResource(R.string.settings_account))
-            SectionCard {
+            // 로그아웃·탈퇴·차단은 계정이 있어야 성립한다.
+            // 게스트에게 '회원탈퇴'를 보여주면 지울 계정이 없는데 지우겠다는 화면이 된다.
+            if (!isGuest) SectionHeader(stringResource(R.string.settings_account))
+            if (!isGuest) SectionCard {
                 SettingsRow(Icons.Filled.PersonOff, stringResource(R.string.settings_blockedUsers), onClick = onOpenBlocked) { Chevron() }
                 SettingsDivider()
                 SettingsRow(

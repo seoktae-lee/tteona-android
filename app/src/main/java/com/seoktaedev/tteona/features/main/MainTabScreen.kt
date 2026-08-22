@@ -116,6 +116,18 @@ fun MainTabScreen(
     var showPaywall by remember { mutableStateOf(false) }
     /** '나의 오늘'을 마무리 모드로 열었는가 (촬영 탭의 ✓) */
     var impromptuFinishMode by remember { mutableStateOf(false) }
+
+    // 앱 어디서든 올라오는 "가입이 필요합니다" 신호를 여기서만 받는다.
+    // 게스트 게이트·브이로그 한도·결제 직전이 전부 이 한 곳으로 모인다.
+    val authPromptRequested by com.seoktaedev.tteona.core.auth.AuthPrompt.requested.collectAsState()
+    LaunchedEffect(authPromptRequested) {
+        if (authPromptRequested) {
+            com.seoktaedev.tteona.core.auth.AuthPrompt.clear()
+            impromptuRoomIds = null
+            impromptuFinishMode = false
+            showAuth = true
+        }
+    }
     // 코치마크 스포트라이트용 탭 실측 위치 (기기별 해상도·내비바 높이 대응)
     val tabBounds = remember { mutableStateListOf<androidx.compose.ui.geometry.Rect?>(null, null, null, null) }
 
@@ -319,7 +331,14 @@ fun MainTabScreen(
         }
 
         if (showGuestSettings) {
-            Box(Modifier.fillMaxSize().background(TteBackground)) {
+            // 상태바를 피한다 — 프로필 탭 안에서 열릴 때는 Scaffold가 여백을 주지만,
+            // 게스트 경로는 전체화면 Box로 직접 띄우므로 제목이 시계와 겹친다.
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .background(TteBackground)
+                    .statusBarsPadding()
+            ) {
                 com.seoktaedev.tteona.features.settings.SettingsScreen(
                     onBack = { showGuestSettings = false },
                 )

@@ -340,13 +340,9 @@ fun CourseDetailScreen(
                 com.seoktaedev.tteona.features.session.RoomSelectSheet(
                     onConfirm = { roomIds ->
                         showRoomSelect = false
-                        // 퍼널 ③ 세션 시작 — 코스가 실제로 '떠나기'로 이어졌는가
-                        scope.launch {
-                            com.seoktaedev.tteona.core.services.StatsService.postCourseEvent(
-                                com.seoktaedev.tteona.core.services.StatsService.CourseFunnelStep.SESSION_START,
-                                course,
-                            )
-                        }
+                        // 퍼널 ③(세션 시작)은 여기서 쏘지 않는다.
+                        // 시트는 열었다 닫았다 다시 확정할 수 있어 중복 기록이 난다.
+                        // 세션 화면(ActiveSessionScreen)이 didStart 가드와 함께 한 번만 쏜다.
                         onStartCourse(roomIds)
                     },
                     onDismiss = { showRoomSelect = false },

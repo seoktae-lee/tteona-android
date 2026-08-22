@@ -6,6 +6,7 @@ import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import com.seoktaedev.tteona.core.model.StatsEvent
 import com.seoktaedev.tteona.core.model.TravelStats
 import com.seoktaedev.tteona.core.network.ApiClient
+import kotlinx.serialization.json.Json
 import com.seoktaedev.tteona.core.network.StatsEventRequest
 
 // iOS의 소형 actor 서비스 3종 이식본 — 실패 시 기본값 반환 (iOS와 동일한 방어적 동작)
@@ -41,8 +42,64 @@ object CourseThumbnailService {
  * 2순위: Google Places (New) 직접 폴백 — 캐시에 없는 새 장소 커버 (iOS와 동일).
  */
 object PlacesPhotoService {
-    private data class Info(val photoUrl: String?, val category: String?)
+    @kotlinx.serialization.Serializable
+    private data class Info(
+        val photoUrl: String? = null,
+        val category: String? = null,
+        /** 만료 시각(epoch millis). 지나면 다시 조회한다. */
+        val expiresAt: Long = 0L,
+    )
+
     private val cache = mutableMapOf<String, Info>()
+
+    /*
+     * **디스크 캐시.**
+     *
+     * TourAPI 이름 규칙을 조인 뒤로 관광지가 아닌 장소는 대부분 Google Places로 넘어간다.
+     * Google 텍스트 검색과 사진 요청은 **호출당 과금**이라, 앱을 껐다 켤 때마다 같은 코스를
+     * 다시 조회하면 정확도를 돈으로 바꾸는 꼴이 된다. 조회 결과를 기기에 남겨 재사용한다.
+     */
+    private const val CACHE_FILE = "place-photos.json"
+    private val cacheJson = Json { ignoreUnknownKeys = true; encodeDefaults = true }
+    private var appContext: android.content.Context? = null
+    private var diskLoaded = false
+
+    /** TourAPI 큐레이션 사진은 잘 바뀌지 않는다 */
+    private const val TTL_TOUR_MS = 30L * 86_400_000
+    /** Google 사진 URL은 서명이 붙어 있어 오래 두면 깨진다 — 짧게만 들고 있는다 */
+    private const val TTL_GOOGLE_MS = 7L * 86_400_000
+    /**
+     * 사진을 못 찾은 것도 결과다. 남겨두지 않으면 사진 없는 장소를 볼 때마다
+     * 유료 검색을 다시 때린다. 다만 짧게만 — 나중에 등록될 수 있으니.
+     */
+    private const val TTL_NEGATIVE_MS = 3L * 86_400_000
+
+    fun init(context: android.content.Context) {
+        appContext = context.applicationContext
+    }
+
+    private fun cacheFile(): java.io.File? =
+        appContext?.let { java.io.File(it.cacheDir, CACHE_FILE) }
+
+    private fun loadDiskCacheIfNeeded() {
+        if (diskLoaded) return
+        diskLoaded = true
+        val f = cacheFile() ?: return
+        if (!f.exists()) return
+        val stored = runCatching {
+            cacheJson.decodeFromString<Map<String, Info>>(f.readText())
+        }.getOrNull() ?: return
+        val now = System.currentTimeMillis()
+        stored.forEach { (k, info) -> if (info.expiresAt > now) cache[k] = info }
+    }
+
+    private fun persistDiskCache() {
+        val f = cacheFile() ?: return
+        val now = System.currentTimeMillis()
+        // 만료된 항목은 남기지 않는다
+        val keep = cache.filterValues { it.expiresAt > now }
+        runCatching { f.writeText(cacheJson.encodeToString(keep)) }
+    }
 
     /**
      * 캐시 키에 **좌표를 함께 넣는다.**
@@ -70,12 +127,14 @@ object PlacesPhotoService {
     }
 
     private suspend fun ensureFetched(k: String, placeName: String, latitude: Double?, longitude: Double?) {
+        loadDiskCacheIfNeeded()
         if (cache.containsKey(k)) return
         // TourAPI 네트워크 실패(tour == null)와 "사진 없음"을 구분 — 사진이 없으면 Google 폴백 시도.
         val tour = runCatching { ApiClient.api.getTourPhoto(placeName, latitude, longitude) }.getOrNull()
         val tourUrl = tour?.url?.takeIf { it.isNotEmpty() }
         if (tourUrl != null) {
-            cache[k] = Info(tourUrl, tour.category)
+            cache[k] = Info(tourUrl, tour.category, System.currentTimeMillis() + TTL_TOUR_MS)
+            persistDiskCache()
             return
         }
 
@@ -90,12 +149,18 @@ object PlacesPhotoService {
             val photoUrl = photoName?.takeIf { it.isNotEmpty() }?.let { GooglePlacesService.photoUri(it) }
             val types = place.optJSONArray("types")
                 ?.let { arr -> (0 until arr.length()).map(arr::getString) } ?: emptyList()
-            cache[k] = Info(photoUrl, GooglePlacesService.categoryText(types) ?: tour?.category)
+            cache[k] = Info(
+                photoUrl,
+                GooglePlacesService.categoryText(types) ?: tour?.category,
+                System.currentTimeMillis() + if (photoUrl != null) TTL_GOOGLE_MS else TTL_NEGATIVE_MS,
+            )
+            persistDiskCache()
         } else if (tour != null) {
             // TourAPI는 성공(사진 없음), Google은 실패/미설정 — 일시 실패가 아니므로 결과를 캐시.
             // 사진을 못 찾은 것도 결과다: 남겨두지 않으면 사진 없는 장소를 볼 때마다
             // 유료 검색을 다시 때린다.
-            cache[k] = Info(null, tour.category)
+            cache[k] = Info(null, tour.category, System.currentTimeMillis() + TTL_NEGATIVE_MS)
+            persistDiskCache()
         }
     }
 }

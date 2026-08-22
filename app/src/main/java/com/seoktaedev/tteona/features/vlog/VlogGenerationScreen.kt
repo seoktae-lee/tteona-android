@@ -146,6 +146,11 @@ fun VlogGenerationScreen(
     onBack: () -> Unit = onDismissToHome,
     /** 게스트 한도에 걸렸을 때 가입 화면으로 — 미전달 시 그냥 닫는다 */
     onRequestSignUp: () -> Unit = onBack,
+    /**
+     * 브이로그를 실제로 손에 넣은 순간. 세션 정리는 여기서 한다 —
+     * 생성 전에 미리 지우면 취소·실패 시 그날 기록이 통째로 사라진다.
+     */
+    onVlogCompleted: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val view = LocalView.current
@@ -410,6 +415,7 @@ fun VlogGenerationScreen(
                     com.seoktaedev.tteona.core.services.StatsService.CourseFunnelStep.VLOG_COMPLETE, course,
                 )
             }
+            onVlogCompleted()
             phase = Phase.PREVIEW
             // 튜토리얼: 첫 브이로그 완성 → 축하 카드
             VlogTutorial.advance(VlogTutorial.Step.CELEBRATE)
@@ -1284,7 +1290,16 @@ private fun ChooseCaptionView(
                         value = currentCaption,
                         onValueChange = { raw ->
                             if (currentKey.isEmpty()) return@OutlinedTextField
-                            onCaptionChange(currentKey, VlogSubtitleStyle.sanitize(raw))
+                            val clamped = VlogSubtitleStyle.sanitize(raw)
+                            // 자르기와 햅틱을 한곳에서 판단한다.
+                            // 값이 그대로면 = 한도에 막힌 것 → 벽에 닿는 감촉으로 알린다.
+                            // 아무 반응이 없으면 "왜 안 써지지?"가 되어 고장으로 읽힌다.
+                            if (clamped == currentCaption) {
+                                if (raw != currentCaption) Haptics.limitReached(view)
+                            } else {
+                                Haptics.typing(view)
+                            }
+                            onCaptionChange(currentKey, clamped)
                         },
                         placeholder = {
                             Text(

@@ -31,6 +31,25 @@ object Haptics {
     }
 
     /** 경고 노티 — 되돌릴 수 없는 삭제/차단 직전 */
+    /**
+     * 타이핑 틱 — 글자가 하나 늘고 줄 때의 아주 작은 반응.
+     * CLOCK_TICK은 안드로이드에서 가장 가벼운 촉각 상수라 연타 상황에 맞는다.
+     */
+    fun typing(view: View) {
+        view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+    }
+
+    /**
+     * 한도에 닿아 더 들어가지 않을 때 — 벽에 닿는 단단한 감촉.
+     * **입력이 막혔는데 아무 반응이 없으면 고장으로 읽힌다.**
+     * REJECT는 API 30부터라 그 아래에서는 LONG_PRESS로 물러난다.
+     */
+    fun limitReached(view: View) {
+        val constant = if (android.os.Build.VERSION.SDK_INT >= 30) HapticFeedbackConstants.REJECT
+                       else HapticFeedbackConstants.LONG_PRESS
+        view.performHapticFeedback(constant)
+    }
+
     fun warning(view: View) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             view.performHapticFeedback(HapticFeedbackConstants.REJECT)

@@ -94,6 +94,7 @@ fun ProPaywallScreen(onDismiss: () -> Unit) {
     val view = LocalView.current
     val scope = rememberCoroutineScope()
     val isPro by ProManager.isPro.collectAsState()
+    val isGuest by com.seoktaedev.tteona.core.auth.AuthService.isGuest.collectAsState()
     val offerings by ProManager.offerings.collectAsState()
 
     val packages = offerings?.current?.availablePackages ?: emptyList()
@@ -286,6 +287,17 @@ fun ProPaywallScreen(onDismiss: () -> Unit) {
                         .clickable(enabled = selectedPackage != null && !isPurchasing) {
                             val activity = context as? Activity ?: return@clickable
                             val pkg = selectedPackage ?: return@clickable
+                            // **결제는 계정에 묶여야 한다.**
+                            // 게스트로 사면 기기를 바꾸거나 앱을 지웠을 때 복원할 방법이 없어
+                            // "돈은 냈는데 사라졌다"가 된다. 게다가 우리는 익명 uid를 일부러
+                            // RevenueCat에 붙이지 않으므로(그게 옳다), 이 문을 막지 않으면
+                            // 복원 불가능한 결제가 그대로 성사된다 — 구매 직전에 가입을 받는다.
+                            if (isGuest) {
+                                Haptics.light(view)
+                                onDismiss()
+                                com.seoktaedev.tteona.core.auth.AuthPrompt.request()
+                                return@clickable
+                            }
                             isPurchasing = true
                             scope.launch {
                                 try {

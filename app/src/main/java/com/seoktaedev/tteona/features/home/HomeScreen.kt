@@ -230,13 +230,24 @@ fun HomeScreen(
         }
     }
 
-    val filteredCourses = remember(courses, likedIds, filter, searchText, authUser) {
+    /**
+     * 코스를 **이름으로** 거를 때 쓸 검색어.
+     *
+     * 검색창은 두 가지 뜻을 겸한다 — "이 이름의 코스를 걸러줘"와 "이 장소로 가줘".
+     * 장소를 골랐다면 뒤쪽이 확정된 것이므로 이름 필터는 손을 뗀다.
+     * (안 그러면 '판교백화점'을 찾아간 순간 그 자리에 있는 '판교 수다 코스'가
+     *  이름이 다르다는 이유로 걸러져, 코스가 하나도 없는 것처럼 보인다 —
+     *  '이 근처 코스 N개'도 같이 0이 된다)
+     */
+    val courseNameQuery = if (searchedPlace == null) searchText else ""
+
+    val filteredCourses = remember(courses, likedIds, filter, courseNameQuery, authUser) {
         val base = when (filter) {
             CourseFilter.ALL -> courses
             CourseFilter.LIKED -> courses.filter { it.courseId in likedIds }
             CourseFilter.MINE -> courses.filter { it.authorId == authUser?.uid }
         }
-        val q = searchText.trim().lowercase()
+        val q = courseNameQuery.trim().lowercase()
         val results = if (q.isEmpty()) base else base.filter { c ->
             c.courseName.lowercase().contains(q) ||
                 c.region.lowercase().contains(q) ||

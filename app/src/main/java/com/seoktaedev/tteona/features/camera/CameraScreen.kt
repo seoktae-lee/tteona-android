@@ -201,7 +201,9 @@ fun CameraScreen(
             if (clipFile != null) 0.0 else VlogClips.clipSeconds(targetFile)
         onUsedSecondsChanged(usedSeconds)
     }
-    LaunchedEffect(Unit) { refreshUsedSeconds() }
+    // 세션 폴더가 바뀌면(앱 실행 직후 신원이 늦게 정해지는 경우) 예산을 다시 센다.
+    // free_ → free_{uid} 로 갈아타는 그 순간 세지 않으면 예산이 0인 채로 남는다.
+    LaunchedEffect(sessionId) { refreshUsedSeconds() }
     // 바깥에서 클립을 지우거나 세션을 비우면 예산을 다시 센다 —
     // 그러지 않으면 예산이 찬 것으로 알고 셔터가 잠긴 채 남는다.
     LaunchedEffect(budgetRefreshToken) { if (budgetRefreshToken > 0) refreshUsedSeconds() }

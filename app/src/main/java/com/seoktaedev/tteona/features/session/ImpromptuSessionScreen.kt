@@ -198,6 +198,18 @@ fun ImpromptuSessionScreen(
         }
     }
 
+    /**
+     * 오늘 기록을 통째로 버리고 촬영 예산을 되돌린다.
+     * 예산이 찬 채로 촬영도 삭제도 못 하는 상태에 갇혔을 때의 탈출구다.
+     */
+    fun discardToday() {
+        VlogClips.deleteAll(context, sessionId)
+        ImpromptuSessionStore.clear()
+        capturedPlaces = emptyList()
+        recordedSeconds = 0.0
+        Haptics.warning(view)
+    }
+
     fun startNewSession() {
         // 세션 폴더(free_{uid})는 유저당 고정 — 새 세션은 깨끗한 폴더로 시작 (촬영 예산 보호)
         VlogClips.deleteAll(context, sessionId)
@@ -241,7 +253,11 @@ fun ImpromptuSessionScreen(
         )
         generatedCourse = course
         courseSavedToFirestore = saveToFirestore
-        ImpromptuSessionStore.clear()
+        // **여기서 세션을 지우지 않는다.**
+        // 마무리 시트에서 '브이로그 만들기'를 고른 것일 뿐, 아직 아무것도 손에 넣지 않았다.
+        // 여기서 지우면 생성을 취소하거나 실패했을 때 오늘 찍은 기록이 통째로 사라진다 —
+        // 목록이 없어지면 촬영 탭이 세션을 비었다고 보고 클립 파일까지 지운다.
+        // 정리는 브이로그를 실제로 손에 넣은 순간(onVlogCompleted)에 한다.
         if (saveToFirestore) scope.launch { runCatching { CourseService.saveCourse(course) } }
         postEndFeed(activeRoomIds.toList(), capturedPlaces.size)
     }
@@ -704,6 +720,10 @@ fun ImpromptuSessionScreen(
                 showPaywall = true
             },
             onDismiss = { showBudgetAlert = false },
+            onDiscardToday = {
+                showBudgetAlert = false
+                discardToday()
+            },
         )
     }
     if (showPaywall) {
@@ -723,6 +743,13 @@ fun ImpromptuSessionScreen(
                 onBack = { showVlog = false },
                 // 게스트 한도 안내의 '회원가입' — 세션을 닫고 상위(탭)가 가입 화면을 연다
                 onRequestSignUp = onRequestSignUp,
+                // 브이로그를 손에 넣은 그 순간 오늘 세션은 만료한다.
+                // 이 정리를 '나가기' 버튼에 매달면, 다른 경로로 화면을 벗어났을 때
+                // 세션이 살아남아 촬영 탭 칩이 그대로 남는다.
+                onVlogCompleted = {
+                    ImpromptuSessionStore.clear()
+                    capturedPlaces = emptyList()
+                },
             )
         }
     }

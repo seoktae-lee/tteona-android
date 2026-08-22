@@ -23,6 +23,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -46,7 +49,14 @@ fun VlogLimitPopup(
     isPro: Boolean,
     onUpgrade: () -> Unit = {},
     onDismiss: () -> Unit = {},
+    /**
+     * 오늘 기록을 버리고 예산을 되돌린다.
+     * 예산이 찬 상태에서 브이로그 생성이 실패하면 유저는 촬영도 못 하고 지울 수도 없이
+     * 갇힌다 — **막는 화면이 곧 탈출구여야 한다.**
+     */
+    onDiscardToday: (() -> Unit)? = null,
 ) {
+    var showDiscardConfirm by remember { mutableStateOf(false) }
     Box(
         Modifier
             .fillMaxSize()
@@ -141,13 +151,49 @@ fun VlogLimitPopup(
             Box(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier
-                    .padding(top = if (isPro) 20.dp else 6.dp, bottom = 14.dp)
+                    .padding(top = if (isPro) 20.dp else 6.dp, bottom = if (onDiscardToday == null) 14.dp else 0.dp)
                     .fillMaxWidth()
                     .height(44.dp)
                     .clickable(onClick = onDismiss),
             ) {
                 Text(stringResource(R.string.common_ok), fontSize = 15.sp, fontWeight = FontWeight.Medium, color = Color.White.copy(alpha = 0.65f))
             }
+
+            if (onDiscardToday != null) {
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .padding(bottom = 14.dp)
+                        .fillMaxWidth()
+                        .height(36.dp)
+                        .clickable { showDiscardConfirm = true },
+                ) {
+                    Text(
+                        stringResource(R.string.impromptu_discardToday),
+                        fontSize = 13.sp,
+                        color = Color.White.copy(alpha = 0.45f),
+                    )
+                }
+            }
         }
+    }
+
+    if (showDiscardConfirm && onDiscardToday != null) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showDiscardConfirm = false },
+            title = { Text(stringResource(R.string.impromptu_discardToday)) },
+            text = { Text(stringResource(R.string.impromptu_discardToday_message)) },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = {
+                    showDiscardConfirm = false
+                    onDiscardToday()
+                }) { Text(stringResource(R.string.impromptu_discardToday), color = Color.Red) }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = { showDiscardConfirm = false }) {
+                    Text(stringResource(R.string.common_cancel))
+                }
+            },
+        )
     }
 }

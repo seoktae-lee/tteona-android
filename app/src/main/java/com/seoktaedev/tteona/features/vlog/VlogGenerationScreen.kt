@@ -117,6 +117,7 @@ import com.seoktaedev.tteona.features.tutorial.TutorialBubble
 import com.seoktaedev.tteona.features.tutorial.TutorialCelebrateOverlay
 import com.seoktaedev.tteona.features.tutorial.VlogTutorial
 import com.seoktaedev.tteona.features.tutorial.tutorialGlow
+import com.seoktaedev.tteona.ui.theme.BadgeNumberTextStyle
 import com.seoktaedev.tteona.ui.theme.TteOrange
 import com.seoktaedev.tteona.ui.theme.glowCircle
 import kotlinx.coroutines.CancellationException
@@ -1195,6 +1196,7 @@ private fun ChooseCaptionView(
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = if (isOn) Color.White else TteOrange,
+                                        style = BadgeNumberTextStyle,
                                     )
                                 }
                                 Text(

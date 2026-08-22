@@ -104,6 +104,7 @@ import com.seoktaedev.tteona.core.services.CourseThumbnailService
 import com.seoktaedev.tteona.core.services.PlaceSearchService
 import com.seoktaedev.tteona.core.services.PlacesPhotoService
 import com.seoktaedev.tteona.core.services.UserService
+import com.seoktaedev.tteona.ui.theme.BadgeNumberTextStyle
 import com.seoktaedev.tteona.ui.theme.TteDarkGray
 import com.seoktaedev.tteona.ui.theme.TteFieldBackground
 import com.seoktaedev.tteona.ui.theme.TteMediumGray
@@ -1190,6 +1191,9 @@ private fun PlacePhotoThumbnail(place: Place) {
                     fontSize = 10.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White,
+                    // 기본 Text는 includeFontPadding=true라 숫자가 원 정중앙보다 아래로 쏠린다
+                    // (전 기종 공통). 원형 배지는 반드시 이 스타일을 쓸 것.
+                    style = BadgeNumberTextStyle,
                 )
             }
         }

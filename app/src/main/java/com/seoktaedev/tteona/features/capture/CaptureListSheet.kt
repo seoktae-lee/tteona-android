@@ -45,6 +45,7 @@ import com.seoktaedev.tteona.R
 import com.seoktaedev.tteona.core.i18n.LocaleManager
 import com.seoktaedev.tteona.core.model.Place
 import com.seoktaedev.tteona.core.services.VlogClips
+import com.seoktaedev.tteona.ui.theme.BadgeNumberTextStyle
 import com.seoktaedev.tteona.ui.theme.TteDarkGray
 import com.seoktaedev.tteona.ui.theme.TteFieldBackground
 import com.seoktaedev.tteona.ui.theme.TteMediumGray
@@ -258,6 +259,7 @@ private fun CaptureRow(place: Place, clipFile: File?, onDelete: () -> Unit) {
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Bold,
                 color = TteOrange,
+                style = BadgeNumberTextStyle,
             )
         }
         Text(

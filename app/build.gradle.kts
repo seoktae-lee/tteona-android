@@ -30,8 +30,8 @@ android {
         applicationId = "com.seoktaedev.tteona"
         minSdk = 26
         targetSdk = 36
-        versionCode = 22
-        versionName = "1.3"
+        versionCode = 23
+        versionName = "1.4"
 
         // local.properties에 MAPS_API_KEY=... 형태로 저장 (VCS 제외 대상)
         manifestPlaceholders["MAPS_API_KEY"] = localProps.getProperty("MAPS_API_KEY") ?: ""

@@ -9,6 +9,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -224,10 +225,68 @@ fun HomeScreen(
         results.sortedByDescending { it.likeCount }
     }
 
-    // 코스명 라벨은 충분히 확대했을 때만 — 축소 상태에서 라벨이 지도를 뒤덮지 않게 한다
-    // (iOS GoogleMapView.labelZoomThreshold = 9.0과 동일). 경계를 넘을 때만 recompose.
+    // 지도가 멈추면 그 지역 코스를 보충한다 — 인기 상위 300에 못 든 동네 코스와
+    // 초기 상한(500) 밖으로 밀린 큐레이션 코스가 여기서 채워진다.
+    // 이미 훑은 밴드는 CourseService가 건너뛰므로 팬할 때마다 쿼리가 나가지는 않는다.
+    LaunchedEffect(cameraPositionState.isMoving) {
+        if (cameraPositionState.isMoving) return@LaunchedEffect
+        val target = cameraPositionState.position.target
+        // 전국이 한눈에 들어오는 축척에서는 '주변'이라는 말이 성립하지 않는다
+        if (cameraPositionState.position.zoom < 8f) return@LaunchedEffect
+        CourseService.fetchCoursesNear(
+            latitude = target.latitude,
+            longitude = target.longitude,
+            blockedUserIds = UserService.currentUser.value?.blockedUserIds ?: emptyList(),
+        )
+    }
+
+    /**
+     * 화면에 그릴 핀을 솎아낸다. **묶어서 숫자로 만들지 않는다.**
+     *
+     * iOS에서 숫자 클러스터를 먼저 시도했는데 지도가 주황 동그라미로 덮여 더 나빠졌다.
+     * "이 근처에 157개"라는 정보는 어디로 갈지 정하는 데 아무 도움이 되지 않는다.
+     * 실제 지도 앱들이 하는 대로 간다 — 멀리서는 아무것도 그리지 않고(확대 유도),
+     * 가까이서는 화면에 담기는 만큼만 개별 핀으로 보여준다.
+     *
+     * 남길 것을 고르는 기준은 **화면 중심에서 가까운 순**이다. 사용자가 방금 가져다 놓은
+     * 지점이 곧 관심사이므로, 가운데부터 채우는 편이 가장자리 것을 남기는 것보다 낫다.
+     */
+    val visibleCourses by remember(filteredCourses, searchText) {
+        derivedStateOf {
+            val pos = cameraPositionState.position
+            // 검색 중에는 줌 문턱을 적용하지 않는다 — "이걸 보여달라"고 명시적으로 말한
+            // 상황에서 축척을 이유로 아무것도 안 그리면 결과 개수만 있고 핀은 없는 꼴이 된다.
+            val searching = searchText.isNotBlank()
+            if (!searching && pos.zoom < PIN_MIN_ZOOM) return@derivedStateOf emptyList()
+            val c = pos.target
+            filteredCourses
+                .mapNotNull { course -> course.mainPlace?.let { course to it } }
+                .sortedBy { (_, main) ->
+                    val dLat = main.latitude - c.latitude
+                    // 경도는 위도에 따라 실제 거리가 달라진다 — 대략 보정해 동서로 치우치지 않게
+                    val dLng = (main.longitude - c.longitude) * 0.8
+                    dLat * dLat + dLng * dLng
+                }
+                .take(MAX_VISIBLE_PINS)
+                .map { it.first }
+        }
+    }
+
+    /**
+     * 코스명 라벨을 보일지 — 줌 + **화면 내 밀도**로 정한다.
+     *
+     * 줌만으로는 부족하다: 같은 줌이라도 서울 도심은 핀이 몰리고 지방은 흩어져서
+     * 줌 임계 하나로는 한쪽이 반드시 깨진다. iOS에서 큐레이션 코스를 넣으며 실제로 겪었다 —
+     * 수도권이 라벨로 완전히 덮여 지도가 보이지 않았다.
+     * 동네 단위까지 당겨봤다면 밀도를 따지지 않는다(그 줌에서 겹치는 건 사용자가 의도한 것이고,
+     * 오히려 이름이 안 보이면 고를 수가 없다).
+     */
     val showLabels by remember {
-        derivedStateOf { cameraPositionState.position.zoom >= 9f }
+        derivedStateOf {
+            val zoom = cameraPositionState.position.zoom
+            zoom >= LABEL_ALWAYS_ZOOM ||
+                (zoom >= 9f && visibleCourses.size <= LABEL_DENSITY_LIMIT)
+        }
     }
 
     Box(modifier.fillMaxSize()) {
@@ -242,7 +301,7 @@ fun HomeScreen(
             ),
             onMapClick = { previewCourse = null },
         ) {
-            filteredCourses.forEach { course ->
+            visibleCourses.forEach { course ->
                 val main = course.mainPlace ?: return@forEach
                 key(course.courseId) {
                     MarkerComposable(
@@ -667,6 +726,9 @@ private fun CoursePin(course: Course, showLabel: Boolean) {
             modifier = Modifier.size(46.dp),
         )
         if (showLabel) {
+            // 큐레이션 코스는 **주황 테두리**로 구분한다.
+            // 캡슐을 통째로 주황으로 채웠더니 라벨이 전부 강하게 튀어 지도를 덮어버렸다
+            // (iOS에서 수도권 182개를 넣고 실제로 확인). 바탕은 흰색으로 두고 테두리만 바꾼다.
             Text(
                 course.courseName,
                 fontSize = 10.sp,
@@ -678,6 +740,10 @@ private fun CoursePin(course: Course, showLabel: Boolean) {
                     .widthLimit()
                     .clip(RoundedCornerShape(6.dp))
                     .background(Color.White.copy(alpha = 0.85f))
+                    .then(
+                        if (course.curated) Modifier.border(1.5.dp, TteOrange, RoundedCornerShape(6.dp))
+                        else Modifier
+                    )
                     .padding(horizontal = 5.dp, vertical = 1.dp),
             )
         }
@@ -856,3 +922,23 @@ private fun PlacePhotoThumbnail(place: Place) {
         )
     }
 }
+
+/**
+ * 이 줌보다 멀리 보면 핀을 아예 그리지 않는다.
+ * 광역 화면에서 전국의 코스를 뿌려봐야 서로 겹쳐 읽히지 않고, 그 상태의 핀은
+ * 누를 대상도 되지 못한다. 네이버·카카오 지도가 그렇듯 확대를 유도한다.
+ */
+private const val PIN_MIN_ZOOM = 9.5f
+
+/**
+ * 한 화면에 그릴 핀의 최대 개수. 넘으면 화면 중심에 가까운 것만 남긴다.
+ * (에어비앤비가 화면에 20개 남짓만 띄우는 것과 같은 방식)
+ *
+ * **라벨 밀도 한계와 같은 값으로 맞춘다.** 핀만 잔뜩 있고 이름이 안 보이면
+ * 무엇을 누를지 고를 수 없어 아무 소용이 없다. 상한 안에서는 항상 이름이 보이게 한다.
+ */
+private const val MAX_VISIBLE_PINS = 20
+private const val LABEL_DENSITY_LIMIT = 20
+
+/** 이 줌 이상이면 밀도와 무관하게 라벨을 보여준다(동네 단위로 당겨본 상태) */
+private const val LABEL_ALWAYS_ZOOM = 14f

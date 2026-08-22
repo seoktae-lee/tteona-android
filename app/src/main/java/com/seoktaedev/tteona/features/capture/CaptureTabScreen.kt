@@ -402,9 +402,11 @@ fun CaptureTabScreen(
         // 첫 브이로그 안내 — 셔터 위 / ✓ 아래
         if (!isRecording) {
             when (tutorialStep) {
+                // 말풍선은 길이 칩보다 **위**에 둔다. 셔터 바로 위 200dp 자리에 놓았더니
+                // 칩을 통째로 덮어 "몇 초로 찍을지"를 고를 수 없었다 (에뮬 실측).
                 VlogTutorial.Step.CAPTURE_HERE -> TutorialHint(
                     text = stringResource(R.string.tutorial_capture_text),
-                    modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 200.dp),
+                    modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 290.dp),
                 )
                 VlogTutorial.Step.END_TODAY -> TutorialHint(
                     text = stringResource(R.string.tutorial_endToday_text),

@@ -29,6 +29,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -100,6 +101,15 @@ import java.io.File
 import java.util.concurrent.Executor
 
 /**
+ * 벽시계 백업 종료에 두는 여유(초).
+ *
+ * 느린 인코더에서 첫 키프레임까지 걸리는 시간을 덮을 만큼 넉넉해야 하고(에뮬 실측 약 2.2초),
+ * 그렇다고 너무 길면 Status가 멎은 기기에서 촬영이 오래 이어진다. 예산은 결과 파일의
+ * 실제 길이로 정산되므로 조금 길어져도 회계가 어긋나지는 않는다.
+ */
+private const val CLIP_WALLCLOCK_SLACK = 4.0
+
+/**
  * 장소 영상 촬영 — iOS Features/Camera/CameraView.swift(CameraViewController)의 CameraX 이식본.
  * 촬영 예산: 무료 세션 총 30초(장소당 5초) / PRO 5분 — ProManager 기준.
  * 클립은 files/Tteona/Sessions/{sessionId}/에 iOS와 동일한 이름 규칙으로 저장된다.
@@ -156,8 +166,14 @@ fun CameraScreen(
     var saveDone by remember { mutableStateOf(false) }
     var recordStartMs by remember { mutableStateOf(0L) }
     var elapsedSeconds by remember { mutableDoubleStateOf(0.0) }
-    // 이번 클립의 자동 종료 한도(초) — startRecording에서 갱신. 무료=5초, PRO=남은 예산.
+    // 이번 클립의 자동 종료 한도(초) — startRecording에서 갱신. 유저가 고른 길이를 남은 예산으로 클램프한 값.
     var clipLimitSeconds by remember { mutableDoubleStateOf(5.0) }
+    /**
+     * **실제로 파일에 기록된** 길이(초). CameraX가 Status 이벤트로 알려준다.
+     * 벽시계 경과와 다르다 — 느린 인코더에서는 녹화 시작 신호 뒤에도 첫 키프레임이
+     * 나오기까지 몇 초가 걸리고, 그동안은 이 값이 0에 머문다.
+     */
+    var recordedSeconds by remember { mutableDoubleStateOf(0.0) }
     var selectedZoom by remember { mutableStateOf(1.0f) }
     var showTip by remember { mutableStateOf(true) }
     // 탭 초점 인디케이터 위치 (px) — 잠시 표시 후 사라짐
@@ -202,7 +218,19 @@ fun CameraScreen(
     LaunchedEffect(isRecording) {
         while (isRecording) {
             elapsedSeconds = (System.currentTimeMillis() - recordStartMs) / 1000.0
-            if (elapsedSeconds >= clipLimitSeconds) {
+            // **실제 기록 길이**가 한도에 닿으면 끝낸다 — 그게 결과물의 길이다.
+            //
+            // 벽시계만 보고 끊으면 느린 인코더에서 사고가 난다: Start 신호가 온 뒤에도
+            // 첫 비디오 키프레임이 나오기까지 2~3초가 걸리는 기기가 있고(에뮬에서 실측),
+            // 그 사이에 3초 한도로 끊으면 muxer가 한 프레임도 못 받아
+            // ERROR_NO_VALID_DATA로 끝나 파일이 통째로 사라진다.
+            // 5초 고정이던 시절엔 겨우 넘어갔지만 2·3초 옵션이 생기며 드러났다.
+            //
+            // 그렇다고 벽시계를 버릴 수도 없다 — 일부 기기는 Status가 뒤처지거나 멎어
+            // 기록 길이만 보면 영영 안 끝난다. 여유(SLACK)를 둔 백업으로 남긴다.
+            if (recordedSeconds >= clipLimitSeconds ||
+                elapsedSeconds >= clipLimitSeconds + CLIP_WALLCLOCK_SLACK
+            ) {
                 // stopRecording()과 동일 — 종료는 Finalize 이벤트에서 마무리된다.
                 isSaving = true
                 activeRecording?.stop()
@@ -211,6 +239,7 @@ fun CameraScreen(
             delay(50)
         }
         elapsedSeconds = 0.0
+        recordedSeconds = 0.0
     }
 
     // 카메라 바인딩 (렌즈 전환 시 재바인딩)
@@ -305,12 +334,9 @@ fun CameraScreen(
                     isRecording = true
                 }
                 is VideoRecordEvent.Status -> {
-                    // 클립 한도 도달 시 자동 종료 (iOS maxDuration)
-                    if (event.recordingStats.recordedDurationNanos / 1e9 >= clipLimit && isRecording) {
-                        isRecording = false
-                        isSaving = true
-                        activeRecording?.stop()
-                    }
+                    // 종료 판정은 위 루프가 단독으로 한다 — 두 곳에서 stop()을 부르면
+                    // 어느 쪽이 이겼는지에 따라 결과가 달라져 재현이 어려워진다.
+                    recordedSeconds = event.recordingStats.recordedDurationNanos / 1e9
                 }
                 is VideoRecordEvent.Finalize -> {
                     isRecording = false
@@ -337,11 +363,17 @@ fun CameraScreen(
         }
     }
 
-    // 저장 성공 → 1.2초 후 자동 닫기 (iOS recordingDone)
+    // 저장 성공 → 1.2초 후 다음 단계로 (iOS recordingDone)
     LaunchedEffect(saveDone) {
-        if (saveDone) {
-            delay(1200)
-            onSaved()
+        if (!saveDone) return@LaunchedEffect
+        delay(1200)
+        onSaved()
+        // 임베드 모드에서는 이 화면이 그대로 남는다 — 오버레이를 직접 걷어내지 않으면
+        // '저장됐어요'가 화면을 덮은 채로 굳고, 그 뒤의 터치 차단막이 셔터까지 막는다.
+        // (코스 경로는 onSaved가 화면을 닫으므로 원래 문제가 없었다)
+        if (embedded) {
+            saveDone = false
+            isSaving = false
         }
     }
 
@@ -581,8 +613,11 @@ fun CameraScreen(
                         if (!isRecording) startRecording()
                     },
             ) {
+                // 기록이 실제로 시작되면 그 길이를 따른다 — 링이 다 찼는데 결과물이
+                // 짧으면 거짓말이 된다. 아직 0이면(키프레임 대기) 벽시계로 채워 둔다.
+                val progressSeconds = if (recordedSeconds > 0) recordedSeconds else elapsedSeconds
                 val clipFrac = if (isRecording) {
-                    (elapsedSeconds / clipLimitSeconds.coerceAtLeast(0.1)).coerceIn(0.0, 1.0)
+                    (progressSeconds / clipLimitSeconds.coerceAtLeast(0.1)).coerceIn(0.0, 1.0)
                 } else 0.0
                 Canvas(Modifier.size(76.dp)) {
                     val stroke = Stroke(width = 4.dp.toPx(), cap = StrokeCap.Round)
@@ -607,7 +642,11 @@ fun CameraScreen(
                 when {
                     isRecording -> LocaleManager.string(
                         context, R.string.camera_clipElapsed,
-                        String.format("%.1f", elapsedSeconds.coerceAtMost(clipLimitSeconds)),
+                        String.format(
+                            "%.1f",
+                            (if (recordedSeconds > 0) recordedSeconds else elapsedSeconds)
+                                .coerceAtMost(clipLimitSeconds),
+                        ),
                         clipLimitSeconds.roundToInt(),
                     )
                     embedded -> ""
@@ -799,9 +838,14 @@ fun CameraScreen(
 }
 
 /**
- * 세로 슬라이더 — 회전한 Slider는 레이아웃 크기가 회전 전 기준이라
- * 바깥 Box로 실제 차지할 영역을 못박아야 다른 컨트롤과 겹치지 않는다.
- * 아이콘을 누르면 기본값으로 되돌아간다.
+ * 세로 슬라이더 — **직접 그린다.**
+ *
+ * 처음엔 Material Slider를 `rotationZ = -90f`로 돌려 썼는데, 회전은 그리기에만 적용되고
+ * 레이아웃 크기는 회전 전 기준이라 트랙이 옆 컨트롤 위로 삐져나오고 터치 영역도 어긋났다
+ * (에뮬 실측: 트랙이 가로로 누운 채 뷰파인더를 가로질렀다).
+ *
+ * 트랙 하나와 손잡이 하나가 전부라 직접 그리는 편이 예측 가능하다.
+ * 검은 판을 깔지 않는다 — 화면 한쪽이 어두워지면 뷰파인더를 가린다. 대신 그림자로 띄운다.
  */
 @Composable
 private fun VerticalCameraSlider(
@@ -813,6 +857,7 @@ private fun VerticalCameraSlider(
     onReset: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val trackHeight = 140.dp
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -833,22 +878,44 @@ private fun VerticalCameraSlider(
                 modifier = Modifier.size(15.dp),
             )
         }
-        Box(
-            contentAlignment = Alignment.Center,
-            modifier = Modifier.size(width = 40.dp, height = 150.dp),
+
+        // 위가 1, 아래가 0 — 밝기·줌 모두 "위로 올리면 커진다"가 직관적이다
+        Canvas(
+            Modifier
+                .size(width = 28.dp, height = trackHeight)
+                .pointerInput(Unit) {
+                    detectVerticalDragGestures { change, _ ->
+                        change.consume()
+                        onValueChange((1f - change.position.y / size.height).coerceIn(0f, 1f))
+                    }
+                }
+                .pointerInput(Unit) {
+                    detectTapGestures { offset ->
+                        onValueChange((1f - offset.y / size.height).coerceIn(0f, 1f))
+                    }
+                },
         ) {
-            androidx.compose.material3.Slider(
-                value = value,
-                onValueChange = onValueChange,
-                colors = androidx.compose.material3.SliderDefaults.colors(
-                    thumbColor = TteOrange,
-                    activeTrackColor = TteOrange,
-                    inactiveTrackColor = Color.White.copy(alpha = 0.35f),
-                ),
-                modifier = Modifier
-                    .width(150.dp)
-                    .graphicsLayer { rotationZ = -90f },
+            val cx = size.width / 2f
+            val trackW = 3.dp.toPx()
+            val y = size.height * (1f - value)
+            // 트랙(전체) → 활성 구간(손잡이 아래) → 손잡이
+            drawLine(
+                Color.Black.copy(alpha = 0.35f),
+                Offset(cx, 0f), Offset(cx, size.height),
+                strokeWidth = trackW + 2.dp.toPx(), cap = StrokeCap.Round,
             )
+            drawLine(
+                Color.White.copy(alpha = 0.45f),
+                Offset(cx, 0f), Offset(cx, size.height),
+                strokeWidth = trackW, cap = StrokeCap.Round,
+            )
+            drawLine(
+                TteOrange,
+                Offset(cx, y), Offset(cx, size.height),
+                strokeWidth = trackW, cap = StrokeCap.Round,
+            )
+            drawCircle(Color.Black.copy(alpha = 0.35f), radius = 8.dp.toPx(), center = Offset(cx, y))
+            drawCircle(Color.White, radius = 6.5f.dp.toPx(), center = Offset(cx, y))
         }
     }
 }

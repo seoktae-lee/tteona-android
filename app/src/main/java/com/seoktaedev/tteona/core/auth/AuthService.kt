@@ -574,7 +574,34 @@ object AuthService {
         com.seoktaedev.tteona.core.services.UserService.clear()
         com.seoktaedev.tteona.core.services.RoomService.clear()
         com.seoktaedev.tteona.core.services.FootprintService.clear()
-        auth.signOut()
+        /*
+         * **진행 중이던 세션은 로그아웃과 함께 끊는다.**
+         *
+         * 세션 저장소는 기기 단위인데 클립은 `free_{uid}` 아래에 있다. 지우지 않으면
+         * 로그아웃 뒤 새로 발급된 게스트가 이전 계정의 장소 목록을 그대로 물려받고,
+         * 그 항목이 가리키는 클립 파일은 남의 폴더에 있어 열리지 않는다 —
+         * 촬영 탭 칩에 "1곳"이 뜨는데 영상은 없는 상태가 된다.
+         * (iOS signOut도 두 저장소를 함께 비운다)
+         */
+        com.seoktaedev.tteona.core.services.ActiveSessionStore.clear()
+        com.seoktaedev.tteona.core.services.ImpromptuSessionStore.clear()
+        /*
+         * 기기 푸시 토큰 해제를 **Firebase 세션이 살아 있을 때** 먼저 끝낸다.
+         * 남겨두면 이 기기에 다음으로 로그인하는 사람에게 이전 계정의 알림이 배달된다.
+         * 네트워크가 죽어 있어도 로그아웃 자체는 막히면 안 되므로 시간 제한을 둔다.
+         */
+        scope.launch {
+            runCatching {
+                kotlinx.coroutines.withTimeout(3_000) {
+                    val token = com.google.firebase.messaging.FirebaseMessaging.getInstance()
+                        .token.await()
+                    com.seoktaedev.tteona.core.network.ApiClient.api.unregisterPush(
+                        com.seoktaedev.tteona.core.network.PushUnregisterRequest(token),
+                    )
+                }
+            }
+            auth.signOut()
+        }
     }
 
     // MARK: - 회원탈퇴 (iOS deleteAccount 대응)

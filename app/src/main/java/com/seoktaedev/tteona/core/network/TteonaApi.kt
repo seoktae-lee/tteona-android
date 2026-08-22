@@ -177,6 +177,10 @@ data class PushRegisterRequest(
     val lang: String,
 )
 
+// 로그아웃 시 이 기기의 토큰 해제 (iOS PushService.unregisterDeviceToken 대응)
+@Serializable
+data class PushUnregisterRequest(val token: String)
+
 /**
  * tteona.kr REST API 정의 — iOS의 각 actor 서비스가 호출하는 엔드포인트와 동일.
  */
@@ -305,4 +309,8 @@ interface TteonaApi {
     // 서버 직발송 푸시(채팅·Vlog 완성 등)용 디바이스 토큰 등록 (iOS PushService.registerDeviceToken 대응)
     @POST("push/register")
     suspend fun registerPush(@Body body: PushRegisterRequest)
+
+    // 로그아웃 시 디바이스 토큰 해제 — 남겨두면 다음 로그인 사용자에게 이전 계정 알림이 간다
+    @POST("push/unregister")
+    suspend fun unregisterPush(@Body body: PushUnregisterRequest)
 }

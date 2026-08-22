@@ -214,7 +214,14 @@ fun MainTabScreen(
     val unreadRoomIds by com.seoktaedev.tteona.core.services.RoomService.unreadRoomIds.collectAsState()
     // 게스트는 uid가 있어도 계정이 아니다 — Firestore 규칙이 익명을 막으므로 실시간 룸
     // 리스너는 권한 거부만 쌓으며 재시도를 돈다. 진짜 계정일 때만 켠다.
-    val gated = isGuest && !forceUnlockTabs
+    //
+    // **게스트가 아니라고 해서 계정인 것도 아니다.** 이메일로 가입하고 인증을 아직 안 한
+    // 상태에서는 isGuest=false지만 currentUser는 비어 있다(인증 전까지 로그인으로 치지
+    // 않는다). isGuest만 보고 게이트를 열면 그 사이에 프로필·발견·채팅이 계정 없이 열려
+    // 닉네임 없음·통계 대시(–)만 뜨고, 가입 게이트도 통째로 건너뛴다.
+    // iOS는 이 자리에서 isLoggedIn(currentUser != nil && !isGuest)을 본다 — 같게 맞춘다.
+    val isAccount = authUser != null && !isGuest
+    val gated = !isAccount && !forceUnlockTabs
     val accountUid = authUser?.uid?.takeIf { !isGuest }
     LaunchedEffect(accountUid) {
         accountUid?.let { com.seoktaedev.tteona.core.services.RoomService.startListeningMyRooms(it) }
@@ -326,8 +333,10 @@ fun MainTabScreen(
                         .clickable { showAuth = false },
                 )
             }
-            // 게스트가 아니게 되면(가입·로그인 성공) 스스로 닫는다
-            LaunchedEffect(isGuest) { if (!isGuest) showAuth = false }
+            // 진짜 계정이 되면(가입·로그인 성공) 스스로 닫는다.
+            // isGuest만 보면 이메일 인증 대기 상태에서도 닫혀, 아직 계정이 아닌 사람이
+            // 게이트 화면으로 떨어진다.
+            LaunchedEffect(isAccount) { if (isAccount) showAuth = false }
         }
 
         if (showGuestSettings) {
@@ -426,7 +435,7 @@ fun MainTabScreen(
         // 하나로 두면 게스트로 짧은 안내를 본 사람이 가입해도 전체 안내를 영영 못 본다
         // (link 승계로 uid가 그대로이기 때문).
         val navGuideKey = authUser?.uid?.let {
-            if (isGuest) "hasSeenNavGuideGuest_$it" else "hasSeenNavGuide_$it"
+            if (isAccount) "hasSeenNavGuide_$it" else "hasSeenNavGuideGuest_$it"
         }
         LaunchedEffect(authUser?.uid, isGuest) {
             val uid = authUser?.uid ?: return@LaunchedEffect
@@ -449,7 +458,7 @@ fun MainTabScreen(
             NavGuideOverlay(
                 tabBounds = { i -> tabBounds.getOrNull(i) },
                 onSelectTab = { selectedTab = it },
-                showsAccountTabs = !isGuest,
+                showsAccountTabs = isAccount,
                 onFinish = {
                     authUser?.uid?.let { uid ->
                         navGuideKey?.let { key ->

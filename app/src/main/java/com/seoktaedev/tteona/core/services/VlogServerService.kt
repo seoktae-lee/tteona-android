@@ -4,10 +4,14 @@ import android.content.Context
 import com.seoktaedev.tteona.R
 import com.seoktaedev.tteona.core.i18n.LocaleManager
 import com.seoktaedev.tteona.core.model.Course
+import com.seoktaedev.tteona.features.vlog.VlogSubtitleStyle
 import com.seoktaedev.tteona.core.network.ApiClient
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
+import kotlin.coroutines.coroutineContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -17,6 +21,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MultipartBody
+import okio.buffer
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -41,13 +46,20 @@ object VlogServerService {
     private val json = Json { ignoreUnknownKeys = true }
 
     /** 서버가 "이 영상은 못 만든다"고 확정했는가 — DEFINITIVE면 이어받아도 결과가 같다. */
-    enum class ErrorKind { DEFINITIVE, TRANSIENT, JOB_GONE }
+    enum class ErrorKind {
+        DEFINITIVE,
+        TRANSIENT,
+        JOB_GONE,
+        /** 게스트 무료 체험을 이미 썼다 — 재시도해도 안 되는 **약속의 경계**다 */
+        GUEST_LIMIT,
+    }
 
     class ServerVlogException(
         message: String,
         val kind: ErrorKind = ErrorKind.TRANSIENT,
     ) : Exception(message) {
-        val isDefinitive: Boolean get() = kind == ErrorKind.DEFINITIVE
+        val isDefinitive: Boolean get() = kind == ErrorKind.DEFINITIVE || kind == ErrorKind.GUEST_LIMIT
+        val isGuestLimit: Boolean get() = kind == ErrorKind.GUEST_LIMIT
     }
 
     // ── 진행 중인 잡 기억하기 ────────────────────────────────────────────
@@ -151,8 +163,7 @@ object VlogServerService {
         watermark: Boolean = true,
         priority: Boolean = false,
         shareRoomIds: List<String> = emptyList(),   // 완성 시 서버가 이 방들의 채팅에 자동 공유
-        font: String = "gowun",        // 장소 자막 서체 키 (VlogTextStyle)
-        fontScale: String = "medium",  // 장소 자막 크기 (small/medium/large)
+        style: VlogSubtitleStyle = VlogSubtitleStyle(),   // 자막 서체·크기·표시항목·색·캡션
         onProgress: suspend (Double, String) -> Unit,
     ): GeneratedVlog = withContext(Dispatchers.IO) {
         // 로컬에 실제 존재하는 클립만 수집
@@ -212,22 +223,36 @@ object VlogServerService {
                             "order" to JsonPrimitive(place.order),
                             "placeName" to JsonPrimitive(place.placeName),
                             "shotAt" to JsonPrimitive(df.format(Date(file.lastModified()))),
+                            // 장소별 한 줄 문구를 함께 실어 보낸다 —
+                            // 서체·크기·표시항목·색은 공통이고 이것만 장소마다 다르다
+                            "caption" to JsonPrimitive(style.caption(place.clipFileName)),
                         )
                     )
                 }
             )
-            jobId = createJob(userId, course, formats, bgm, watermark, priority, shareRoomIds, font, fontScale, placesPayload)
+            jobId = createJob(userId, course, formats, bgm, watermark, priority, shareRoomIds, style, placesPayload)
             uploadedOrders = mutableSetOf()
             alreadyStarted = false
             savePending(context, sessionId, PendingJob(jobId, course.courseId, emptyList(), false, System.currentTimeMillis()))
         }
 
         // 2) 클립 업로드 (0.05 → 0.45) — 이미 올린 클립은 건너뛴다
+        val scope = CoroutineScope(coroutineContext)
         if (!alreadyStarted) {
             clips.forEachIndexed { i, (place, file) ->
-                onProgress(0.05 + 0.40 * i / clips.size, LocaleManager.string(R.string.vlogserver_uploading, i + 1, clips.size))
+                val base = 0.05 + 0.40 * i / clips.size
+                val span = 0.40 / clips.size
+                val label = LocaleManager.string(R.string.vlogserver_uploading, i + 1, clips.size)
+                onProgress(base, label)
                 if (place.order !in uploadedOrders) {
-                    uploadClip(jobId, place.order, file)
+                    // 클립 단위로만 갱신하면 느린 회선(해외 로밍)에서 몇 분씩 멈춘 것처럼 보인다.
+                    // 실제 전송 바이트로 채워 숫자가 계속 움직이게 한다.
+                    // 바이트 콜백은 OkHttp의 쓰기 스레드에서 불린다(비-suspend).
+                    // onProgress는 suspend라 바로 못 부르므로 현재 스코프로 넘긴다.
+                    // 진행률 갱신이 조금 늦거나 몇 개 유실돼도 무해하다 — 숫자가 움직이면 된다.
+                    uploadClip(jobId, place.order, file) { fraction ->
+                        scope.launch { onProgress(base + span * fraction, label) }
+                    }
                     uploadedOrders.add(place.order)
                     savePending(context, sessionId, PendingJob(jobId, course.courseId, uploadedOrders.toList(), false, System.currentTimeMillis()))
                 }
@@ -339,8 +364,7 @@ object VlogServerService {
         watermark: Boolean,
         priority: Boolean,
         shareRoomIds: List<String>,
-        font: String,
-        fontScale: String,
+        style: VlogSubtitleStyle,
         placesPayload: JsonArray,
     ): Int = retrying(3) {
         val body = JsonObject(
@@ -354,8 +378,16 @@ object VlogServerService {
                 "watermark" to JsonPrimitive(watermark),
                 "priority" to JsonPrimitive(priority),
                 "shareRoomIds" to JsonArray(shareRoomIds.map { JsonPrimitive(it) }),
-                "font" to JsonPrimitive(font),
-                "fontScale" to JsonPrimitive(fontScale),
+                "font" to JsonPrimitive(style.font.key),
+                "fontScale" to JsonPrimitive(style.scale.key),
+                // 색은 **키만** 보낸다 — 서버가 자기 표에서 색값을 찾는다.
+                // 색값을 그대로 넘기면 사용자 입력이 ffmpeg drawtext 인자로 흘러들어
+                // 필터 체인을 조작할 수 있는 통로가 된다.
+                "subtitleFields" to JsonPrimitive(style.fields.key),
+                "subtitleColor" to JsonPrimitive(style.color.key),
+                "subtitleHold" to JsonPrimitive(style.holdsSubtitle),
+                // 장소별 문구는 places[]에 실린다. 이 전역 값은 구버전 서버 호환용으로만 남긴다.
+                "caption" to JsonPrimitive(""),
                 "places" to placesPayload,
             )
         ).toString().toRequestBody("application/json".toMediaType())
@@ -363,17 +395,68 @@ object VlogServerService {
         val req = Request.Builder().url("$BASE_URL/jobs").post(body).build()
         ApiClient.httpClient.newCall(req).execute().use { res ->
             val text = res.body?.string() ?: ""
+            // 상태 코드를 뭉뚱그리면 **거절과 장애를 구분할 수 없다.**
+            // "게스트 체험을 다 썼다"는 확정 거절인데 일시 오류로 취급하면 재시도만 반복하고,
+            // 사용자는 무엇이 잘못됐는지 끝내 알지 못한다.
+            if (res.code == 403 &&
+                runCatching { json.parseToJsonElement(text).jsonObject["error"]?.jsonPrimitive?.content }
+                    .getOrNull() == "guest_limit"
+            ) {
+                throw ServerVlogException(
+                    LocaleManager.string(R.string.vlogserver_error_guestLimit),
+                    ErrorKind.GUEST_LIMIT,
+                )
+            }
             if (!res.isSuccessful) throw ServerVlogException(LocaleManager.string(R.string.vlogserver_error_jobCreateFailed, text.take(120)))
             json.parseToJsonElement(text).jsonObject["jobId"]?.jsonPrimitive?.content?.toIntOrNull()
                 ?: throw ServerVlogException(LocaleManager.string(R.string.vlogserver_error_jobCreateResponse))
         }
     }
 
+    /**
+     * 전송 바이트 진행률을 흘려보내는 래퍼.
+     *
+     * OkHttp는 업로드 진행률 콜백을 제공하지 않는다 — 본문을 감싸 writeTo에서 직접 센다.
+     * 재시도(retrying)로 같은 클립을 다시 올리면 진행률도 0부터 다시 흐른다.
+     */
+    private class ProgressRequestBody(
+        private val delegate: okhttp3.RequestBody,
+        private val onProgress: (Double) -> Unit,
+    ) : okhttp3.RequestBody() {
+        override fun contentType() = delegate.contentType()
+        override fun contentLength() = delegate.contentLength()
+
+        override fun writeTo(sink: okio.BufferedSink) {
+            val total = contentLength()
+            if (total <= 0) { delegate.writeTo(sink); return }
+            var written = 0L
+            val counting = object : okio.ForwardingSink(sink) {
+                override fun write(source: okio.Buffer, byteCount: Long) {
+                    super.write(source, byteCount)
+                    written += byteCount
+                    onProgress((written.toDouble() / total).coerceIn(0.0, 1.0))
+                }
+            }
+            val buffered = counting.buffer()
+            delegate.writeTo(buffered)
+            buffered.flush()
+        }
+    }
+
     /** 클립 1개 업로드 실패로 전체가 무너지지 않도록 지수 백오프 3회 재시도 */
-    private suspend fun uploadClip(jobId: Int, order: Int, file: File) = retrying(3) {
+    private suspend fun uploadClip(
+        jobId: Int,
+        order: Int,
+        file: File,
+        onBytes: ((Double) -> Unit)? = null,
+    ) = retrying(3) {
+        val part = file.asRequestBody("video/mp4".toMediaType())
         val body = MultipartBody.Builder()
             .setType(MultipartBody.FORM)
-            .addFormDataPart("clip", "$order.mp4", file.asRequestBody("video/mp4".toMediaType()))
+            .addFormDataPart(
+                "clip", "$order.mp4",
+                if (onBytes == null) part else ProgressRequestBody(part, onBytes),
+            )
             .build()
         val req = Request.Builder().url("$BASE_URL/jobs/$jobId/clips?order=$order").post(body).build()
         // 영상 업로드는 오래 걸릴 수 있어 타임아웃 연장 (iOS 300초)

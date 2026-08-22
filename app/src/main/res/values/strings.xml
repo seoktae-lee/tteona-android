@@ -719,4 +719,35 @@
     <!-- 발견 탭 지도/목록 토글 -->
     <string name="discover_mode_map">지도</string>
     <string name="discover_mode_grid">탐색</string>
+
+    <!-- 자막 커스터마이징 (iOS vlog.subtitle*/vlog.caption.*) -->
+    <string name="vlog_subtitleFields_both">둘 다</string>
+    <string name="vlog_subtitleFields_place">장소만</string>
+    <string name="vlog_subtitleFields_time">시각만</string>
+    <string name="vlog_subtitleColor_orange">주황</string>
+    <string name="vlog_subtitleColor_white">흰색</string>
+    <string name="vlog_subtitleColor_yellow">노랑</string>
+    <string name="vlog_subtitleColor_mint">민트</string>
+    <string name="vlog_subtitleColor_sky">하늘</string>
+    <string name="vlog_subtitleColor_pink">분홍</string>
+    <string name="vlog_subtitleColor_ink">먹색</string>
+    <string name="vlog_textSheet_fieldsLabel">표시 항목</string>
+    <string name="vlog_textSheet_colorLabel">강조색</string>
+    <string name="vlog_textSheet_holdLabel">자막 계속 띄우기</string>
+    <string name="vlog_textSheet_holdHint">끄면 2.5초 뒤 사라져요</string>
+    <string name="vlog_textSheet_captionLabel">한 줄 문구</string>
+    <string name="vlog_textSheet_captionPlaceholder">오늘을 한 줄로 (선택)</string>
+    <string name="vlog_caption_title">장소별 한 줄</string>
+    <string name="vlog_caption_subtitle">장소를 골라 그때의 한마디를 남겨보세요.\n비워두면 장소와 시각만 나와요.</string>
+    <string name="vlog_caption_placeholder">이 순간을 한 줄로 (선택)</string>
+    <string name="vlogserver_error_guestLimit">무료 체험 브이로그를 이미 만들었어요. 계속하려면 가입이 필요해요.</string>
+
+    <!-- 게스트 브이로그 1회 제한 -->
+    <string name="vlog_guestLimit_title">첫 브이로그는 어떠셨나요?</string>
+    <string name="vlog_guestLimit_message">회원가입 없이 만들 수 있는 브이로그는 여기까지예요.\n회원가입하면 계속 만들 수 있고, 발자취 지도에도 쌓여요.</string>
+    <string name="vlog_guestLimit_signUp">회원가입하고 계속 만들기</string>
+    <string name="vlog_guestLimit_later">나중에 할게요</string>
+    <string name="vlog_invite_title">이 브이로그, 여기서 끝내긴 아깝죠?</string>
+    <string name="vlog_invite_message">회원가입하면 다음 브이로그도 계속 만들 수 있고,\n다녀온 곳이 발자취 지도에 쌓여요.</string>
+    <string name="vlog_invite_signUp">회원가입하고 이어가기</string>
 </resources>

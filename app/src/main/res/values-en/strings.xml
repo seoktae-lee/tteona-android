@@ -719,4 +719,35 @@ Turn what you’ve captured into a vlog.</string>
     <!-- 발견 탭 지도/목록 토글 -->
     <string name="discover_mode_map">Map</string>
     <string name="discover_mode_grid">Explore</string>
+
+    <!-- 자막 커스터마이징 (iOS vlog.subtitle*/vlog.caption.*) -->
+    <string name="vlog_subtitleFields_both">Both</string>
+    <string name="vlog_subtitleFields_place">Place only</string>
+    <string name="vlog_subtitleFields_time">Time only</string>
+    <string name="vlog_subtitleColor_orange">Orange</string>
+    <string name="vlog_subtitleColor_white">White</string>
+    <string name="vlog_subtitleColor_yellow">Yellow</string>
+    <string name="vlog_subtitleColor_mint">Mint</string>
+    <string name="vlog_subtitleColor_sky">Sky</string>
+    <string name="vlog_subtitleColor_pink">Pink</string>
+    <string name="vlog_subtitleColor_ink">Ink</string>
+    <string name="vlog_textSheet_fieldsLabel">What to show</string>
+    <string name="vlog_textSheet_colorLabel">Accent color</string>
+    <string name="vlog_textSheet_holdLabel">Keep subtitles visible</string>
+    <string name="vlog_textSheet_holdHint">Off: fades after 2.5 seconds</string>
+    <string name="vlog_textSheet_captionLabel">One-line caption</string>
+    <string name="vlog_textSheet_captionPlaceholder">Sum up today (optional)</string>
+    <string name="vlog_caption_title">A line for each place</string>
+    <string name="vlog_caption_subtitle">Pick a place and leave a line about that moment.\nLeave it empty to show just the place and time.</string>
+    <string name="vlog_caption_placeholder">One line about this moment (optional)</string>
+    <string name="vlogserver_error_guestLimit">You\'ve already made your free trial vlog. Sign up to keep going.</string>
+
+    <!-- 게스트 브이로그 1회 제한 -->
+    <string name="vlog_guestLimit_title">How was your first vlog?</string>
+    <string name="vlog_guestLimit_message">That was the one vlog you can make without an account.\nSign up to keep making them and build your footprint map.</string>
+    <string name="vlog_guestLimit_signUp">Sign up and keep going</string>
+    <string name="vlog_guestLimit_later">Maybe later</string>
+    <string name="vlog_invite_title">Don\'t let this be the last one</string>
+    <string name="vlog_invite_message">Sign up to keep making vlogs and watch the places you\'ve been fill your footprint map.</string>
+    <string name="vlog_invite_signUp">Sign up and continue</string>
 </resources>

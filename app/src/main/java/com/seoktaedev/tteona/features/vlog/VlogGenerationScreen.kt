@@ -59,7 +59,22 @@ import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.Image
+import androidx.compose.ui.res.painterResource
+import com.seoktaedev.tteona.core.auth.GuestVlogQuota
 import androidx.compose.runtime.Composable
+import com.seoktaedev.tteona.core.model.Place
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.material3.SwitchDefaults
+import androidx.compose.material3.Switch
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.LocalTextStyle
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -129,13 +144,22 @@ fun VlogGenerationScreen(
     // 포맷/BGM 선택·에러 화면에서 닫기 — 세션 화면으로 되돌아가 기록을 보존한다.
     // (iOS VlogGenerationView의 dismiss() 대응. 미전달 시 홈으로 폴백.)
     onBack: () -> Unit = onDismissToHome,
+    /** 게스트 한도에 걸렸을 때 가입 화면으로 — 미전달 시 그냥 닫는다 */
+    onRequestSignUp: () -> Unit = onBack,
 ) {
     val context = LocalContext.current
     val view = LocalView.current
     val isPro by ProManager.isPro.collectAsState()
     val creatingText = stringResource(R.string.vlog_creating)
 
-    var phase by remember { mutableStateOf(Phase.CHOOSE_FORMAT) }
+    val isGuest by AuthService.isGuest.collectAsState()
+    // 이미 다 썼다면 포맷·BGM을 고르게 한 뒤 마지막에 거절하는 건 잔인하다 —
+    // 들어오는 문에서 안내한다.
+    var phase by remember {
+        mutableStateOf(
+            if (isGuest && GuestVlogQuota.isExhausted) Phase.GUEST_LIMIT else Phase.CHOOSE_FORMAT
+        )
+    }
     var vlogFile by remember { mutableStateOf<File?>(null) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var progress by remember { mutableDoubleStateOf(0.0) }
@@ -144,10 +168,27 @@ fun VlogGenerationScreen(
     var selectedFormats by remember { mutableStateOf<Set<String>>(emptySet()) }
     var shotPortrait by remember { mutableStateOf<Boolean?>(null) }
     var selectedBgm by remember { mutableStateOf("auto") }
-    // 장소 자막 서체·크기 — 다음 생성에도 기억된다 (tteona_prefs, iOS @AppStorage와 동일 키)
+    // 장소 자막 설정 — 다음 생성에도 기억된다 (tteona_prefs, iOS @AppStorage와 동일 키).
+    // 캡션만은 기억하지 않는다 — 그날 그 장소의 한 줄이라 다음 브이로그로 넘어오면 안 된다.
     val prefs = remember { context.getSharedPreferences("tteona_prefs", android.content.Context.MODE_PRIVATE) }
-    var selectedFont by remember { mutableStateOf(prefs.getString("vlog.font", "gowun") ?: "gowun") }
-    var selectedFontScale by remember { mutableStateOf(prefs.getString("vlog.fontScale", "medium") ?: "medium") }
+    var style by remember {
+        mutableStateOf(
+            VlogSubtitleStyle(
+                font = VlogFont.from(prefs.getString("vlog.font", null)),
+                scale = VlogFontScale.from(prefs.getString("vlog.fontScale", null)),
+                fields = VlogSubtitleFields.from(prefs.getString("vlog.subtitleFields", null)),
+                color = VlogSubtitleColor.from(prefs.getString("vlog.subtitleColor", null)),
+                holdsSubtitle = prefs.getBoolean("vlog.subtitleHold", false),
+            )
+        )
+    }
+    /** 지금 문구를 적고 있는 클립의 파일명 */
+    var editingClip by remember { mutableStateOf<String?>(null) }
+
+    /** 실제로 클립 파일이 있는 장소만 — 파일이 없는 장소는 브이로그에 안 들어간다 */
+    val clipsForCaption = remember(course.places, sessionId) {
+        course.places.filter { VlogClips.clipFile(context, it, sessionId).exists() }
+    }
     var showProNotice by remember { mutableStateOf(false) }
     // 서버가 아직 이 잡을 렌더링 중이라 "이어받기"가 가능한 상태인가
     var canResume by remember { mutableStateOf(false) }
@@ -242,20 +283,50 @@ fun VlogGenerationScreen(
         Phase.CHOOSE_TEXT -> ChooseTextView(
             previewPlaceName = course.places.firstOrNull()?.placeName
                 ?: stringResource(R.string.vlog_font_sampleName),
-            selectedFont = selectedFont,
-            selectedFontScale = selectedFontScale,
+            style = style,
             onSelectFont = {
-                selectedFont = it
-                prefs.edit().putString("vlog.font", it).apply()
+                style = style.copy(font = it)
+                prefs.edit().putString("vlog.font", it.key).apply()
                 Haptics.light(view)
             },
             onSelectScale = {
-                selectedFontScale = it
-                prefs.edit().putString("vlog.fontScale", it).apply()
+                style = style.copy(scale = it)
+                prefs.edit().putString("vlog.fontScale", it.key).apply()
                 Haptics.light(view)
             },
-            onNext = { phase = Phase.GENERATING },
+            onSelectFields = {
+                style = style.copy(fields = it)
+                prefs.edit().putString("vlog.subtitleFields", it.key).apply()
+                Haptics.light(view)
+            },
+            onSelectColor = {
+                style = style.copy(color = it)
+                prefs.edit().putString("vlog.subtitleColor", it.key).apply()
+                Haptics.light(view)
+            },
+            onToggleHold = {
+                style = style.copy(holdsSubtitle = it)
+                prefs.edit().putBoolean("vlog.subtitleHold", it).apply()
+                Haptics.light(view)
+            },
+            onNext = {
+                editingClip = clipsForCaption.firstOrNull()?.clipFileName
+                phase = Phase.CHOOSE_CAPTION
+            },
             onBack = { phase = Phase.CHOOSE_BGM },
+        )
+        Phase.CHOOSE_CAPTION -> ChooseCaptionView(
+            sessionId = sessionId,
+            clips = clipsForCaption,
+            style = style,
+            isReels = selectedFormats.contains("reels") || shotPortrait == true,
+            editingClip = editingClip,
+            onSelectClip = { editingClip = it },
+            onCaptionChange = { key, text ->
+                style = style.copy(captions = style.captions + (key to text))
+            },
+            onNext = { phase = Phase.GENERATING },
+            onBack = { phase = Phase.CHOOSE_TEXT },
         )
         Phase.GENERATING -> GeneratingView(progress = progress, stageText = stageText, courseName = course.courseName)
         Phase.PREVIEW -> vlogFile?.let { file ->
@@ -266,6 +337,10 @@ fun VlogGenerationScreen(
                 onDismiss = onDismissToHome,
             )
         }
+        Phase.GUEST_LIMIT -> GuestLimitView(
+            onSignUp = onRequestSignUp,
+            onLater = onBack,
+        )
         Phase.ERROR -> ErrorView(
             message = errorMessage,
             canResume = canResume,
@@ -305,8 +380,7 @@ fun VlogGenerationScreen(
                 watermark = !isPro,
                 priority = isPro,
                 shareRoomIds = if (shareVlogPref) shareRoomIds.toList() else emptyList(),
-                font = selectedFont,
-                fontScale = selectedFontScale,
+                style = style,
                 onProgress = { p, stage ->
                     withContext(Dispatchers.Main) {
                         progress = p
@@ -328,6 +402,8 @@ fun VlogGenerationScreen(
                     context.applicationContext, course, sessionId, uid,
                 )
             }
+            // 완성된 것만 센다(서버/로컬 경로를 가리지 않는다). 게스트가 아니면 셀 이유가 없다.
+            if (isGuest) GuestVlogQuota.recordCompletion()
             phase = Phase.PREVIEW
             // 튜토리얼: 첫 브이로그 완성 → 축하 카드
             VlogTutorial.advance(VlogTutorial.Step.CELEBRATE)
@@ -336,7 +412,15 @@ fun VlogGenerationScreen(
         } catch (e: Exception) {
             // 서버가 아직 이 잡을 붙잡고 있으면 이어받기를 안내한다.
             // 지금 포기하면 서버는 헛일을 하고 유저는 영상을 통째로 잃는다.
-            val definitive = (e as? VlogServerService.ServerVlogException)?.isDefinitive ?: false
+            val serverErr = e as? VlogServerService.ServerVlogException
+            if (serverErr?.isGuestLimit == true) {
+                // 기기 쪽 셈을 서버에 맞춘다 — 어긋난 채로 두면 만들려 할 때마다
+                // 서버까지 갔다가 거절당하는 길을 매번 되풀이한다.
+                GuestVlogQuota.markExhausted()
+                phase = Phase.GUEST_LIMIT
+                return@LaunchedEffect
+            }
+            val definitive = serverErr?.isDefinitive ?: false
             val pending = VlogServerService.hasPendingJob(context, sessionId)
             if (!definitive && pending) {
                 canResume = true
@@ -350,7 +434,7 @@ fun VlogGenerationScreen(
     }
 }
 
-private enum class Phase { CHOOSE_FORMAT, CHOOSE_BGM, CHOOSE_TEXT, GENERATING, PREVIEW, ERROR }
+private enum class Phase { CHOOSE_FORMAT, CHOOSE_BGM, CHOOSE_TEXT, CHOOSE_CAPTION, GENERATING, PREVIEW, ERROR, GUEST_LIMIT }
 
 // ── 포맷 선택 (iOS chooseFormatView) ────────────────────────────────────
 
@@ -668,15 +752,19 @@ private fun ChooseBgmView(
 @Composable
 private fun ChooseTextView(
     previewPlaceName: String,
-    selectedFont: String,
-    selectedFontScale: String,
-    onSelectFont: (String) -> Unit,
-    onSelectScale: (String) -> Unit,
+    style: VlogSubtitleStyle,
+    onSelectFont: (VlogFont) -> Unit,
+    onSelectScale: (VlogFontScale) -> Unit,
+    onSelectFields: (VlogSubtitleFields) -> Unit,
+    onSelectColor: (VlogSubtitleColor) -> Unit,
+    onToggleHold: (Boolean) -> Unit,
     onNext: () -> Unit,
     onBack: () -> Unit,
 ) {
-    val font = VlogFont.from(selectedFont)
-    val scale = VlogFontScale.from(selectedFontScale)
+    val font = style.font
+    val scale = style.scale
+    val selectedFont = font.key
+    val selectedFontScale = scale.key
     val previewDate = remember {
         SimpleDateFormat("yyyy.MM.dd  HH:mm", Locale.KOREA).format(Date())
     }
@@ -696,8 +784,10 @@ private fun ChooseTextView(
                 modifier = Modifier.padding(top = 6.dp),
             )
 
-            // 실제 자막이 얹히는 모습 미리보기 (영상 프레임 흉내)
-            Box(
+            // 실제 자막이 얹히는 모습 미리보기 (영상 프레임 흉내).
+            // 크기·줄임 계산은 캡션 화면과 **같은 규칙**을 쓴다 — 두 화면이 다르게 그리면
+            // 어느 쪽을 믿어야 할지 알 수 없다.
+            BoxWithConstraints(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier
                     .padding(horizontal = 24.dp)
@@ -711,22 +801,25 @@ private fun ChooseTextView(
                         ),
                     ),
             ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        previewPlaceName,
-                        fontFamily = font.family,
-                        fontSize = (30 * scale.multiplier).sp,
-                        color = TteOrange,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Text(
-                        previewDate,
-                        fontFamily = font.family,
-                        fontSize = (30 * scale.multiplier * 0.62f).sp,
-                        color = Color.White,
-                        modifier = Modifier.padding(top = 6.dp),
-                    )
+                val cardW = maxWidth.value.toDouble()
+                val placeSize = videoPlaceSize(scale)
+                // 강조색은 **첫 줄에만** 붙는다 — 장소를 끄고 시각만 보는 사람에게도
+                // 색 선택이 보여야 하므로, 색을 장소 줄에 고정하지 않는다 (렌더러와 같은 규칙).
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    if (style.fields.showsPlace) {
+                        SubtitlePreviewLine(
+                            previewPlaceName, font, placeSize, 1080.0, cardW, style.color.color,
+                        )
+                    }
+                    if (style.fields.showsTime) {
+                        SubtitlePreviewLine(
+                            previewDate, font, placeSize * 0.62, 1080.0, cardW,
+                            if (style.fields.showsPlace) Color.White else style.color.color,
+                        )
+                    }
                 }
             }
 
@@ -753,7 +846,7 @@ private fun ChooseTextView(
                                 .clip(RoundedCornerShape(14.dp))
                                 .background(Color.White.copy(alpha = if (isOn) 0.14f else 0.06f))
                                 .then(if (isOn) Modifier.border(1.5.dp, TteOrange, RoundedCornerShape(14.dp)) else Modifier)
-                                .clickable { onSelectFont(f.key) }
+                                .clickable { onSelectFont(f) }
                                 .padding(horizontal = 16.dp),
                         ) {
                             Text(
@@ -779,7 +872,7 @@ private fun ChooseTextView(
                                 .clip(RoundedCornerShape(14.dp))
                                 .background(Color.White.copy(alpha = if (isOn) 0.14f else 0.06f))
                                 .then(if (isOn) Modifier.border(1.5.dp, TteOrange, RoundedCornerShape(14.dp)) else Modifier)
-                                .clickable { onSelectScale(s.key) },
+                                .clickable { onSelectScale(s) },
                         ) {
                             Text(
                                 stringResource(s.labelRes),
@@ -789,6 +882,92 @@ private fun ChooseTextView(
                             )
                         }
                     }
+                }
+
+                // 표시 항목 — 장소 / 시각 / 둘 다
+                Text(stringResource(R.string.vlog_textSheet_fieldsLabel), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Color.White.copy(alpha = 0.75f))
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                    VlogSubtitleFields.entries.forEach { f ->
+                        val isOn = style.fields == f
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(44.dp)
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(Color.White.copy(alpha = if (isOn) 0.14f else 0.06f))
+                                .then(if (isOn) Modifier.border(1.5.dp, TteOrange, RoundedCornerShape(14.dp)) else Modifier)
+                                .clickable { onSelectFields(f) },
+                        ) {
+                            Text(
+                                stringResource(f.labelRes),
+                                fontSize = 14.sp,
+                                fontWeight = if (isOn) FontWeight.Bold else FontWeight.Normal,
+                                color = if (isOn) Color.White else Color.White.copy(alpha = 0.7f),
+                                maxLines = 1,
+                            )
+                        }
+                    }
+                }
+
+                // 강조색 — 첫 줄에 적용된다(렌더러와 같은 규칙)
+                Text(stringResource(R.string.vlog_textSheet_colorLabel), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Color.White.copy(alpha = 0.75f))
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+                    VlogSubtitleColor.entries.forEach { c ->
+                        val isOn = style.color == c
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier
+                                .size(38.dp)
+                                .clip(CircleShape)
+                                // 먹색은 어두운 배경에서 안 보인다 — 흰 테두리로 존재를 알린다
+                                .background(c.color)
+                                .then(
+                                    if (isOn) Modifier.border(2.5.dp, Color.White, CircleShape)
+                                    else Modifier.border(1.dp, Color.White.copy(alpha = 0.25f), CircleShape)
+                                )
+                                .clickable { onSelectColor(c) },
+                        ) {
+                            if (isOn) {
+                                Icon(
+                                    Icons.Filled.Check,
+                                    contentDescription = stringResource(c.labelRes),
+                                    tint = if (c == VlogSubtitleColor.WHITE || c == VlogSubtitleColor.YELLOW)
+                                        Color.Black else Color.White,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // 자막 유지 — 끄면 2.5초만 보이고 사라진다
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            stringResource(R.string.vlog_textSheet_holdLabel),
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color.White,
+                        )
+                        Text(
+                            stringResource(R.string.vlog_textSheet_holdHint),
+                            fontSize = 12.sp,
+                            color = Color.White.copy(alpha = 0.6f),
+                            modifier = Modifier.padding(top = 2.dp),
+                        )
+                    }
+                    Switch(
+                        checked = style.holdsSubtitle,
+                        onCheckedChange = onToggleHold,
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color.White,
+                            checkedTrackColor = TteOrange,
+                        ),
+                    )
                 }
             }
 
@@ -802,7 +981,7 @@ private fun ChooseTextView(
                     .background(TteOrange)
                     .clickable { onNext() },
             ) {
-                Text(stringResource(R.string.session_makeVlog), fontSize = 17.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                Text(stringResource(R.string.common_next), fontSize = 17.sp, fontWeight = FontWeight.Bold, color = Color.White)
             }
             Text(
                 stringResource(R.string.vlog_back),
@@ -885,6 +1064,320 @@ private fun BgmRow(
         }
     }
 }
+
+// ── 장소별 한 줄 문구 (iOS chooseCaptionView) ────────────────────────────
+
+/**
+ * 장소마다 한 줄씩 적는 화면.
+ *
+ * 서체·크기·표시항목·색은 브이로그 전체에 공통이고 **이 문구만 장소마다 다르다.**
+ * (예전엔 한 줄을 브이로그 하나에 하나만 두어 모든 클립에 같은 말이 반복됐다)
+ *
+ * 미리보기는 완성될 영상과 **같은 비율**로 보여준다. 가로로 넓은 카드에 자막을 얹어 두면
+ * 실제 결과물이 그렇게 나오는 줄 오해한다 — 세로 촬영이면 9:16, 가로면 16:9로 맞춰
+ * 잘린 모습까지 그대로 보인다.
+ */
+@Composable
+private fun ChooseCaptionView(
+    sessionId: String,
+    clips: List<Place>,
+    style: VlogSubtitleStyle,
+    isReels: Boolean,
+    editingClip: String?,
+    onSelectClip: (String?) -> Unit,
+    onCaptionChange: (String, String) -> Unit,
+    onNext: () -> Unit,
+    onBack: () -> Unit,
+) {
+    val context = LocalContext.current
+    val view = LocalView.current
+    val previewDate = remember { SimpleDateFormat("yyyy.MM.dd  HH:mm", Locale.KOREA).format(Date()) }
+    val current = clips.firstOrNull { it.clipFileName == editingClip } ?: clips.firstOrNull()
+    val currentKey = current?.clipFileName ?: ""
+    val currentCaption = style.captions[currentKey] ?: ""
+
+    // 클립 첫 프레임 — 한 번 뽑은 건 다시 뽑지 않는다
+    var frames by remember { mutableStateOf<Map<String, ImageBitmap>>(emptyMap()) }
+    LaunchedEffect(currentKey) {
+        if (currentKey.isEmpty() || frames.containsKey(currentKey)) return@LaunchedEffect
+        val place = current ?: return@LaunchedEffect
+        val file = VlogClips.clipFile(context, place, sessionId)
+        if (!file.exists()) return@LaunchedEffect
+        val bmp = withContext(Dispatchers.IO) {
+            // MediaMetadataRetriever가 AutoCloseable이 된 건 API 29부터다.
+            // minSdk 26에서 `use {}`를 쓰면 컴파일은 통과하고 구형 기기에서만 터진다.
+            val r = MediaMetadataRetriever()
+            try {
+                r.setDataSource(file.absolutePath)
+                // 0.3초 지점 — 첫 프레임은 아직 노출이 안 잡혀 어두운 경우가 많다
+                r.getFrameAtTime(300_000L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+            } catch (_: Exception) {
+                null
+            } finally {
+                runCatching { r.release() }
+            }
+        }
+        if (bmp != null) frames = frames + (currentKey to bmp.asImageBitmap())
+    }
+
+    Box(Modifier.fillMaxSize()) {
+        VlogAuroraBackground()
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.fillMaxSize().navigationBarsPadding().imePadding(),
+        ) {
+            Spacer(Modifier.height(40.dp))
+            Text(stringResource(R.string.vlog_caption_title), fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color.White)
+            Text(
+                stringResource(R.string.vlog_caption_subtitle),
+                fontSize = 13.sp,
+                color = Color.White.copy(alpha = 0.65f),
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(top = 6.dp, start = 32.dp, end = 32.dp),
+            )
+
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                modifier = Modifier
+                    .weight(1f)
+                    .verticalScroll(rememberScrollState())
+                    .padding(top = 20.dp, bottom = 12.dp),
+            ) {
+                // 클립이 하나뿐이면 고를 것이 없다 — 칩 줄을 감춘다
+                if (clips.size > 1) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier
+                            .horizontalScroll(rememberScrollState())
+                            .padding(horizontal = 24.dp),
+                    ) {
+                        clips.forEach { place ->
+                            val isOn = place.clipFileName == currentKey
+                            val written = !(style.captions[place.clipFileName ?: ""] ?: "").isEmpty()
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(5.dp),
+                                modifier = Modifier
+                                    .height(38.dp)
+                                    .clip(CircleShape)
+                                    .background(if (isOn) TteOrange else Color.White.copy(alpha = 0.10f))
+                                    .clickable {
+                                        Haptics.light(view)
+                                        onSelectClip(place.clipFileName)
+                                    }
+                                    .padding(horizontal = 12.dp),
+                            ) {
+                                Box(
+                                    contentAlignment = Alignment.Center,
+                                    modifier = Modifier
+                                        .size(18.dp)
+                                        .clip(CircleShape)
+                                        .background(
+                                            if (isOn) Color.White.copy(alpha = 0.25f)
+                                            else TteOrange.copy(alpha = 0.18f)
+                                        ),
+                                ) {
+                                    Text(
+                                        "${place.order}",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (isOn) Color.White else TteOrange,
+                                    )
+                                }
+                                Text(
+                                    place.placeName,
+                                    fontSize = 13.sp,
+                                    fontWeight = if (isOn) FontWeight.Bold else FontWeight.Medium,
+                                    color = if (isOn) Color.White else Color.White.copy(alpha = 0.7f),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                // 이미 적은 곳은 표시해 둔다 — 여러 곳을 오갈 때 어디를 채웠는지 놓치기 쉽다
+                                if (written) {
+                                    Icon(
+                                        Icons.Filled.Check,
+                                        contentDescription = null,
+                                        tint = if (isOn) Color.White else TteOrange,
+                                        modifier = Modifier.size(11.dp),
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // 미리보기 — 완성될 영상과 같은 비율
+                val previewHeight = if (isReels) 300.dp else 190.dp
+                val previewWidth = previewHeight * (if (isReels) 9f / 16f else 16f / 9f)
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .size(width = previewWidth, height = previewHeight)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(
+                            Brush.linearGradient(listOf(Color(0xFF2E1A0D), Color(0xFF4D2914)))
+                        )
+                        .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(16.dp)),
+                ) {
+                    frames[currentKey]?.let { frame ->
+                        Image(
+                            bitmap = frame,
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,   // 서버의 cover 크롭과 같은 방식
+                            modifier = Modifier.matchParentSize(),
+                        )
+                    }
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                        modifier = Modifier.padding(horizontal = 8.dp),
+                    ) {
+                        val videoWidth = if (isReels) 1080.0 else 1920.0
+                        val placeSize = videoPlaceSize(style.scale)
+                        val cardW = previewWidth.value.toDouble()
+                        if (style.fields.showsPlace) {
+                            SubtitlePreviewLine(
+                                current?.placeName ?: "", style.font,
+                                placeSize, videoWidth, cardW, style.color.color,
+                            )
+                        }
+                        if (style.fields.showsTime) {
+                            SubtitlePreviewLine(
+                                previewDate, style.font, placeSize * 0.62, videoWidth, cardW,
+                                if (style.fields.showsPlace) Color.White else style.color.color,
+                            )
+                        }
+                        SubtitlePreviewLine(
+                            VlogSubtitleStyle.sanitize(currentCaption), style.font,
+                            placeSize * 0.62, videoWidth, cardW, Color.White,
+                        )
+                    }
+                    Text(
+                        if (isReels) "9:16" else "16:9",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White.copy(alpha = 0.8f),
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(bottom = 8.dp)
+                            .clip(CircleShape)
+                            .background(Color.Black.copy(alpha = 0.45f))
+                            .padding(horizontal = 8.dp, vertical = 3.dp),
+                    )
+                }
+
+                // 입력 — 자르기는 한 곳에서만 한다(입력 콜백). 값을 되돌려 쓰는 경로에서
+                // 다시 자르면 한 번의 입력에 햅틱이 두 번 울린다.
+                Column(
+                    horizontalAlignment = Alignment.End,
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
+                ) {
+                    OutlinedTextField(
+                        value = currentCaption,
+                        onValueChange = { raw ->
+                            if (currentKey.isEmpty()) return@OutlinedTextField
+                            onCaptionChange(currentKey, VlogSubtitleStyle.sanitize(raw))
+                        },
+                        placeholder = {
+                            Text(
+                                stringResource(R.string.vlog_caption_placeholder),
+                                color = Color.White.copy(alpha = 0.35f),
+                                fontSize = 15.sp,
+                            )
+                        },
+                        singleLine = true,
+                        textStyle = LocalTextStyle.current.copy(fontSize = 15.sp, color = Color.White),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedContainerColor = Color.White.copy(alpha = 0.06f),
+                            unfocusedContainerColor = Color.White.copy(alpha = 0.06f),
+                            focusedBorderColor = TteOrange,
+                            unfocusedBorderColor = Color.Transparent,
+                            cursorColor = TteOrange,
+                        ),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Text(
+                        "${currentCaption.length}/${VlogSubtitleStyle.CAPTION_MAX_LENGTH}",
+                        fontSize = 11.sp,
+                        color = Color.White.copy(alpha = 0.4f),
+                    )
+                }
+            }
+
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .padding(horizontal = 24.dp)
+                    .fillMaxWidth()
+                    .height(56.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(TteOrange)
+                    .clickable { onNext() },
+            ) {
+                Text(stringResource(R.string.session_makeVlog), fontSize = 17.sp, fontWeight = FontWeight.Bold, color = Color.White)
+            }
+            Text(
+                stringResource(R.string.vlog_back),
+                fontSize = 14.sp,
+                color = Color.White.copy(alpha = 0.6f),
+                modifier = Modifier
+                    .padding(top = 14.dp, bottom = 30.dp)
+                    .clickable { onBack() },
+            )
+        }
+    }
+}
+
+/**
+ * 자막 미리보기 한 줄.
+ *
+ * **크기와 줄임은 완성될 영상 기준으로 계산한 뒤 미리보기 크기로 옮긴다.**
+ * 미리보기 카드 폭으로 직접 계산하면, 읽히게 하려고 키운 글자 때문에 폭이 모자란 것으로
+ * 판정돼 영상에서는 멀쩡한 날짜·이름이 여기서만 "2026.08.22 09:…"처럼 잘린다.
+ * 그러면 유저는 "안 되는 건가?" 하게 된다 — 에뮬에서 실제로 그렇게 보였다.
+ *
+ * 서버 쪽 같은 계산은 server.js의 `placeSize = min(W,H) * 0.042 * fontScale`.
+ */
+@Composable
+private fun SubtitlePreviewLine(
+    text: String,
+    font: VlogFont,
+    /** 영상에서 쓸 글자 크기(px) */
+    videoWanted: Double,
+    /** 영상 가로 픽셀 — 세로 영상 1080, 가로 영상 1920 */
+    videoWidth: Double,
+    cardWidthDp: Double,
+    color: Color,
+) {
+    if (text.isEmpty()) return
+    val (fittedSize, shownText) = VlogSubtitleFit.fit(text, videoWanted, videoWidth)
+    // 그대로 축소하면 9sp라 읽히지 않는다 — 조금 키워 그린다.
+    // 다만 확대분이 카드를 넘치면 안 되므로, 넘칠 만큼은 키우지 않는다.
+    val cardScale = cardWidthDp / videoWidth
+    val baseSp = fittedSize * cardScale
+    val roomRatio = if (baseSp > 0) {
+        (cardWidthDp * 0.92) / VlogSubtitleFit.estimatedWidth(shownText, baseSp)
+    } else 1.0
+    val magnify = minOf(SUBTITLE_PREVIEW_MAGNIFY, maxOf(1.0, roomRatio))
+
+    Text(
+        shownText,
+        fontFamily = font.family,
+        fontSize = (baseSp * magnify).sp,
+        color = color,
+        maxLines = 1,
+        textAlign = TextAlign.Center,
+    )
+}
+
+/** 미리보기는 실제보다 조금 크게 그린다 — 그대로 축소하면 읽히지 않는다 (iOS previewMagnify) */
+private const val SUBTITLE_PREVIEW_MAGNIFY = 1.7
+
+/** 영상에서 쓰는 장소명 크기 — 서버와 같은 식(짧은 변의 4.2% × 배율) */
+private fun videoPlaceSize(scale: VlogFontScale): Double = 1080.0 * 0.042 * scale.multiplier
 
 // ── 생성 중 (iOS generatingView) ─────────────────────────────────────────
 
@@ -1115,6 +1608,75 @@ private enum class ThumbState { IDLE, UPLOADING, DONE, FAILED }
 
 // PickVisualMedia 콜백 → LaunchedEffect 전달용 (Compose 상태로 담기엔 과한 일회성 값)
 private var pendingThumbUri: Uri? = null
+
+// ── 게스트 한도 (iOS guestLimitView) ─────────────────────────────────────
+
+/**
+ * 게스트가 무료 체험 브이로그를 이미 만든 경우.
+ *
+ * 막는 화면이 아니라 **결과물을 손에 쥔 사람에게 다음을 권하는 화면**이다 —
+ * 여기까지 온 사람은 이미 브이로그 하나를 만들어 봤고, 그게 가장 좋은 설득이다.
+ */
+@Composable
+private fun GuestLimitView(onSignUp: () -> Unit, onLater: () -> Unit) {
+    val view = LocalView.current
+    Box(Modifier.fillMaxSize()) {
+        VlogAuroraBackground()
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+            modifier = Modifier.fillMaxSize().navigationBarsPadding().padding(horizontal = 32.dp),
+        ) {
+            Image(
+                painter = painterResource(R.drawable.tteoni_thumbsup),
+                contentDescription = null,
+                modifier = Modifier.size(140.dp),
+            )
+            Spacer(Modifier.height(24.dp))
+            Text(
+                stringResource(R.string.vlog_guestLimit_title),
+                fontSize = 22.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White,
+                textAlign = TextAlign.Center,
+            )
+            Spacer(Modifier.height(10.dp))
+            Text(
+                stringResource(R.string.vlog_guestLimit_message),
+                fontSize = 14.sp,
+                color = Color.White.copy(alpha = 0.75f),
+                textAlign = TextAlign.Center,
+                lineHeight = 21.sp,
+            )
+            Spacer(Modifier.height(32.dp))
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(TteOrange)
+                    .clickable {
+                        Haptics.light(view)
+                        onSignUp()
+                    },
+            ) {
+                Text(
+                    stringResource(R.string.vlog_guestLimit_signUp),
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                )
+            }
+            Text(
+                stringResource(R.string.vlog_guestLimit_later),
+                fontSize = 14.sp,
+                color = Color.White.copy(alpha = 0.6f),
+                modifier = Modifier.padding(top = 18.dp).clickable { onLater() },
+            )
+        }
+    }
+}
 
 // ── 에러 (iOS errorView) ─────────────────────────────────────────────────
 

@@ -118,11 +118,23 @@ import java.util.UUID
 fun ImpromptuSessionScreen(
     selectedRoomIds: Set<String>,
     onClose: () -> Unit,
+    /**
+     * 촬영 탭의 '오늘 마치기'(✓)로 들어왔는가.
+     *
+     * 켜면 지도·촬영 UI를 그리지 않고 **마무리 시트만** 띄운다 — 촬영은 이미 촬영 탭이
+     * 맡고 있으므로, 여기까지 와서 또 뷰파인더를 보여주면 화면이 두 겹으로 겹친다.
+     * 이어하기 시트도 건너뛴다: 마치러 온 사람에게 "이어할까요?"를 묻는 건 앞뒤가 안 맞는다.
+     */
+    startInFinishMode: Boolean = false,
+    /** 게스트가 브이로그 한도에 걸렸을 때 — 상위가 가입 화면을 띄운다 */
+    onRequestSignUp: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val view = LocalView.current
     val scope = rememberCoroutineScope()
-    val uid = AuthService.currentUser.value?.uid ?: ""
+    // 저장 경로는 게이팅 신원이 아니라 저장 신원을 쓴다 — 이메일 인증 대기 같은 과도기에
+    // currentUser가 비면 경로가 free_ 로 미끄러져 그날 찍은 클립을 잃는다. (촬영 탭과 같은 규칙)
+    val uid by AuthService.identityUid.collectAsState()
     val nickname = UserService.currentUser.value?.nickname?.takeIf { it.isNotEmpty() } ?: LocaleManager.string(context, R.string.session_member)
     val sessionId = "free_$uid"
 
@@ -241,6 +253,16 @@ fun ImpromptuSessionScreen(
         // 튜토리얼: '나의 오늘' 진입 확인 → 촬영 유도 단계로
         VlogTutorial.advance(VlogTutorial.Step.CAPTURE_HERE)
         val saved = ImpromptuSessionStore.loadTodaySession()
+        if (startInFinishMode) {
+            // 촬영 탭에서 마치러 왔다 — 묻지 않고 그날 기록을 그대로 복원해 종료 시트를 연다
+            if (saved != null && saved.places.isNotEmpty()) {
+                resumeSession(saved)
+                showEndSheet = true
+            } else {
+                onClose()   // 남은 기록이 없으면 보여줄 것이 없다
+            }
+            return@LaunchedEffect
+        }
         if (saved != null && saved.places.isNotEmpty()) {
             showResumeSheet = true
         } else {
@@ -360,7 +382,8 @@ fun ImpromptuSessionScreen(
 
     BackHandler { exitSession() }
 
-    Box(Modifier.fillMaxSize()) {
+    // 마무리 모드에서는 지도·촬영 UI를 그리지 않는다 — 뒤에 촬영 탭의 뷰파인더가 살아 있다
+    if (!startInFinishMode) Box(Modifier.fillMaxSize()) {
         // 지도
         GoogleMap(
             modifier = Modifier.fillMaxSize(),
@@ -698,6 +721,8 @@ fun ImpromptuSessionScreen(
                 onDismissToHome = onClose,
                 // 포맷/BGM 선택·에러에서 닫기 = 즉흥 세션 화면 복귀 (촬영 기록 보존)
                 onBack = { showVlog = false },
+                // 게스트 한도 안내의 '회원가입' — 세션을 닫고 상위(탭)가 가입 화면을 연다
+                onRequestSignUp = onRequestSignUp,
             )
         }
     }

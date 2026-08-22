@@ -719,4 +719,35 @@
     <!-- 발견 탭 지도/목록 토글 -->
     <string name="discover_mode_map">地図</string>
     <string name="discover_mode_grid">探索</string>
+
+    <!-- 자막 커스터마이징 (iOS vlog.subtitle*/vlog.caption.*) -->
+    <string name="vlog_subtitleFields_both">両方</string>
+    <string name="vlog_subtitleFields_place">場所のみ</string>
+    <string name="vlog_subtitleFields_time">時刻のみ</string>
+    <string name="vlog_subtitleColor_orange">オレンジ</string>
+    <string name="vlog_subtitleColor_white">ホワイト</string>
+    <string name="vlog_subtitleColor_yellow">イエロー</string>
+    <string name="vlog_subtitleColor_mint">ミント</string>
+    <string name="vlog_subtitleColor_sky">スカイ</string>
+    <string name="vlog_subtitleColor_pink">ピンク</string>
+    <string name="vlog_subtitleColor_ink">インク</string>
+    <string name="vlog_textSheet_fieldsLabel">表示する項目</string>
+    <string name="vlog_textSheet_colorLabel">アクセントカラー</string>
+    <string name="vlog_textSheet_holdLabel">字幕を出したままにする</string>
+    <string name="vlog_textSheet_holdHint">オフ：2.5秒後に消えます</string>
+    <string name="vlog_textSheet_captionLabel">ひとことキャプション</string>
+    <string name="vlog_textSheet_captionPlaceholder">今日をひとことで（任意）</string>
+    <string name="vlog_caption_title">場所ごとにひとこと</string>
+    <string name="vlog_caption_subtitle">場所を選んで、その時のひとことを残しましょう。\n空欄なら場所と時刻だけ表示されます。</string>
+    <string name="vlog_caption_placeholder">この瞬間をひとことで（任意）</string>
+    <string name="vlogserver_error_guestLimit">無料体験のVlogはすでに作成済みです。続けるには登録が必要です。</string>
+
+    <!-- 게스트 브이로그 1회 제한 -->
+    <string name="vlog_guestLimit_title">最初のブイログはいかがでしたか？</string>
+    <string name="vlog_guestLimit_message">登録なしで作れるブイログはここまでです。\n登録すると作り続けられ、足あとマップにも残ります。</string>
+    <string name="vlog_guestLimit_signUp">登録して続ける</string>
+    <string name="vlog_guestLimit_later">あとで</string>
+    <string name="vlog_invite_title">このブイログ、ここで終わりはもったいない</string>
+    <string name="vlog_invite_message">登録すると次のブイログも作り続けられ、\n訪れた場所が足あとマップに残ります。</string>
+    <string name="vlog_invite_signUp">登録して続ける</string>
 </resources>

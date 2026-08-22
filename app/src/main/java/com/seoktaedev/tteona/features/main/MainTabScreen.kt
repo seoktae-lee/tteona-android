@@ -109,6 +109,8 @@ fun MainTabScreen(initialTab: Int = 0, previewFootprintDemo: Boolean = false) {
     var showGuestSettings by remember { mutableStateOf(false) }
     /** 잠긴 클립 길이를 만졌을 때의 업셀 */
     var showPaywall by remember { mutableStateOf(false) }
+    /** '나의 오늘'을 마무리 모드로 열었는가 (촬영 탭의 ✓) */
+    var impromptuFinishMode by remember { mutableStateOf(false) }
     // 코치마크 스포트라이트용 탭 실측 위치 (기기별 해상도·내비바 높이 대응)
     val tabBounds = remember { mutableStateListOf<androidx.compose.ui.geometry.Rect?>(null, null, null, null) }
 
@@ -256,7 +258,9 @@ fun MainTabScreen(initialTab: Int = 0, previewFootprintDemo: Boolean = false) {
                     onFinishToday = { roomIds ->
                         // 마무리는 기존 '나의 오늘' 화면이 그대로 받는다 —
                         // 종료 시트·브이로그 생성이 전부 거기에 있다.
+                        // 다만 마무리 모드로 열어 지도·촬영 UI는 그리지 않는다.
                         impromptuRoomIds = roomIds
+                        impromptuFinishMode = true
                     },
                     onRequestPaywall = { showPaywall = true },
                 )
@@ -377,7 +381,16 @@ fun MainTabScreen(initialTab: Int = 0, previewFootprintDemo: Boolean = false) {
         impromptuRoomIds?.let { roomIds ->
             com.seoktaedev.tteona.features.session.ImpromptuSessionScreen(
                 selectedRoomIds = roomIds,
-                onClose = { impromptuRoomIds = null },
+                startInFinishMode = impromptuFinishMode,
+                onRequestSignUp = {
+                    impromptuRoomIds = null
+                    impromptuFinishMode = false
+                    showAuth = true
+                },
+                onClose = {
+                    impromptuRoomIds = null
+                    impromptuFinishMode = false
+                },
             )
         }
 

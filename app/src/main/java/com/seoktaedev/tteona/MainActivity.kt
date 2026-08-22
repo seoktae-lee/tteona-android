@@ -34,6 +34,11 @@ class MainActivity : ComponentActivity() {
             intent?.getBooleanExtra("previewProfileTab", false) == true
         val previewFootprintDemo = BuildConfig.DEBUG &&
             intent?.getBooleanExtra("previewFootprintDemo", false) == true
+        // 시각 검증용: 발견 탭(지도) 바로 진입 — 핀 밀도·검색 제안을 눈으로 확인할 때 쓴다
+        //   adb shell am start -n com.seoktaedev.tteona/.MainActivity --ez previewDiscoverTab true
+        //   (iOS -previewDiscoverTab 런치 아규먼트 대응)
+        val previewDiscoverTab = BuildConfig.DEBUG &&
+            intent?.getBooleanExtra("previewDiscoverTab", false) == true
         setContent {
             TteonaTheme {
                 AppRoot(
@@ -41,6 +46,7 @@ class MainActivity : ComponentActivity() {
                     previewOnboardingStep = previewStep,
                     previewProfileTab = previewProfileTab,
                     previewFootprintDemo = previewFootprintDemo,
+                    previewDiscoverTab = previewDiscoverTab,
                 )
             }
         }

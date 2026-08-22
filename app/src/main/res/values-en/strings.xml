@@ -767,4 +767,12 @@ Turn what you’ve captured into a vlog.</string>
 
     <string name="main_zoomInForCourses">Zoom in to see courses</string>
     <string name="vlog_keepsRunning">Keeps rendering on our servers even if you close the app</string>
+
+    <!-- 지도 검색 개편 (장소 후보 · 근처 코스 수 · 나와의 거리) -->
+    <string name="main_searchSectionPlaces">Places</string>
+    <string name="main_nearbyCourses">%d courses nearby</string>
+    <string name="main_nearbyCoursesNone">No courses here yet</string>
+    <string name="main_distanceKm">%d km away</string>
+    <string name="main_distanceNear">Nearby</string>
+    <string name="main_clearSearchedPlace">Clear searched place</string>
 </resources>

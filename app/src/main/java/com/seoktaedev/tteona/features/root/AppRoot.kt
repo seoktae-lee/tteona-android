@@ -50,6 +50,7 @@ fun AppRoot(
     previewOnboardingStep: Int = 0,
     previewProfileTab: Boolean = false,
     previewFootprintDemo: Boolean = false,
+    previewDiscoverTab: Boolean = false,
 ) {
     val isInitializing by AuthService.isInitializing.collectAsState()
     val currentUser by AuthService.currentUser.collectAsState()
@@ -74,6 +75,12 @@ fun AppRoot(
     // 시각 검증용 — 인증 없이 메인 탭 + 프로필 탭 진입
     if (previewProfileTab) {
         MainTabScreen(initialTab = 3, previewFootprintDemo = previewFootprintDemo)
+        return
+    }
+
+    // 시각 검증용 — 발견 탭(지도) 바로 진입. 게스트 게이트도 건너뛴다
+    if (previewDiscoverTab) {
+        MainTabScreen(initialTab = 1, forceUnlockTabs = true)
         return
     }
 

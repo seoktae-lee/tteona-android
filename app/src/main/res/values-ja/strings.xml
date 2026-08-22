@@ -767,4 +767,12 @@
 
     <string name="main_zoomInForCourses">地図を拡大するとコースが表示されます</string>
     <string name="vlog_keepsRunning">アプリを閉じてもサーバーで作成が続きます</string>
+
+    <!-- 지도 검색 개편 (장소 후보 · 근처 코스 수 · 나와의 거리) -->
+    <string name="main_searchSectionPlaces">場所</string>
+    <string name="main_nearbyCourses">この近くのコース%d件</string>
+    <string name="main_nearbyCoursesNone">この近くにはまだコースがありません</string>
+    <string name="main_distanceKm">現在地から%dkm</string>
+    <string name="main_distanceNear">すぐ近く</string>
+    <string name="main_clearSearchedPlace">検索した場所を消す</string>
 </resources>

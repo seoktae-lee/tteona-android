@@ -94,7 +94,12 @@ private val tabs = listOf(
 private data class CourseSelection(val course: Course, val thumbnailUrl: String?)
 
 @Composable
-fun MainTabScreen(initialTab: Int = 0, previewFootprintDemo: Boolean = false) {
+fun MainTabScreen(
+    initialTab: Int = 0,
+    previewFootprintDemo: Boolean = false,
+    /** 시각 검증용 — 게스트 게이트를 건너뛴다 (DEBUG 진입점에서만 true) */
+    forceUnlockTabs: Boolean = false,
+) {
     var selectedTab by rememberSaveable { mutableIntStateOf(initialTab) }
     var courseSelection by remember { mutableStateOf<CourseSelection?>(null) }
     var sessionInfo by remember { mutableStateOf<CourseSessionInfo?>(null) }
@@ -197,6 +202,7 @@ fun MainTabScreen(initialTab: Int = 0, previewFootprintDemo: Boolean = false) {
     val unreadRoomIds by com.seoktaedev.tteona.core.services.RoomService.unreadRoomIds.collectAsState()
     // 게스트는 uid가 있어도 계정이 아니다 — Firestore 규칙이 익명을 막으므로 실시간 룸
     // 리스너는 권한 거부만 쌓으며 재시도를 돈다. 진짜 계정일 때만 켠다.
+    val gated = isGuest && !forceUnlockTabs
     val accountUid = authUser?.uid?.takeIf { !isGuest }
     LaunchedEffect(accountUid) {
         accountUid?.let { com.seoktaedev.tteona.core.services.RoomService.startListeningMyRooms(it) }
@@ -265,7 +271,7 @@ fun MainTabScreen(initialTab: Int = 0, previewFootprintDemo: Boolean = false) {
                     onRequestPaywall = { showPaywall = true },
                 )
                 // 지도 + 탐색 — 둘 다 "코스를 찾는" 화면이라 한 탭에 묶고 토글로 전환한다
-                Tab.DISCOVER -> GuestGated(isGuest, R.drawable.tteoni_travel,
+                Tab.DISCOVER -> GuestGated(gated, R.drawable.tteoni_travel,
                     R.string.guest_discover_title, R.string.guest_discover_message,
                     onSignUp = { showAuth = true }, modifier = modifier) {
                     DiscoverTabScreen(
@@ -276,13 +282,13 @@ fun MainTabScreen(initialTab: Int = 0, previewFootprintDemo: Boolean = false) {
                         onOpenGroups = { selectedTab = Tab.CHAT },
                     )
                 }
-                Tab.CHAT -> GuestGated(isGuest, R.drawable.tteoni_front,
+                Tab.CHAT -> GuestGated(gated, R.drawable.tteoni_front,
                     R.string.guest_chat_title, R.string.guest_chat_message,
                     onSignUp = { showAuth = true }, modifier = modifier) {
                     Box(modifier) { GroupListScreen() }
                 }
                 // 설정으로 가는 유일한 통로가 프로필이라, 게스트도 약관·언어에 닿게 열어 둔다
-                Tab.PROFILE -> GuestGated(isGuest, R.drawable.tteoni_thumbsup,
+                Tab.PROFILE -> GuestGated(gated, R.drawable.tteoni_thumbsup,
                     R.string.guest_profile_title, R.string.guest_profile_message,
                     onSignUp = { showAuth = true }, onOpenSettings = { showGuestSettings = true },
                     modifier = modifier) {

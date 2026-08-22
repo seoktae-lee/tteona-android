@@ -767,4 +767,12 @@
 
     <string name="main_zoomInForCourses">지도를 확대하면 코스가 보여요</string>
     <string name="vlog_keepsRunning">앱을 닫아도 서버에서 계속 만들어져요</string>
+
+    <!-- 지도 검색 개편 (장소 후보 · 근처 코스 수 · 나와의 거리) -->
+    <string name="main_searchSectionPlaces">장소</string>
+    <string name="main_nearbyCourses">이 근처 코스 %d개</string>
+    <string name="main_nearbyCoursesNone">아직 이 근처 코스가 없어요</string>
+    <string name="main_distanceKm">내 위치에서 %dkm</string>
+    <string name="main_distanceNear">바로 근처</string>
+    <string name="main_clearSearchedPlace">검색한 장소 지우기</string>
 </resources>

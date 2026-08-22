@@ -9,6 +9,12 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import kotlin.math.roundToInt
+import com.seoktaedev.tteona.features.explore.haversineKm
+import com.seoktaedev.tteona.core.util.Haptics
+import com.seoktaedev.tteona.core.i18n.LocaleManager
+import androidx.compose.material.icons.filled.NorthWest
+import androidx.compose.material.icons.filled.Place
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -150,12 +156,24 @@ fun HomeScreen(
 
     var isLoadingCourses by remember { mutableStateOf(false) }
     var searchText by remember { mutableStateOf("") }
+    // 검색 상태는 화면 전체가 쓴다(제안 카드·장소 핀·하단 카드) — 최상단에서 들고 있는다
+    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
+    var searchFocused by remember { mutableStateOf(false) }
+    val view = androidx.compose.ui.platform.LocalView.current
     var filter by remember { mutableStateOf(CourseFilter.ALL) }
     var previewCourse by remember { mutableStateOf<Course?>(null) }
-    LaunchedEffect(previewCourse) { onPreviewCardVisibilityChanged(previewCourse != null) }
+    /** 검색해서 찾아간 장소 — 지도 위 핀과 하단 카드로 남는다 */
+    var searchedPlace by remember { mutableStateOf<PlaceSearchService.SearchResult?>(null) }
+    // 하단을 차지하는 카드가 있으면 발견 탭 토글을 접어야 한다.
+    // 코스 카드만 알렸더니 검색한 장소 카드 위에 토글이 그대로 앉아 문구와 닫기를 가렸다.
+    LaunchedEffect(previewCourse, searchedPlace) {
+        onPreviewCardVisibilityChanged(previewCourse != null || searchedPlace != null)
+    }
     var thumbnails by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     var locationGranted by remember { mutableStateOf(false) }
     var didMoveToUser by remember { mutableStateOf(false) }
+    /** 마지막으로 알려진 내 위치 — 미리보기 카드의 '나와의 거리'에 쓴다 */
+    var myLocation by remember { mutableStateOf<Pair<Double, Double>?>(null) }
     var showRegionSearch by remember { mutableStateOf(false) }
 
     val cameraPositionState = rememberCameraPositionState {
@@ -168,6 +186,7 @@ fun HomeScreen(
         val loc = runCatching {
             LocationServices.getFusedLocationProviderClient(context).lastLocation.await()
         }.getOrNull() ?: return
+        myLocation = loc.latitude to loc.longitude
         val delta = animateDelta ?: withContext(Dispatchers.IO) {
             val code = runCatching {
                 @Suppress("DEPRECATION")
@@ -224,6 +243,56 @@ fun HomeScreen(
                 c.places.any { it.placeName.lowercase().contains(q) }
         }
         results.sortedByDescending { it.likeCount }
+    }
+
+    /**
+     * 입력은 두 가지 뜻을 가진다 — "이 이름의 코스를 걸러줘"와 "이 장소로 가줘".
+     * 예전엔 뒤쪽이 '지도 이동' 한 줄에 숨어 있어서, '양재고'를 친 사람은 코스 0개만 보고
+     * 막다른 길에 섰다. 이제 장소 후보를 직접 늘어놓는다.
+     */
+    var placeResults by remember { mutableStateOf<List<PlaceSearchService.SearchResult>>(emptyList()) }
+    var isSearchingPlaces by remember { mutableStateOf(false) }
+
+    // 타이핑마다 검색을 때리면 카카오 API를 낭비하고 결과도 계속 흔들린다 — 잠시 멈추면 보낸다
+    LaunchedEffect(searchText, searchFocused) {
+        val q = searchText.trim()
+        if (!searchFocused || q.length < 2) {
+            placeResults = emptyList()
+            isSearchingPlaces = false
+            return@LaunchedEffect
+        }
+        isSearchingPlaces = true
+        kotlinx.coroutines.delay(320)
+        val center = cameraPositionState.position.target
+        placeResults = runCatching {
+            PlaceSearchService.search(context, q, center.latitude, center.longitude)
+        }.getOrDefault(emptyList())
+        isSearchingPlaces = false
+    }
+
+    /** 지도에 이미 올라와 있는 코스 중 그 장소 5km 안에 있는 것 */
+    fun nearbyCourseCount(place: PlaceSearchService.SearchResult): Int =
+        filteredCourses.count { course ->
+            val main = course.mainPlace ?: return@count false
+            haversineKm(place.latitude, place.longitude, main.latitude, main.longitude) <= 5.0
+        }
+
+    fun selectPlace(place: PlaceSearchService.SearchResult) {
+        Haptics.light(view)
+        focusManager.clearFocus()
+        searchedPlace = place
+        previewCourse = null
+        scope.launch {
+            cameraPositionState.animate(
+                CameraUpdateFactory.newLatLngZoom(LatLng(place.latitude, place.longitude), 14f)
+            )
+            // 그 동네 코스를 채워야 "이 근처 코스 N개"가 진짜 숫자가 된다
+            CourseService.fetchCoursesNear(
+                latitude = place.latitude,
+                longitude = place.longitude,
+                blockedUserIds = UserService.currentUser.value?.blockedUserIds ?: emptyList(),
+            )
+        }
     }
 
     // 지도가 멈추면 그 지역 코스를 보충한다 — 인기 상위 300에 못 든 동네 코스와
@@ -326,12 +395,29 @@ fun HomeScreen(
                     }
                 }
             }
+
+            // 검색해서 찾아간 장소 — 코스 핀과 구분되는 모양으로 세운다.
+            // 솎아내기 대상이 아니다: 사용자가 방금 지목한 대상이라 항상 남아야 한다.
+            searchedPlace?.let { place ->
+                key("searched:${place.latitude},${place.longitude}") {
+                    MarkerComposable(
+                        keys = arrayOf(place.name),
+                        state = rememberUpdatedMarkerState(
+                            position = LatLng(place.latitude, place.longitude),
+                        ),
+                    ) {
+                        Icon(
+                            Icons.Filled.Place,
+                            contentDescription = place.name,
+                            tint = TteOrange,
+                            modifier = Modifier.size(40.dp),
+                        )
+                    }
+                }
+            }
         }
 
         // 상단 검색 + 필터 (iOS topBar) + 검색 제안 카드
-        val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
-        var searchFocused by remember { mutableStateOf(false) }
-
         Column(Modifier.fillMaxWidth()) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -451,7 +537,110 @@ fun HomeScreen(
                         .clip(RoundedCornerShape(16.dp))
                         .background(Color.White),
                 ) {
-                    // 현재 입력으로 필터된 코스 수 — 탭하면 키보드를 내리고 지도에서 확인
+                    // ── 장소 후보 ──
+                    when {
+                        placeResults.isNotEmpty() -> {
+                            Text(
+                                stringResource(R.string.main_searchSectionPlaces),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = TteMediumGray,
+                                modifier = Modifier.padding(start = 14.dp, top = 12.dp, bottom = 4.dp),
+                            )
+                            placeResults.take(5).forEach { place ->
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { selectPlace(place) }
+                                        .padding(horizontal = 14.dp, vertical = 8.dp),
+                                ) {
+                                    Icon(
+                                        Icons.Filled.Place,
+                                        contentDescription = null,
+                                        tint = TteOrange,
+                                        modifier = Modifier.size(16.dp),
+                                    )
+                                    Column(Modifier.weight(1f)) {
+                                        Text(
+                                            place.name,
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            color = TteDarkGray,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                        if (place.address.isNotEmpty()) {
+                                            Text(
+                                                place.address,
+                                                fontSize = 11.sp,
+                                                color = TteMediumGray,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                            )
+                                        }
+                                    }
+                                    Icon(
+                                        Icons.Filled.NorthWest,
+                                        contentDescription = null,
+                                        tint = TteMediumGray,
+                                        modifier = Modifier.size(13.dp),
+                                    )
+                                }
+                            }
+                        }
+                        isSearchingPlaces -> Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
+                        ) {
+                            CircularProgressIndicator(
+                                color = TteOrange,
+                                strokeWidth = 2.dp,
+                                modifier = Modifier.size(14.dp),
+                            )
+                            Text(
+                                stringResource(R.string.main_searchSectionPlaces),
+                                fontSize = 13.sp,
+                                color = TteMediumGray,
+                            )
+                        }
+                        else -> {
+                            // 아무것도 못 찾은 경우에도 길은 남겨둔다 —
+                            // 지역명처럼 '장소'가 아닌 입력은 여기로 흡수된다.
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        focusManager.clearFocus()
+                                        scope.launch { geocodeAndMove(context, searchText, cameraPositionState) }
+                                    }
+                                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                            ) {
+                                Icon(Icons.Filled.Map, contentDescription = null, tint = TteOrange, modifier = Modifier.size(16.dp))
+                                Text(
+                                    stringResource(R.string.main_goToRegion, searchText.trim()),
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = TteDarkGray,
+                                    maxLines = 1,
+                                )
+                            }
+                        }
+                    }
+
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(start = 40.dp)
+                            .height(1.dp)
+                            .background(TteMediumGray.copy(alpha = 0.15f))
+                    )
+
+                    // ── 코스 ── 현재 입력으로 필터된 코스 수. 탭하면 키보드를 내리고 지도에서 확인
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -468,40 +657,17 @@ fun HomeScreen(
                             color = TteDarkGray,
                         )
                     }
-                    Box(
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(start = 40.dp)
-                            .height(1.dp)
-                            .background(TteMediumGray.copy(alpha = 0.15f))
-                    )
-                    // 지역/장소로 지도 이동 — 기존 검색 키 액션의 숨은 동작을 눈에 보이는 선택지로
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                focusManager.clearFocus()
-                                scope.launch { geocodeAndMove(context, searchText, cameraPositionState) }
-                            }
-                            .padding(horizontal = 14.dp, vertical = 12.dp),
-                    ) {
-                        Icon(Icons.Filled.Map, contentDescription = null, tint = TteOrange, modifier = Modifier.size(16.dp))
-                        Text(
-                            stringResource(R.string.main_goToRegion, searchText.trim()),
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = TteDarkGray,
-                            maxLines = 1,
-                        )
-                    }
                 }
             }
         }
 
-        // 검색 결과 없음 오버레이 — 뜨오니 마스코트 (iOS emptySearchResultOverlay)
-        if (searchText.isNotEmpty() && filteredCourses.isEmpty()) {
+        // 검색 결과 없음 오버레이 — 뜨오니 마스코트 (iOS emptySearchResultOverlay).
+        // **입력 중에는 띄우지 않는다.** 제안 카드가 떠 있는 동안 그 위에 겹쳐서,
+        // 아직 장소를 고르는 중인 사람에게 "결과 없음"부터 들이미는 꼴이 됐다(에뮬 실측).
+        // 코스가 0개여도 갈 수 있는 장소는 제안 카드에 있다.
+        if (searchText.isNotEmpty() && filteredCourses.isEmpty() &&
+            !searchFocused && searchedPlace == null
+        ) {
             Box(
                 modifier = Modifier
                     .align(Alignment.Center)
@@ -536,6 +702,69 @@ fun HomeScreen(
             }
         }
 
+        /*
+         * 검색해서 찾아간 장소를 지도 위에서 한 번 더 확인시켜 준다.
+         * 핀만 세우면 "여기가 맞나?"에서 끝나는데, 사람이 장소를 찾아온 진짜 이유는
+         * 대개 "여기 뭐 있지?"라서 근처 코스 수를 같이 보여준다.
+         */
+        searchedPlace?.let { place ->
+            if (previewCourse == null) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(horizontal = 12.dp)
+                        .padding(bottom = 12.dp)
+                        .fillMaxWidth()
+                        .shadow(14.dp, RoundedCornerShape(20.dp))
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(Color.White)
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                ) {
+                    Icon(Icons.Filled.Place, contentDescription = null, tint = TteOrange, modifier = Modifier.size(24.dp))
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        Text(
+                            place.name,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TteDarkGray,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        if (place.address.isNotEmpty()) {
+                            Text(
+                                place.address,
+                                fontSize = 11.5.sp,
+                                color = TteMediumGray,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                        val count = nearbyCourseCount(place)
+                        Text(
+                            if (count > 0) LocaleManager.string(context, R.string.main_nearbyCourses, count)
+                            else stringResource(R.string.main_nearbyCoursesNone),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = if (count > 0) TteOrange else TteMediumGray,
+                        )
+                    }
+                    Icon(
+                        Icons.Filled.Close,
+                        contentDescription = stringResource(R.string.main_clearSearchedPlace),
+                        tint = TteMediumGray,
+                        modifier = Modifier
+                            .size(20.dp)
+                            .clickable {
+                                Haptics.light(view)
+                                searchedPlace = null
+                            },
+                    )
+                }
+            }
+        }
+
         // 확대 안내 — 핀을 숨긴 이유를 말해준다.
         // 아무 설명 없이 비워두면 "이 지역엔 코스가 없구나"로 읽혀 사용자가
         // 확대해볼 생각을 하지 않는다.
@@ -557,8 +786,10 @@ fun HomeScreen(
             )
         }
 
-        // 하단 버튼 영역 (미리보기 카드가 없을 때만)
-        if (previewCourse == null) {
+        // 하단 버튼 영역 (하단 카드가 없을 때만).
+        // 검색한 장소 카드도 같은 자리를 쓴다 — 빼먹었더니 '현재 위치' 버튼이
+        // 카드의 닫기(X)를 가려 카드를 치울 방법이 없었다(에뮬 실측).
+        if (previewCourse == null && searchedPlace == null) {
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
@@ -654,6 +885,11 @@ fun HomeScreen(
             CoursePreviewCard(
                 course = course,
                 modifier = Modifier.align(Alignment.BottomCenter),
+                distanceKm = myLocation?.let { me ->
+                    course.mainPlace?.let { main ->
+                        haversineKm(me.first, me.second, main.latitude, main.longitude)
+                    }
+                },
                 onTap = {
                     val c = course
                     previewCourse = null
@@ -785,9 +1021,12 @@ private fun Modifier.widthLimit() = this.width(96.dp)
 private fun CoursePreviewCard(
     course: Course,
     modifier: Modifier = Modifier,
+    /** 내 위치에서 대표 장소까지의 거리(km). 위치를 모르면 null — 그때는 표시하지 않는다. */
+    distanceKm: Double? = null,
     onTap: () -> Unit,
     onDismiss: () -> Unit,
 ) {
+    val context = LocalContext.current
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -866,6 +1105,18 @@ private fun CoursePreviewCard(
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
                         Icon(Icons.Filled.Favorite, contentDescription = null, tint = TteMediumGray, modifier = Modifier.size(11.dp))
                         Text("${course.likeCount}", fontSize = 12.sp, color = TteMediumGray)
+                    }
+                    // 나와의 거리 — "갈 만한가"를 여기서 바로 판단하게 해준다.
+                    // 위치를 모르면(권한 없음) 자리를 비운다: 빈 값을 '0km'로 그리면 거짓말이 된다.
+                    distanceKm?.let { km ->
+                        Text(
+                            if (km < 1) stringResource(R.string.main_distanceNear)
+                            else LocaleManager.string(context, R.string.main_distanceKm, km.roundToInt()),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = TteOrange,
+                            maxLines = 1,
+                        )
                     }
                 }
             }

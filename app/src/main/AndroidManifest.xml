@@ -17,6 +17,22 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
 
+
+    <!--
+        Android 11+ 패키지 가시성.
+        선언하지 않으면 getPackageInfo/resolveActivity가 항상 실패해 지도 앱 분기가
+        통째로 죽고 매번 폴백으로 떨어진다 — 아무 오류 없이 조용히.
+    -->
+    <queries>
+        <package android:name="com.nhn.android.nmap" />   <!-- 네이버지도 -->
+        <package android:name="net.daum.android.map" />   <!-- 카카오맵 -->
+        <!-- geo:/google.navigation: 폴백이 선택창을 띄울 수 있게 -->
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="geo" />
+        </intent>
+    </queries>
+
     <application
         android:name=".TteonaApplication"
         android:label="떠나"

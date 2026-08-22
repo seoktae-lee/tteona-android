@@ -36,6 +36,17 @@ data class TourPhotoResponse(val url: String? = null, val category: String? = nu
 @Serializable
 data class StatsEventRequest(val userId: String, val type: String)
 
+/**
+ * 코스 퍼널 이벤트 (iOS StatsService.CourseFunnelStep).
+ *
+ * **기본값을 두지 않는다.** kotlinx.serialization은 필드가 기본값과 같으면 JSON에서
+ * 통째로 생략하는데(ApiClient의 encodeDefaults가 꺼져 있다), 서버는 event·courseId가
+ * 없으면 조용히 무시한다 — 이벤트가 사라진 줄도 모르게 된다.
+ * 예전에 platform 필드가 같은 이유로 서버에 전달되지 않은 적이 있다.
+ */
+@Serializable
+data class CourseEventRequest(val event: String, val courseId: String, val curated: Boolean)
+
 // 장소 상세 캐시 (iOS PlaceDetailService — WAS PostgreSQL 캐시)
 @Serializable
 data class PlaceCachePayload(
@@ -219,6 +230,10 @@ interface TteonaApi {
     // 통계 이벤트 적재 — fire-and-forget (iOS StatsService.postEvent)
     @POST("stats/event")
     suspend fun postStatsEvent(@Body body: StatsEventRequest)
+
+    // 코스 퍼널 단계 적재 — 실패해도 사용자 흐름을 막지 않는다 (iOS postCourseEvent)
+    @POST("stats/course-event")
+    suspend fun postCourseEvent(@Body body: CourseEventRequest)
 
     // 프로필 이미지 업로드 — 서버가 512px로 리샘플 후 Firestore profileImageUrl도 갱신
     // (iOS ProfileImageService.upload)

@@ -96,7 +96,7 @@
     <string name="onboarding_permission_title">アプリの利用には\n権限が必要です</string>
     <string name="onboarding_permission_subtitle">以下の権限はコア機能に使用されます。</string>
     <string name="onboarding_permission_location">位置情報</string>
-    <string name="onboarding_permission_location_desc">場所への到着を検知し、地図に現在地を表示します</string>
+    <string name="onboarding_permission_location_desc">今撮影した場所を探して一覧に表示します。コースを追うときは到着も検知します</string>
     <string name="onboarding_permission_notification">通知</string>
     <string name="onboarding_permission_notification_desc">場所に到着すると撮影通知をお送りします</string>
     <string name="onboarding_permission_camera">カメラ</string>
@@ -750,4 +750,21 @@
     <string name="vlog_invite_title">このブイログ、ここで終わりはもったいない</string>
     <string name="vlog_invite_message">登録すると次のブイログも作り続けられ、\n訪れた場所が足あとマップに残ります。</string>
     <string name="vlog_invite_signUp">登録して続ける</string>
+    <string name="common_directionsNoApp">地図アプリが見つかりません</string>
+
+    <!-- 코스 상세 개편 (요약·출처·근처 맛집·전체지도) -->
+    <string name="coursedetail_summaryPlaces">%d カ所</string>
+    <string name="coursedetail_summaryMove">移動 %s</string>
+    <string name="coursedetail_summaryFromMe">現在地から %s</string>
+    <string name="coursedetail_sourceLabel">コース情報提供</string>
+    <string name="coursedetail_nearbyFood">この近くで一食</string>
+    <string name="coursedetail_nearbyFoodHint">コースには含まれていません。立ち寄るかはご自由に。</string>
+    <string name="coursedetail_nearbyFoodDistance">%1$s から %2$dm</string>
+    <string name="coursedetail_viewMap">地図で見る</string>
+    <string name="coursedetail_mapTitle">コース地図</string>
+    <string name="source_kto">韓国観光公社</string>
+    <string name="common_directions">経路案内</string>
+
+    <string name="main_zoomInForCourses">地図を拡大するとコースが表示されます</string>
+    <string name="vlog_keepsRunning">アプリを閉じてもサーバーで作成が続きます</string>
 </resources>

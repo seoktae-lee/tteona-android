@@ -44,37 +44,58 @@ object PlacesPhotoService {
     private data class Info(val photoUrl: String?, val category: String?)
     private val cache = mutableMapOf<String, Info>()
 
+    /**
+     * 캐시 키에 **좌표를 함께 넣는다.**
+     *
+     * 이름만 키로 쓰면 '스타벅스'·'본점' 같은 흔한 이름이 전국에서 한 칸을 공유해,
+     * 먼저 조회된 다른 도시의 사진이 그대로 재사용된다 — 엉뚱한 사진의 한 원인이다.
+     * 소수점 셋째 자리(약 100m 격자)로 뭉개 같은 장소는 계속 캐시를 맞히게 한다.
+     */
+    private fun key(placeName: String, latitude: Double?, longitude: Double?): String {
+        val base = placeName.trim().lowercase()
+        if (latitude == null || longitude == null) return base
+        return String.format(java.util.Locale.US, "%s|%.3f|%.3f", base, latitude, longitude)
+    }
+
     suspend fun photoUrl(placeName: String, latitude: Double? = null, longitude: Double? = null): String? {
-        ensureFetched(placeName, latitude, longitude)
-        return cache[placeName]?.photoUrl
+        val k = key(placeName, latitude, longitude)
+        ensureFetched(k, placeName, latitude, longitude)
+        return cache[k]?.photoUrl
     }
 
     suspend fun placeCategory(placeName: String, latitude: Double? = null, longitude: Double? = null): String? {
-        ensureFetched(placeName, latitude, longitude)
-        return cache[placeName]?.category
+        val k = key(placeName, latitude, longitude)
+        ensureFetched(k, placeName, latitude, longitude)
+        return cache[k]?.category
     }
 
-    private suspend fun ensureFetched(placeName: String, latitude: Double?, longitude: Double?) {
-        if (cache.containsKey(placeName)) return
+    private suspend fun ensureFetched(k: String, placeName: String, latitude: Double?, longitude: Double?) {
+        if (cache.containsKey(k)) return
         // TourAPI 네트워크 실패(tour == null)와 "사진 없음"을 구분 — 사진이 없으면 Google 폴백 시도.
         val tour = runCatching { ApiClient.api.getTourPhoto(placeName, latitude, longitude) }.getOrNull()
         val tourUrl = tour?.url?.takeIf { it.isNotEmpty() }
         if (tourUrl != null) {
-            cache[placeName] = Info(tourUrl, tour.category)
+            cache[k] = Info(tourUrl, tour.category)
             return
         }
 
-        // 2순위: Google Places 폴백 (iOS fetchAndCache와 동일 — 사진 1장 + 카테고리)
-        val place = GooglePlacesService.searchTextFirstPlace(placeName, "places.photos,places.types")
+        // 2순위: Google Places 폴백 (iOS fetchAndCache와 동일 — 사진 1장 + 카테고리).
+        // **좌표를 함께 넘긴다** — 이름만 던지면 전 세계에서 가장 유명한 동명 장소가
+        // 1등으로 오고, 그 사진이 이 장소의 것으로 올라간다.
+        val place = GooglePlacesService.searchTextFirstPlace(
+            placeName, "places.photos,places.types", latitude, longitude,
+        )
         if (place != null) {
             val photoName = place.optJSONArray("photos")?.optJSONObject(0)?.optString("name")
             val photoUrl = photoName?.takeIf { it.isNotEmpty() }?.let { GooglePlacesService.photoUri(it) }
             val types = place.optJSONArray("types")
                 ?.let { arr -> (0 until arr.length()).map(arr::getString) } ?: emptyList()
-            cache[placeName] = Info(photoUrl, GooglePlacesService.categoryText(types) ?: tour?.category)
+            cache[k] = Info(photoUrl, GooglePlacesService.categoryText(types) ?: tour?.category)
         } else if (tour != null) {
-            // TourAPI는 성공(사진 없음), Google은 실패/미설정 — 일시 실패가 아니므로 결과를 캐시
-            cache[placeName] = Info(null, tour.category)
+            // TourAPI는 성공(사진 없음), Google은 실패/미설정 — 일시 실패가 아니므로 결과를 캐시.
+            // 사진을 못 찾은 것도 결과다: 남겨두지 않으면 사진 없는 장소를 볼 때마다
+            // 유료 검색을 다시 때린다.
+            cache[k] = Info(null, tour.category)
         }
     }
 }
@@ -113,5 +134,30 @@ object StatsService {
     /** 통계 이벤트 적재 — 실패해도 무시 (iOS postEvent와 동일한 fire-and-forget) */
     suspend fun postEvent(event: StatsEvent, userId: String) {
         runCatching { ApiClient.api.postStatsEvent(StatsEventRequest(userId, event.type)) }
+    }
+
+    /**
+     * 코스가 세션까지 이어지는 각 단계.
+     * 큐레이션 코스가 실제로 "떠나기"를 만드는지 알려면 **코스별로, 큐레이션 여부와 함께**
+     * 세야 한다 — 컬럼을 증가시키는 방식(user_stats)으로는 답할 수 없는 질문이다.
+     */
+    enum class CourseFunnelStep(val event: String) {
+        PIN_TAP("pin_tap"),
+        COURSE_OPEN("course_open"),
+        SESSION_START("session_start"),
+        VLOG_COMPLETE("vlog_complete"),
+    }
+
+    /** 통계 전송이 사용자 흐름을 막아서는 안 된다 — 실패해도 조용히 넘어간다. */
+    suspend fun postCourseEvent(step: CourseFunnelStep, course: com.seoktaedev.tteona.core.model.Course) {
+        runCatching {
+            ApiClient.api.postCourseEvent(
+                com.seoktaedev.tteona.core.network.CourseEventRequest(
+                    event = step.event,
+                    courseId = course.courseId,
+                    curated = course.curated,
+                )
+            )
+        }
     }
 }

@@ -54,8 +54,22 @@ import com.seoktaedev.tteona.ui.theme.TteOrange
  * 번호 마커 + 점선 폴리라인, 탭하면 전체화면 인터랙티브 지도.
  */
 @Composable
-fun CourseRouteMap(course: Course) {
-    var showFullMap by remember { mutableStateOf(false) }
+fun CourseRouteMap(
+    course: Course,
+    /**
+     * 전체화면 지도를 바깥에서도 열 수 있게 한다.
+     * 목록 헤더의 '지도 보기' 칩이 같은 지도를 열어야 하는데, 상태가 이 안에만 있으면
+     * 화면마다 지도를 따로 만들게 된다 — 하나를 두고 제어권만 끌어올린다.
+     */
+    showFullMapExternally: Boolean = false,
+    onFullMapDismiss: () -> Unit = {},
+) {
+    var showFullMapInternal by remember { mutableStateOf(false) }
+    val showFullMap = showFullMapInternal || showFullMapExternally
+    fun closeFullMap() {
+        showFullMapInternal = false
+        onFullMapDismiss()
+    }
 
     Box(
         modifier = Modifier
@@ -84,13 +98,13 @@ fun CourseRouteMap(course: Course) {
         Box(
             Modifier
                 .fillMaxSize()
-                .clickable { showFullMap = true }
+                .clickable { showFullMapInternal = true }
         )
     }
 
     if (showFullMap) {
         Dialog(
-            onDismissRequest = { showFullMap = false },
+            onDismissRequest = { closeFullMap() },
             properties = DialogProperties(usePlatformDefaultWidth = false),
         ) {
             Box(Modifier.fillMaxSize()) {
@@ -103,7 +117,7 @@ fun CourseRouteMap(course: Course) {
                         .size(38.dp)
                         .clip(CircleShape)
                         .background(Color.Black.copy(alpha = 0.45f))
-                        .clickable { showFullMap = false },
+                        .clickable { closeFullMap() },
                 ) {
                     Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.common_close), tint = Color.White, modifier = Modifier.size(18.dp))
                 }

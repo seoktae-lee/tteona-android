@@ -2,6 +2,7 @@ package com.seoktaedev.tteona.core.model
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import com.seoktaedev.tteona.features.explore.haversineKm
 
 // iOS Core/Models/Course.swift의 Kotlin 이식본
 
@@ -104,6 +105,17 @@ data class Course(
 ) {
     // 유저에게 보여줄 장소 목록 — 연속 중복이 병합된 표시용 (원본 places는 그대로 유지)
     val displayPlaces: List<Place> get() = places.mergedForDisplay()
+
+    /**
+     * 코스 안에서 이동하는 총 거리(km). 좌표만으로 즉시 구할 수 있어 API가 필요 없다.
+     * (교통수단별 실측 소요시간은 별도 조회가 담당한다)
+     */
+    val totalDistanceKm: Double
+        get() {
+            val ps = displayPlaces
+            if (ps.size < 2) return 0.0
+            return ps.zipWithNext().sumOf { (a, b) -> haversineKm(a.latitude, a.longitude, b.latitude, b.longitude) }
+        }
 
     // 대표 장소 — 핀·썸네일·날씨·추천의 기준점.
     // 유저가 지정했으면 그 장소, 아니면 자동 선택(경유지 후순위), 그것도 없으면 첫 장소.

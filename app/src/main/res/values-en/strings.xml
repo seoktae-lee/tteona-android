@@ -96,7 +96,7 @@
     <string name="onboarding_permission_title">We need a few\npermissions</string>
     <string name="onboarding_permission_subtitle">These permissions are used for core features.</string>
     <string name="onboarding_permission_location">Location</string>
-    <string name="onboarding_permission_location_desc">Detects when you arrive at places and shows your location on the map</string>
+    <string name="onboarding_permission_location_desc">Finds where you just filmed and lists it. Also detects arrivals when you follow a course</string>
     <string name="onboarding_permission_notification">Notifications</string>
     <string name="onboarding_permission_notification_desc">Sends you a reminder to record when you arrive</string>
     <string name="onboarding_permission_camera">Camera</string>
@@ -750,4 +750,21 @@ Turn what you’ve captured into a vlog.</string>
     <string name="vlog_invite_title">Don\'t let this be the last one</string>
     <string name="vlog_invite_message">Sign up to keep making vlogs and watch the places you\'ve been fill your footprint map.</string>
     <string name="vlog_invite_signUp">Sign up and continue</string>
+    <string name="common_directionsNoApp">No map app found</string>
+
+    <!-- 코스 상세 개편 (요약·출처·근처 맛집·전체지도) -->
+    <string name="coursedetail_summaryPlaces">%d stops</string>
+    <string name="coursedetail_summaryMove">%s route</string>
+    <string name="coursedetail_summaryFromMe">%s from you</string>
+    <string name="coursedetail_sourceLabel">Course info provided by</string>
+    <string name="coursedetail_nearbyFood">Grab a bite nearby</string>
+    <string name="coursedetail_nearbyFoodHint">Not part of the course — stop by if you feel like it.</string>
+    <string name="coursedetail_nearbyFoodDistance">%1$s · %2$dm away</string>
+    <string name="coursedetail_viewMap">View on map</string>
+    <string name="coursedetail_mapTitle">Course map</string>
+    <string name="source_kto">Korea Tourism Organization</string>
+    <string name="common_directions">Directions</string>
+
+    <string name="main_zoomInForCourses">Zoom in to see courses</string>
+    <string name="vlog_keepsRunning">Keeps rendering on our servers even if you close the app</string>
 </resources>

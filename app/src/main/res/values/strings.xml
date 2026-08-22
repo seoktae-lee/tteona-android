@@ -96,7 +96,7 @@
     <string name="onboarding_permission_title">앱 사용을 위해\n권한이 필요해요</string>
     <string name="onboarding_permission_subtitle">아래 권한들은 핵심 기능에 사용됩니다.</string>
     <string name="onboarding_permission_location">위치 권한</string>
-    <string name="onboarding_permission_location_desc">장소 도착을 감지하고 지도에 현재 위치를 표시해요</string>
+    <string name="onboarding_permission_location_desc">방금 촬영한 장소를 찾아 목록으로 보여줘요. 코스를 따라 떠날 땐 도착도 감지해요</string>
     <string name="onboarding_permission_notification">알림 권한</string>
     <string name="onboarding_permission_notification_desc">장소에 도착하면 촬영 알림을 보내드려요</string>
     <string name="onboarding_permission_camera">카메라 권한</string>
@@ -750,4 +750,21 @@
     <string name="vlog_invite_title">이 브이로그, 여기서 끝내긴 아깝죠?</string>
     <string name="vlog_invite_message">회원가입하면 다음 브이로그도 계속 만들 수 있고,\n다녀온 곳이 발자취 지도에 쌓여요.</string>
     <string name="vlog_invite_signUp">회원가입하고 이어가기</string>
+    <string name="common_directionsNoApp">지도 앱을 찾을 수 없어요</string>
+
+    <!-- 코스 상세 개편 (요약·출처·근처 맛집·전체지도) -->
+    <string name="coursedetail_summaryPlaces">%d곳</string>
+    <string name="coursedetail_summaryMove">이동 %s</string>
+    <string name="coursedetail_summaryFromMe">내 위치에서 %s</string>
+    <string name="coursedetail_sourceLabel">코스 정보 제공</string>
+    <string name="coursedetail_nearbyFood">이 근처에서 한 끼</string>
+    <string name="coursedetail_nearbyFoodHint">코스에 포함된 곳은 아니에요. 들를지는 직접 정하세요.</string>
+    <string name="coursedetail_nearbyFoodDistance">%1$s에서 %2$dm</string>
+    <string name="coursedetail_viewMap">지도로 보기</string>
+    <string name="coursedetail_mapTitle">코스 지도</string>
+    <string name="source_kto">한국관광공사</string>
+    <string name="common_directions">길찾기</string>
+
+    <string name="main_zoomInForCourses">지도를 확대하면 코스가 보여요</string>
+    <string name="vlog_keepsRunning">앱을 닫아도 서버에서 계속 만들어져요</string>
 </resources>

@@ -93,6 +93,7 @@ import com.seoktaedev.tteona.core.model.Course
 import com.seoktaedev.tteona.core.model.CourseTag
 import com.seoktaedev.tteona.core.model.Place
 import com.seoktaedev.tteona.core.services.CourseService
+import com.seoktaedev.tteona.core.services.StatsService
 import com.seoktaedev.tteona.core.services.CourseThumbnailService
 import com.seoktaedev.tteona.core.services.PlaceSearchService
 import com.seoktaedev.tteona.core.services.PlacesPhotoService
@@ -312,6 +313,12 @@ fun HomeScreen(
                         ),
                         onClick = {
                             previewCourse = course
+                            // 퍼널 ① 핀 탭 — 실패해도 흐름을 막지 않는다
+                            scope.launch {
+                                StatsService.postCourseEvent(
+                                    StatsService.CourseFunnelStep.PIN_TAP, course,
+                                )
+                            }
                             true
                         },
                     ) {
@@ -527,6 +534,27 @@ fun HomeScreen(
                 CircularProgressIndicator(color = Color.White, modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
                 Text(stringResource(R.string.main_loadingCourses), fontSize = 13.sp, color = Color.White)
             }
+        }
+
+        // 확대 안내 — 핀을 숨긴 이유를 말해준다.
+        // 아무 설명 없이 비워두면 "이 지역엔 코스가 없구나"로 읽혀 사용자가
+        // 확대해볼 생각을 하지 않는다.
+        if (cameraPositionState.position.zoom < PIN_MIN_ZOOM &&
+            searchText.isBlank() && !isLoadingCourses
+        ) {
+            Text(
+                stringResource(R.string.main_zoomInForCourses),
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = Color.White,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    // 탭바와 지도/목록 토글을 피해야 한다 — 그 뒤에 깔리면 글자가 안 보인다
+                    .padding(bottom = 90.dp)
+                    .clip(CircleShape)
+                    .background(Color.Black.copy(alpha = 0.55f))
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
+            )
         }
 
         // 하단 버튼 영역 (미리보기 카드가 없을 때만)

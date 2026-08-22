@@ -109,9 +109,25 @@ fun CourseDetailScreen(
     var showBlockConfirm by remember { androidx.compose.runtime.mutableStateOf(false) }
     var showDeleteConfirm by remember { androidx.compose.runtime.mutableStateOf(false) }
     var infoAlert by remember { androidx.compose.runtime.mutableStateOf<Pair<String, String>?>(null) }
+    /**
+     * 코스 전체 동선을 전체 화면 지도로 본다.
+     * 예전에는 상세 위쪽을 지도가 늘 차지했는데, 그만큼 목록이 밀려 코스 정보가
+     * 한눈에 안 들어왔다. 필요할 때만 펼치도록 바꿨다.
+     */
+    var showFullMap by remember { androidx.compose.runtime.mutableStateOf(false) }
+    /** 근처 맛집을 눌렀을 때 여는 장소 상세 */
+    var nearbyFoodForDetail by remember {
+        androidx.compose.runtime.mutableStateOf<com.seoktaedev.tteona.core.model.NearbyFood?>(null)
+    }
 
     BackHandler(onBack = onClose)
-    LaunchedEffect(course.courseId) { viewModel.load(course) }
+    LaunchedEffect(course.courseId) {
+        viewModel.load(course)
+        // 퍼널 ② 코스 열기
+        com.seoktaedev.tteona.core.services.StatsService.postCourseEvent(
+            com.seoktaedev.tteona.core.services.StatsService.CourseFunnelStep.COURSE_OPEN, course,
+        )
+    }
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -129,9 +145,20 @@ fun CourseDetailScreen(
                             Haptics.light(view)
                             viewModel.toggleLike(course.courseId)
                         }
+                        // 사진 바로 아래에서 "갈 만한가"를 즉시 판단하게 해주는 한 줄
+                        CourseSummaryBar(course)
+                        // 공공데이터 이용조건상 **의무** — 어느 경로로 열어도 보여야 한다
+                        CourseSourceLabel(course)
                         WeatherCard(state.weather)
                         TransportSection(state)
-                        PlacesBlock(course)
+                        PlacesBlock(
+                            course,
+                            showFullMap = showFullMap,
+                            onOpenFullMap = { showFullMap = true },
+                            onFullMapDismiss = { showFullMap = false },
+                        )
+                        // 근처 맛집은 코스에 포함된 곳이 아니므로 장소 목록과 분리해 아래에 둔다
+                        CourseNearbyFoodSection(course, onSelect = { nearbyFoodForDetail = it })
                     }
                 }
             }
@@ -303,11 +330,23 @@ fun CourseDetailScreen(
                 com.seoktaedev.tteona.features.common.InfoAlert(title, message) { infoAlert = null }
             }
 
+            // 근처 맛집 상세 — 코스 장소와 같은 시트를 쓴다(길찾기가 그 안에 있다)
+            nearbyFoodForDetail?.let { food ->
+                PlaceDetailSheet(place = food.asPlace, onDismiss = { nearbyFoodForDetail = null })
+            }
+
             // 공유할 그룹 선택 → 세션 시작 (iOS RoomSelectView 시트 대응)
             if (showRoomSelect && onStartCourse != null) {
                 com.seoktaedev.tteona.features.session.RoomSelectSheet(
                     onConfirm = { roomIds ->
                         showRoomSelect = false
+                        // 퍼널 ③ 세션 시작 — 코스가 실제로 '떠나기'로 이어졌는가
+                        scope.launch {
+                            com.seoktaedev.tteona.core.services.StatsService.postCourseEvent(
+                                com.seoktaedev.tteona.core.services.StatsService.CourseFunnelStep.SESSION_START,
+                                course,
+                            )
+                        }
                         onStartCourse(roomIds)
                     },
                     onDismiss = { showRoomSelect = false },
@@ -481,14 +520,50 @@ private fun TransportRow(
 }
 
 @Composable
-private fun PlacesBlock(course: Course) {
+private fun PlacesBlock(
+    course: Course,
+    showFullMap: Boolean,
+    onOpenFullMap: () -> Unit,
+    onFullMapDismiss: () -> Unit,
+) {
     // 장소 탭 → 상세 시트 (iOS CourseDetailView의 PlaceDetailSheet 진입)
     var selectedPlace by remember { androidx.compose.runtime.mutableStateOf<Place?>(null) }
+    val view = LocalView.current
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text(stringResource(R.string.detail_courseRoute), fontSize = 16.sp, fontWeight = FontWeight.Bold, color = TteDarkGray)
+        // 지도 입구를 목록 헤더 옆에도 둔다. 미니 지도만으로는 전체 동선을 가늠하기 어렵고,
+        // 눌러서 크게 볼 수 있다는 걸 알려주는 표지가 필요하다.
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                stringResource(R.string.detail_courseRoute),
+                fontSize = 16.sp, fontWeight = FontWeight.Bold, color = TteDarkGray,
+                modifier = Modifier.weight(1f),
+            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                modifier = Modifier
+                    .clip(CircleShape)
+                    .background(TteOrange.copy(alpha = 0.10f))
+                    .clickable {
+                        Haptics.light(view)
+                        onOpenFullMap()
+                    }
+                    .padding(horizontal = 10.dp, vertical = 5.dp),
+            ) {
+                Icon(Icons.Filled.Map, contentDescription = null, tint = TteOrange, modifier = Modifier.size(12.dp))
+                Text(
+                    stringResource(R.string.coursedetail_viewMap),
+                    fontSize = 12.sp, fontWeight = FontWeight.Medium, color = TteOrange,
+                )
+            }
+        }
 
-        CourseRouteMap(course)
+        CourseRouteMap(
+            course,
+            showFullMapExternally = showFullMap,
+            onFullMapDismiss = onFullMapDismiss,
+        )
 
         // 연속 중복 장소는 하나로 병합해 표시 (저장 데이터는 원본 유지)
         course.displayPlaces.forEachIndexed { idx, place ->

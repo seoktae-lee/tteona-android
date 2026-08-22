@@ -2,6 +2,9 @@ package com.seoktaedev.tteona.features.explore
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import com.seoktaedev.tteona.core.util.Haptics
+import com.seoktaedev.tteona.core.services.MapAppLauncher
+import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -92,6 +95,7 @@ fun PlaceDetailSheet(
     var selectedTab by remember { mutableIntStateOf(0) } // 0=구글, 1=떠나
 
     val context = LocalContext.current
+    val view = androidx.compose.ui.platform.LocalView.current
     var reviewForAction by remember { mutableStateOf<TteonaPlaceReview?>(null) }
     var showReportDialog by remember { mutableStateOf(false) }
     var showBlockDialog by remember { mutableStateOf(false) }
@@ -181,6 +185,42 @@ fun PlaceDetailSheet(
                         )
                     }
                 }
+            }
+
+            // 길찾기 — **여기 한 단계 안쪽에 둔다.**
+            // 코스 목록에 바로 노출하면 아직 갈지 말지 정하지도 않은 사용자를
+            // 지도 앱으로 내보내게 된다. 장소를 눌러 들여다본 사람에게만 보여준다.
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier
+                    .padding(horizontal = 20.dp)
+                    .padding(bottom = 14.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(TteOrange.copy(alpha = 0.10f))
+                    .clickable {
+                        Haptics.light(view)
+                        MapAppLauncher.openDirections(
+                            context = context,
+                            latitude = place.latitude,
+                            longitude = place.longitude,
+                            name = place.placeName,
+                        )
+                    }
+                    .padding(horizontal = 14.dp, vertical = 10.dp),
+            ) {
+                Icon(
+                    Icons.Filled.Navigation,
+                    contentDescription = null,
+                    tint = TteOrange,
+                    modifier = Modifier.size(16.dp),
+                )
+                Text(
+                    stringResource(R.string.common_directions),
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = TteOrange,
+                )
             }
 
             // 탭 바

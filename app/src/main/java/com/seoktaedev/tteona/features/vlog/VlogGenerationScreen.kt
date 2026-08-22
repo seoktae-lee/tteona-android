@@ -404,6 +404,12 @@ fun VlogGenerationScreen(
             }
             // 완성된 것만 센다(서버/로컬 경로를 가리지 않는다). 게스트가 아니면 셀 이유가 없다.
             if (isGuest) GuestVlogQuota.recordCompletion()
+            // 퍼널 ④ 브이로그 완성 — 코스 → 세션 → 결과물까지 이어진 마지막 단계
+            runCatching {
+                com.seoktaedev.tteona.core.services.StatsService.postCourseEvent(
+                    com.seoktaedev.tteona.core.services.StatsService.CourseFunnelStep.VLOG_COMPLETE, course,
+                )
+            }
             phase = Phase.PREVIEW
             // 튜토리얼: 첫 브이로그 완성 → 축하 카드
             VlogTutorial.advance(VlogTutorial.Step.CELEBRATE)

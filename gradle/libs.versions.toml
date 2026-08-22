@@ -61,7 +61,11 @@ camerax-lifecycle = { group = "androidx.camera", name = "camera-lifecycle", vers
 camerax-video = { group = "androidx.camera", name = "camera-video", version.ref = "camerax" }
 camerax-view = { group = "androidx.camera", name = "camera-view", version.ref = "camerax" }
 guava = { group = "com.google.guava", name = "guava", version = "33.4.0-android" }
-revenuecat = { group = "com.revenuecat.purchases", name = "purchases", version = "8.19.2" }
+# Play 정책: 2026-08-31부터 Google Play 결제 라이브러리 8.0.0+ 필수.
+# RevenueCat 8.x 계열은 billing 7.1.1을 끌어와 이 요건을 못 맞춘다(실측 확인).
+#   8.25.0 → billing 7.1.1 (위반)  /  9.29.1 → 8.0.0  /  10.18.1 → 8.3.0
+# 최신 계열로 올려 여유를 둔다.
+revenuecat = { group = "com.revenuecat.purchases", name = "purchases", version = "10.18.1" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

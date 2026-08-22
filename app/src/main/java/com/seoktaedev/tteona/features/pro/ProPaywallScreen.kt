@@ -337,6 +337,17 @@ fun ProPaywallScreen(onDismiss: () -> Unit) {
                     )
                 }
 
+                // 자동 갱신 고지 — Google Play 구독 정책이 앱 안에 명시하도록 요구한다.
+                // iOS 문구는 Apple 계정 기준이라 그대로 쓸 수 없어 Play 기준으로 다시 썼다.
+                Text(
+                    stringResource(R.string.paywall_autoRenewNotice),
+                    fontSize = 10.5.sp,
+                    lineHeight = 15.sp,
+                    color = Color.White.copy(alpha = 0.45f),
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 10.dp),
+                )
+
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
                     modifier = Modifier

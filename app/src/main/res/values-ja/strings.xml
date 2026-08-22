@@ -775,4 +775,7 @@
     <string name="main_distanceKm">現在地から%dkm</string>
     <string name="main_distanceNear">すぐ近く</string>
     <string name="main_clearSearchedPlace">検索した場所を消す</string>
+
+    <!-- 구독 자동갱신 고지 (Play 정책) -->
+    <string name="paywall_autoRenewNotice">サブスクリプションは更新日の24時間前までに解約しない限り自動更新され、料金はGoogle Playアカウントに請求されます。購入後はPlayストアの定期購入設定でいつでも管理・解約できます。</string>
 </resources>

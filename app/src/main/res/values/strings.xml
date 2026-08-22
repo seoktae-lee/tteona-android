@@ -775,4 +775,7 @@
     <string name="main_distanceKm">내 위치에서 %dkm</string>
     <string name="main_distanceNear">바로 근처</string>
     <string name="main_clearSearchedPlace">검색한 장소 지우기</string>
+
+    <!-- 구독 자동갱신 고지 (Play 정책) -->
+    <string name="paywall_autoRenewNotice">구독은 갱신일 24시간 전까지 해지하지 않으면 자동으로 갱신되며, 요금은 Google Play 계정으로 청구됩니다. 구매 후 Play 스토어 구독 설정에서 언제든 관리·해지할 수 있어요.</string>
 </resources>

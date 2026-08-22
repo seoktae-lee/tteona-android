@@ -775,4 +775,7 @@ Turn what you’ve captured into a vlog.</string>
     <string name="main_distanceKm">%d km away</string>
     <string name="main_distanceNear">Nearby</string>
     <string name="main_clearSearchedPlace">Clear searched place</string>
+
+    <!-- 구독 자동갱신 고지 (Play 정책) -->
+    <string name="paywall_autoRenewNotice">Your subscription renews automatically unless cancelled at least 24 hours before the renewal date, and is billed to your Google Play account. You can manage or cancel it anytime in Play Store subscription settings.</string>
 </resources>

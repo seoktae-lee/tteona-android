@@ -63,6 +63,11 @@
     <string name="auth_checkEmail_title">メールをご確認ください</string>
     <string name="auth_checkEmail_message">登録したメールアドレスに認証リンクを送信しました。\nリンクをクリックした後、下のボタンを押してください。</string>
     <string name="auth_checkSpam">メールが見つからない場合は、迷惑メールフォルダもご確認ください。</string>
+    <string name="auth_changeEmail">メールアドレスを変更</string>
+    <string name="auth_changeEmail_message">認証メールを受け取るアドレスを入力してください。これまでに撮影した動画はそのまま残ります。</string>
+    <string name="auth_changeEmail_sent">新しいアドレスに認証メールを送りました。</string>
+    <string name="auth_changeEmail_needsRecentLogin">セキュリティのため、再度ログインしてからお試しください。</string>
+    <string name="auth_verifyLater">後で行い、撮影を続ける</string>
     <string name="auth_resendIn">再送信まで%d秒</string>
     <string name="auth_resendVerification">認証メールを再送信</string>
     <string name="auth_startAfterVerify">認証完了後に始める</string>
@@ -315,6 +320,8 @@
     <string name="camera_tip">💡 ボタンで開始・終了、縦横自由に</string>
     <string name="camera_recordingHint">撮影中 · ボタンで終了</string>
     <string name="camera_saveSuccess">動画を保存しました！</string>
+    <string name="camera_saveFailed">動画を保存できませんでした</string>
+    <string name="camera_saveFailed_sub">もう一度撮影してください</string>
     <string name="camera_hintAuto">ボタンを押すと%d秒 自動撮影</string>
     <string name="camera_recordingHintAuto">自動撮影中・完了後に自動保存</string>
     <string name="camera_tipAuto">💡 1タップで5秒自動撮影・縦横自由に</string>

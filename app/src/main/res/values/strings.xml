@@ -63,6 +63,11 @@
     <string name="auth_checkEmail_title">이메일을 확인해주세요</string>
     <string name="auth_checkEmail_message">가입하신 이메일로 인증 링크를 보냈어요.\n링크를 클릭한 후 아래 버튼을 눌러주세요.</string>
     <string name="auth_checkSpam">메일이 보이지 않으면 스팸함도 확인해주세요.</string>
+    <string name="auth_changeEmail">이메일 주소 바꾸기</string>
+    <string name="auth_changeEmail_message">인증 메일을 받을 주소를 다시 입력해주세요. 지금까지 찍은 영상은 그대로 남아요.</string>
+    <string name="auth_changeEmail_sent">새 주소로 인증 메일을 보냈어요.</string>
+    <string name="auth_changeEmail_needsRecentLogin">보안을 위해 다시 로그인한 뒤 시도해주세요.</string>
+    <string name="auth_verifyLater">나중에 하고 촬영 계속하기</string>
     <string name="auth_resendIn">재전송 %d초 후 가능</string>
     <string name="auth_resendVerification">인증 메일 재전송</string>
     <string name="auth_startAfterVerify">인증 완료 후 시작하기</string>
@@ -315,6 +320,8 @@
     <string name="camera_tip">💡 버튼으로 촬영 시작·종료, 가로·세로 자유롭게</string>
     <string name="camera_recordingHint">촬영 중 · 버튼을 누르면 종료</string>
     <string name="camera_saveSuccess">영상 저장 성공!</string>
+    <string name="camera_saveFailed">영상을 저장하지 못했어요</string>
+    <string name="camera_saveFailed_sub">다시 찍어주세요</string>
     <string name="camera_hintAuto">버튼을 누르면 %d초 자동 촬영</string>
     <string name="camera_recordingHintAuto">자동 촬영 중 · 끝나면 자동 저장</string>
     <string name="camera_tipAuto">💡 한 번 누르면 5초 자동 촬영 · 가로·세로 자유롭게</string>

@@ -193,10 +193,41 @@ object AuthService {
      * 하므로 signIn으로 물러나고, 익명 계정은 버려진다 — 찍어둔 영상은 파일 이관으로 살린다.
      * (카카오는 커스텀 토큰이라 애초에 이 경로를 못 탄다)
      */
+    /**
+     * **아직 계정이 아닌 임시 신원인가.**
+     *
+     * 익명은 물론이고, 이메일로 가입만 하고 인증을 안 끝낸 계정도 여기 포함된다.
+     * 앱은 그 상태를 로그인으로 치지 않고(`currentUser`를 비운다) 저장 경로만
+     * `free_{uid}`로 유지하는데, 그 uid를 버리고 다른 계정으로 갈 때는 파일을 옮겨야 한다.
+     * 판정을 한 곳에 모아 두지 않으면 경로마다 조건이 어긋난다.
+     */
+    private fun com.google.firebase.auth.FirebaseUser.isProvisionalIdentity(): Boolean {
+        if (isAnonymous) return true
+        val providerIds = providerData.map { it.providerId }.filter { it != "firebase" }
+        val isEmailPassword = providerIds.contains("password") && providerIds.all { it == "password" }
+        return isEmailPassword && !isEmailVerified
+    }
+
     private suspend fun signInOrLink(credential: com.google.firebase.auth.AuthCredential): com.google.firebase.auth.AuthResult {
         val user = auth.currentUser
         if (user == null || !user.isAnonymous) {
-            return auth.signInWithCredential(credential).await()
+            /*
+             * 익명이 아니면 link를 못 쓴다 — 그대로 갈아탄다.
+             *
+             * 다만 **갈아타기 전 신원이 임시 신원이었다면 찍어둔 파일을 옮겨 준다.**
+             * 이메일로 가입하고 인증을 아직 안 한 상태가 여기 걸린다: 익명은 아니지만
+             * 계정도 아니고, 그 사람이 오늘 찍은 클립은 `free_{그 uid}` 아래에 있다.
+             * 인증 메일이 안 와서 구글·카카오로 갈아타는 건 흔한 행동인데, 예전엔
+             * 그 순간 uid만 바뀌고 파일은 남겨져 영상이 조용히 사라졌다.
+             * (진짜 계정 → 다른 계정 전환에서는 옮기면 안 된다 — 남의 데이터가 딸려간다)
+             */
+            val carryOver = user?.takeIf { it.isProvisionalIdentity() }?.uid
+            val result = auth.signInWithCredential(credential).await()
+            if (carryOver != null) {
+                result.user?.uid?.let { SessionFileHousekeeping.migrateGuestSession(appContext, carryOver, it) }
+                GuestVlogQuota.reset()
+            }
+            return result
         }
         val guestUid = user.uid
         return try {
@@ -340,11 +371,78 @@ object AuthService {
                 refreshOnboardingStatus(refreshed.uid)
                 _verificationEmailSent.value = false
             } else {
-                if (auth.currentUser?.isEmailVerified == false && email.isNotEmpty()) auth.signOut()
+                // 로그아웃하지 않는다 — 익명 인증이 켜진 뒤로 로그아웃은 곧 '새 게스트 계정'이라
+                // uid가 바뀌며 찍어둔 클립이 끊긴다. 미인증 상태는 리스너가 이미 걸러낸다.
+                // (iOS는 같은 이유로 이 자리의 signOut을 걷어냈다)
                 _errorMessage.value = LocaleManager.string(appContext, R.string.auth_notVerifiedYet)
             }
         } catch (e: Exception) {
             _errorMessage.value = LocaleManager.string(appContext, R.string.auth_signInFailed)
+        } finally {
+            _isLoading.value = false
+        }
+    }
+
+    /**
+     * 지금 인증을 기다리고 있는 이메일 주소.
+     *
+     * 화면에 이 값을 보여줘야 오타를 알아챌 수 있다. 화면이 들고 있는 입력값을 쓰면 안 된다 —
+     * 인증 대기 화면은 가입을 한 화면과 다른 인스턴스로 뜨는 경우가 있어 그 값이 비어 있다.
+     */
+    val pendingVerificationEmail: String?
+        get() = auth.currentUser?.takeIf { !it.isEmailVerified }?.email
+
+    /**
+     * 인증 대기 화면에서 빠져나온다.
+     *
+     * **로그아웃하지 않는다.** 여기서 로그아웃하면 새 게스트 신원이 발급되며 uid가 바뀌어
+     * 그날 찍어둔 클립이 통째로 끊긴다. 플래그만 내리면 계정은 인증 대기 상태로 남고,
+     * 사용자는 촬영을 이어갈 수 있다 — 인증을 마치면 같은 uid로 돌아온다.
+     */
+    fun dismissVerification() {
+        _errorMessage.value = null
+        _verificationEmailSent.value = false
+    }
+
+    /**
+     * 인증 메일을 받을 주소를 바꾼다. **uid는 그대로 둔다.**
+     *
+     * 주소를 잘못 적은 사람에게 이게 없으면 길이 막힌다. 뒤로 나가 다시 가입해도,
+     * 오타 난 계정이 이미 그 사람의 uid를 물고 있어 두 번째 가입은 link가 아닌 새 계정
+     * 생성으로 흘러 uid가 바뀌고 찍어둔 영상이 사라진다.
+     * `verifyBeforeUpdateEmail`은 새 주소로 링크를 보내고, 그 링크를 누르면 주소 변경과
+     * 인증이 한 번에 끝난다 — 링크를 누르기 전까지 계정은 옛 주소 그대로라 되돌릴 수도 있다.
+     */
+    suspend fun changeVerificationEmail(newEmail: String): Boolean {
+        val trimmed = newEmail.trim()
+        if (!isValidEmail(trimmed)) {
+            _errorMessage.value = LocaleManager.string(appContext, R.string.auth_error_invalidEmail)
+            return false
+        }
+        val user = auth.currentUser
+        if (user == null) {
+            _errorMessage.value = LocaleManager.string(appContext, R.string.auth_reenterForVerify)
+            return false
+        }
+        if (trimmed.equals(user.email, ignoreCase = true)) {
+            _errorMessage.value = null
+            return true   // 같은 주소 — 재전송과 다를 게 없다
+        }
+        _isLoading.value = true
+        return try {
+            user.verifyBeforeUpdateEmail(trimmed).await()
+            _errorMessage.value = null
+            true
+        } catch (e: Exception) {
+            // 로그인한 지 오래되면 Firebase가 재인증을 요구한다. 가입 직후엔 걸리지 않지만,
+            // 앱을 오래 켜 뒀다면 걸릴 수 있어 안내를 따로 준다.
+            val code = (e as? FirebaseAuthException)?.errorCode
+            _errorMessage.value = if (code == "ERROR_REQUIRES_RECENT_LOGIN") {
+                LocaleManager.string(appContext, R.string.auth_changeEmail_needsRecentLogin)
+            } else {
+                firebaseErrorMessage(e)
+            }
+            false
         } finally {
             _isLoading.value = false
         }
@@ -464,8 +562,9 @@ object AuthService {
             }
 
             // 카카오는 uid가 kakao_{id}로 고정된 커스텀 토큰이라 link 자체가 불가능하다.
-            // 익명 계정은 버려지므로, 그 전에 찍어둔 영상을 옮길 수 있게 uid를 붙잡아 둔다.
-            val guestUid = auth.currentUser?.takeIf { it.isAnonymous }?.uid
+            // 임시 신원(익명 · 인증 안 끝난 이메일 계정)은 버려지므로,
+            // 그 전에 찍어둔 영상을 옮길 수 있게 uid를 붙잡아 둔다.
+            val guestUid = auth.currentUser?.takeIf { it.isProvisionalIdentity() }?.uid
 
             val authResult = auth.signInWithCustomToken(customToken).await()
             val user = authResult.user ?: return

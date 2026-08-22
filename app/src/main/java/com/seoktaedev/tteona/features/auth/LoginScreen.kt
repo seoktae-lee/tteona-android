@@ -47,6 +47,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -72,6 +73,7 @@ import com.seoktaedev.tteona.R
 import com.seoktaedev.tteona.core.i18n.AppLanguage
 import com.seoktaedev.tteona.core.i18n.LocaleManager
 import com.seoktaedev.tteona.ui.theme.TteFieldBackground
+import com.seoktaedev.tteona.ui.theme.TteDarkGray
 import com.seoktaedev.tteona.ui.theme.TteMediumGray
 import com.seoktaedev.tteona.ui.theme.TteOrange
 import kotlinx.coroutines.delay
@@ -329,6 +331,16 @@ private fun VerificationSentView(
 ) {
     var resendCooldown by rememberSaveable { mutableIntStateOf(60) }
     var showResendAlert by rememberSaveable { mutableStateOf(false) }
+    var showChangeEmail by rememberSaveable { mutableStateOf(false) }
+    var showChangeDone by rememberSaveable { mutableStateOf(false) }
+    /*
+     * 어디로 보냈는지 화면이 직접 Firebase에 묻는다.
+     *
+     * 호출부가 넘겨준 email을 쓰면 안 된다 — 이 화면은 가입을 한 화면과 다른 인스턴스로
+     * 뜨는 경우가 있어(루트가 통째로 갈아끼운다) 그 값이 비어 있다. 주소를 못 보여주면
+     * 오타를 알아챌 방법 자체가 없어진다.
+     */
+    var pendingEmail by remember { mutableStateOf<String?>(viewModel.pendingVerificationEmail) }
 
     // 재전송 쿨다운 (iOS startResendCooldown과 동일한 60초)
     LaunchedEffect(resendCooldown) {
@@ -384,6 +396,22 @@ private fun VerificationSentView(
                 fontSize = 12.sp,
                 color = TteMediumGray.copy(alpha = 0.7f),
             )
+
+            // 보낸 주소 — 오타를 알아채는 유일한 단서다
+            val addr = pendingEmail?.takeIf { it.isNotEmpty() }
+            if (addr != null) {
+                Spacer(Modifier.height(20.dp))
+                Text(addr, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = TteDarkGray)
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    stringResource(R.string.auth_changeEmail),
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = TteOrange,
+                    textDecoration = TextDecoration.Underline,
+                    modifier = Modifier.clickable(enabled = !isLoading) { showChangeEmail = true },
+                )
+            }
 
             Spacer(Modifier.weight(1f))
 
@@ -443,7 +471,24 @@ private fun VerificationSentView(
                 }
             }
 
-            Spacer(Modifier.height(48.dp))
+            Spacer(Modifier.height(14.dp))
+
+            /*
+             * 나가는 길.
+             *
+             * 이게 없으면 주소를 잘못 적은 사람은 앱을 강제로 껐다 켜는 것 말고 방법이 없다.
+             * 로그아웃이 아니라 플래그만 내린다 — 계정은 인증 대기로 남고 uid도 그대로라
+             * 촬영을 이어갈 수 있고, 나중에 인증을 마치면 같은 신원으로 돌아온다.
+             */
+            Text(
+                stringResource(R.string.auth_verifyLater),
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium,
+                color = TteMediumGray,
+                modifier = Modifier.clickable(enabled = !isLoading) { viewModel.dismissVerification() },
+            )
+
+            Spacer(Modifier.height(40.dp))
         }
     }
 
@@ -454,6 +499,50 @@ private fun VerificationSentView(
             text = { Text(stringResource(R.string.auth_resendDone)) },
             confirmButton = {
                 TextButton(onClick = { showResendAlert = false }) { Text(stringResource(R.string.common_ok), color = TteOrange) }
+            },
+        )
+    }
+
+    if (showChangeEmail) {
+        var newEmail by rememberSaveable { mutableStateOf(pendingEmail ?: "") }
+        AlertDialog(
+            onDismissRequest = { showChangeEmail = false },
+            title = { Text(stringResource(R.string.auth_changeEmail)) },
+            text = {
+                Column {
+                    Text(stringResource(R.string.auth_changeEmail_message), fontSize = 14.sp, color = TteMediumGray)
+                    Spacer(Modifier.height(14.dp))
+                    TteTextField(newEmail, { newEmail = it }, stringResource(R.string.auth_email), KeyboardType.Email)
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = !isLoading,
+                    onClick = {
+                        viewModel.changeVerificationEmail(newEmail) {
+                            // 링크를 누르기 전까진 계정 주소가 옛것이라 Firebase에는 안 뜬다 —
+                            // 화면에는 방금 보낸 주소를 보여줘야 사용자가 상황을 이해한다.
+                            pendingEmail = newEmail.trim()
+                            resendCooldown = 60
+                            showChangeEmail = false
+                            showChangeDone = true
+                        }
+                    },
+                ) { Text(stringResource(R.string.common_ok), color = TteOrange) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showChangeEmail = false }) { Text(stringResource(R.string.common_cancel)) }
+            },
+        )
+    }
+
+    if (showChangeDone) {
+        AlertDialog(
+            onDismissRequest = { showChangeDone = false },
+            title = { Text(stringResource(R.string.auth_verificationMail)) },
+            text = { Text(stringResource(R.string.auth_changeEmail_sent)) },
+            confirmButton = {
+                TextButton(onClick = { showChangeDone = false }) { Text(stringResource(R.string.common_ok), color = TteOrange) }
             },
         )
     }

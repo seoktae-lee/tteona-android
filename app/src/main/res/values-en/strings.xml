@@ -63,6 +63,11 @@
     <string name="auth_checkEmail_title">Check Your Email</string>
     <string name="auth_checkEmail_message">We sent a verification link to your email.\nClick the link, then tap the button below.</string>
     <string name="auth_checkSpam">If you don\'t see the email, check your spam folder.</string>
+    <string name="auth_changeEmail">Change email address</string>
+    <string name="auth_changeEmail_message">Enter the address that should receive the verification link. Videos you already filmed stay put.</string>
+    <string name="auth_changeEmail_sent">Verification email sent to the new address.</string>
+    <string name="auth_changeEmail_needsRecentLogin">For security, please sign in again and retry.</string>
+    <string name="auth_verifyLater">Do this later and keep filming</string>
     <string name="auth_resendIn">Resend available in %ds</string>
     <string name="auth_resendVerification">Resend Verification Email</string>
     <string name="auth_startAfterVerify">I\'ve Verified — Get Started</string>
@@ -315,6 +320,8 @@ Tap ✓ at the top right to turn it into a vlog.</string>
     <string name="camera_tip">💡 Tap to start/stop · film portrait or landscape</string>
     <string name="camera_recordingHint">Recording · tap to stop</string>
     <string name="camera_saveSuccess">Video saved!</string>
+    <string name="camera_saveFailed">Couldn’t save the video</string>
+    <string name="camera_saveFailed_sub">Please try again</string>
     <string name="camera_hintAuto">Tap to record %ds automatically</string>
     <string name="camera_recordingHintAuto">Auto-recording · saves when done</string>
     <string name="camera_tipAuto">💡 One tap = 5s auto clip · portrait or landscape</string>

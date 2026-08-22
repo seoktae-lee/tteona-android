@@ -73,4 +73,17 @@ class AuthViewModel : ViewModel() {
             if (AuthService.resendVerificationEmail(email.trim(), password)) onSent()
         }
     }
+
+    /** 인증을 기다리는 중인 주소 — 화면에 보여줘야 오타를 알아챈다 */
+    val pendingVerificationEmail: String? get() = AuthService.pendingVerificationEmail
+
+    /** 인증 대기 화면에서 빠져나온다 (로그아웃하지 않는다 — uid가 바뀌면 클립이 끊긴다) */
+    fun dismissVerification() = AuthService.dismissVerification()
+
+    /** 오타 난 주소를 고친다 — uid를 유지한 채 새 주소로 인증 메일을 다시 보낸다 */
+    fun changeVerificationEmail(newEmail: String, onSent: () -> Unit) {
+        viewModelScope.launch {
+            if (AuthService.changeVerificationEmail(newEmail)) onSent()
+        }
+    }
 }

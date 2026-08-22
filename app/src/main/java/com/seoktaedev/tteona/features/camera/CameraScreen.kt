@@ -48,6 +48,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Cameraswitch
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ZoomIn
 import androidx.compose.material.icons.filled.WbSunny
@@ -164,6 +165,14 @@ fun CameraScreen(
     var isRecording by remember { mutableStateOf(false) }
     var isSaving by remember { mutableStateOf(false) }
     var saveDone by remember { mutableStateOf(false) }
+    /*
+     * 녹화가 결과물 없이 끝났을 때(인코딩 실패·저장공간 부족·다른 앱이 인코더 점유 등).
+     *
+     * 예전엔 깨진 파일만 지우고 조용히 스피너를 걷었다. 화면이 촬영 직전과 똑같아져서
+     * 사용자는 찍힌 줄 알고 다음 장소로 이동하고, 브이로그를 만들 때가 되어서야
+     * 그 장소가 비어 있는 걸 발견한다. 실패도 결과이므로 그 자리에서 알린다.
+     */
+    var saveFailed by remember { mutableStateOf(false) }
     var recordStartMs by remember { mutableStateOf(0L) }
     var elapsedSeconds by remember { mutableDoubleStateOf(0.0) }
     // 이번 클립의 자동 종료 한도(초) — startRecording에서 갱신. 유저가 고른 길이를 남은 예산으로 클램프한 값.
@@ -358,11 +367,21 @@ fun CameraScreen(
                         saveDone = true
                     } else {
                         file.delete()
-                        isSaving = false
+                        // 오버레이는 남겨 둔 채 실패 문구로 바꾼다 — 아래 LaunchedEffect가 걷는다
+                        Haptics.warning(view)
+                        saveFailed = true
                     }
                 }
             }
         }
+    }
+
+    // 저장 실패 → 2초 보여주고 촬영 화면으로 되돌린다 (다음 단계로 넘기지 않는다)
+    LaunchedEffect(saveFailed) {
+        if (!saveFailed) return@LaunchedEffect
+        delay(2000)
+        saveFailed = false
+        isSaving = false
     }
 
     // 저장 성공 → 1.2초 후 다음 단계로 (iOS recordingDone)
@@ -782,7 +801,11 @@ fun CameraScreen(
                         .background(Color.Black.copy(alpha = 0.8f))
                         .padding(20.dp),
                 ) {
-                    if (saveDone) {
+                    if (saveFailed) {
+                        Icon(Icons.Filled.ErrorOutline, contentDescription = null, tint = Color(0xFFFF9F0A), modifier = Modifier.size(48.dp))
+                        Text(stringResource(R.string.camera_saveFailed), fontSize = 15.sp, fontWeight = FontWeight.Medium, color = Color.White, textAlign = TextAlign.Center)
+                        Text(stringResource(R.string.camera_saveFailed_sub), fontSize = 12.sp, color = Color.White.copy(alpha = 0.7f), textAlign = TextAlign.Center)
+                    } else if (saveDone) {
                         Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = Color(0xFF34C759), modifier = Modifier.size(48.dp))
                         Text(stringResource(R.string.camera_saveSuccess), fontSize = 16.sp, fontWeight = FontWeight.Medium, color = Color.White)
                     } else {
